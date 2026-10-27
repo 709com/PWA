@@ -1,0 +1,349 @@
+<!doctype html>
+<!-- このファイルは「文京区民専用ものさし」の本体です。入力した広さ・高さ・体積・人数を、文京区の名所などで「約○個分」「約○倍」に例えて表示します。 -->
+<!-- 数字はすべてこのファイルの中に出典つきで持っています。入力した数字は保存も送信もしません（最後に選んだタブだけを覚えます）。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文京区民専用ものさし</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="文京ものさし">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2e7d5a">
+
+<style>
+  :root { --bg:#f4f8f5; --card:#fff; --text:#1b2a22; --sub:#5a6b61; --accent:#2e7d5a; --accent-soft:#dff0e6; --line:#dde7e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121a16; --card:#1c2620; --text:#eaf2ed; --sub:#9db0a5; --accent:#5cc493; --accent-soft:#1f3a2c; --line:#2b3a31; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.55; }
+  main { max-width:560px; margin:0 auto;
+         padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.3rem; margin:4px 0 2px; }
+  .unofficial { font-size:.78rem; color:var(--sub); margin:0 0 12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+  h2 { font-size:1rem; margin:0 0 8px; color:var(--sub); font-weight:600; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px; }
+
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:12px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* ===== タブ ===== */
+  .tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:12px; }
+  .tabs button { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 4px; font-weight:700; font-size:.95rem; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* ===== 入力 ===== */
+  .input-row { display:flex; gap:8px; }
+  #num { flex:1; min-width:0; font-size:1.4rem; font-weight:700; text-align:right; }
+  #unit { flex:0 0 auto; max-width:48%; font-size:1rem; }
+  .examples { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .examples button { background:var(--accent-soft); color:var(--accent); border-radius:99px; padding:5px 12px; font-size:.85rem; font-weight:600; }
+
+  /* ===== 結果 ===== */
+  .res { border-top:1px solid var(--line); padding:12px 0; }
+  .res:first-child { border-top:none; padding-top:2px; }
+  .res .name { font-size:.92rem; color:var(--sub); }
+  .res .val { font-size:1.5rem; font-weight:700; line-height:1.3; word-break:break-all; }
+  .res .val small { font-size:.9rem; font-weight:500; color:var(--sub); }
+  .res .pics { font-size:1.5rem; letter-spacing:1px; line-height:1.25; word-break:break-all; margin-top:2px; }
+  .res .pics .part { display:inline-block; overflow:hidden; vertical-align:bottom; white-space:nowrap; }
+  .res.self { opacity:.45; }
+  .empty { color:var(--sub); }
+  #share { width:100%; background:var(--accent); color:#fff; border-radius:12px; padding:12px; font-weight:700; margin-top:4px; }
+
+  details summary { font-weight:600; color:var(--sub); cursor:pointer; }
+  .src { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  .src li { margin-bottom:6px; word-break:break-all; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>📏 文京区民専用ものさし</h1>
+  <p class="unofficial">非公式・個人の試作です。文京区の公式アプリではありません。</p>
+
+  <div class="tabs" id="tabs"></div>
+
+  <section>
+    <h2 id="q">どのくらい？</h2>
+    <div class="input-row">
+      <input id="num" type="text" inputmode="decimal" placeholder="数字" autocomplete="off">
+      <select id="unit"></select>
+    </div>
+    <div class="examples" id="examples"></div>
+  </section>
+
+  <section>
+    <h2>例えると…</h2>
+    <div id="results"><p class="empty">数字を入れてください</p></div>
+    <button id="share" hidden>結果を共有する</button>
+  </section>
+
+  <section>
+    <details>
+      <summary>📚 数字の出典</summary>
+      <ul class="src" id="sources"></ul>
+      <p class="src">出典は2026年10月27日に確認しました。数字は変わることがあります（特に人口は毎月変わります）。</p>
+    </details>
+  </section>
+
+  <footer>版 <span id="ver"></span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_TAB = 'monosashi:tab'; // 最後に選んだタブだけを覚える
+const $ = (id) => document.getElementById(id);
+
+// ===== 名所などの数字（出典つき） =====
+// 数字を直すときは、ここの値と、src（出典）を一緒に直す
+const SOURCES = {
+  dome: '東京ドーム公式サイト（よくある質問・施設概要） https://www.tokyo-dome.co.jp/',
+  botanical: '東京大学大学院理学系研究科附属植物園 公式サイト https://www.bg.s.u-tokyo.ac.jp/koishikawa/',
+  korakuen: '東京都建設局 小石川後楽園の資料（開園面積） https://www.kensetsu.metro.tokyo.lg.jp/',
+  rikugien: '東京都公園協会「公園へ行こう！」六義園 https://www.tokyo-park.or.jp/park/rikugien/',
+  civic: '文京区 シビックセンターに関する資料（建物高さ 141.70m） https://www.city.bunkyo.lg.jp/',
+  lounge: '文京区「文京シビックセンター展望ラウンジ」（25階・地上約105m） https://www.city.bunkyo.lg.jp/',
+  bunkyoArea: '文京区「文京区の位置と地形」（面積 11.29km²） https://www.city.bunkyo.lg.jp/',
+  bunkyoPeople: '文京区人口統計資料（令和8年7月1日現在 237,527人） https://www.city.bunkyo.lg.jp/b011/p006255/index.html',
+};
+
+// 種類ごとの基準。value は「1つ分」の大きさ（広さ＝㎡、高さ＝m、体積＝㎥、人数＝人）
+const KINDS = {
+  area: {
+    label: '広さ', q: 'どのくらいの広さ？',
+    units: [ ['㎡', 1], ['ha（ヘクタール）', 10000], ['km²', 1e6], ['坪', 400 / 121] ],
+    refs: [
+      { name: '東京ドーム（建築面積）', short: '東京ドーム', emoji: '🏟️', value: 46755, word: '個分', src: 'dome' },
+      { name: '小石川植物園', short: '小石川植物園', emoji: '🌿', value: 161588, word: '個分', src: 'botanical' },
+      { name: '六義園（開園面積）', short: '六義園', emoji: '🌸', value: 87809.41, word: '個分', src: 'rikugien' },
+      { name: '小石川後楽園（開園面積）', short: '小石川後楽園', emoji: '🏯', value: 70847.17, word: '個分', src: 'korakuen' },
+      { name: '文京区全体', short: '文京区', emoji: '🗾', value: 11.29e6, word: '個分', src: 'bunkyoArea' },
+    ],
+  },
+  height: {
+    label: '高さ', q: 'どのくらいの高さ・長さ？',
+    units: [ ['m', 1], ['km', 1000], ['cm', 0.01] ],
+    refs: [
+      { name: '文京シビックセンター（建物高さ）', short: 'シビックセンター', emoji: '🏢', value: 141.70, word: '本分', src: 'civic' },
+      { name: 'シビックセンター展望ラウンジ（25階・地上約105m）', short: '展望ラウンジの高さ', emoji: '🔭', value: 105, word: '個分', src: 'lounge' },
+    ],
+  },
+  volume: {
+    label: '体積', q: 'どのくらいの大きさ（体積）？',
+    units: [ ['㎥', 1], ['L（リットル）', 0.001] ],
+    refs: [
+      { name: '東京ドーム（容積 約124万㎥）', short: '東京ドーム', emoji: '🏟️', value: 1240000, word: '杯分', src: 'dome' },
+    ],
+  },
+  people: {
+    label: '人数', q: '何人？',
+    units: [ ['人', 1], ['万人', 10000] ],
+    refs: [
+      { name: '文京区民（令和8年7月1日現在 237,527人）', short: '文京区民', emoji: '👥', value: 237527, word: '倍', src: 'bunkyoPeople' },
+      { name: '東京ドーム満員（収容人数 55,000人）', short: '東京ドーム満員', emoji: '🏟️', value: 55000, word: '杯分', src: 'dome' },
+    ],
+  },
+};
+
+// ===== 数字の見せ方 =====
+function niceNumber(x) {
+  if (x >= 1000) return Math.round(x).toLocaleString();
+  if (x >= 100) return x.toFixed(0);
+  if (x >= 10) return x.toFixed(1);
+  if (x >= 0.01) return String(parseFloat(x.toFixed(2))); // 末尾の0は付けない（1.00→1）
+  return x.toPrecision(2);
+}
+function percent(x) {
+  const p = x * 100;
+  return (p >= 1 ? p.toFixed(1) : p.toPrecision(2)) + '%';
+}
+// 絵で並べる（10個まで。それ以上は「×数」で表す）
+function pictures(emoji, x) {
+  const box = document.createElement('div');
+  box.className = 'pics';
+  if (x > 10) { box.textContent = emoji + ' × ' + niceNumber(x); return box; }
+  const whole = Math.floor(x), frac = x - whole;
+  box.append(emoji.repeat(whole));
+  if (frac >= 0.05 || whole === 0) {
+    const part = document.createElement('span');
+    part.className = 'part';
+    part.textContent = emoji;
+    part.style.width = Math.max(0.12, frac) * 1.25 + 'em'; // 端数の分だけ絵を切って見せる
+    box.append(part);
+  }
+  return box;
+}
+
+// ===== 画面の組み立て =====
+let kind = 'area';
+try { const t = localStorage.getItem(KEY_TAB); if (KINDS[t]) kind = t; } catch (e) {}
+
+function buildTabs() {
+  const tabs = $('tabs');
+  tabs.innerHTML = '';
+  for (const [k, v] of Object.entries(KINDS)) {
+    const b = document.createElement('button');
+    b.textContent = v.label;
+    b.className = k === kind ? 'on' : '';
+    b.onclick = () => { kind = k; try { localStorage.setItem(KEY_TAB, k); } catch (e) {} buildAll(); };
+    tabs.append(b);
+  }
+}
+// 単位の選択肢：普通の単位に加えて、名所そのものも単位として選べる（逆引き用）
+function buildUnits() {
+  const sel = $('unit');
+  sel.innerHTML = '';
+  KINDS[kind].units.forEach(([label], i) => sel.append(new Option(label, 'u' + i)));
+  const grp = document.createElement('optgroup');
+  grp.label = '名所で入れる';
+  KINDS[kind].refs.forEach((r, i) => grp.append(new Option(r.short + '（' + r.word.replace('分', '') + '）', 'r' + i)));
+  sel.append(grp);
+}
+// 例のボタン：名所1つ分を入れて、ほかの名所と比べる
+function buildExamples() {
+  const box = $('examples');
+  box.innerHTML = '';
+  KINDS[kind].refs.forEach((r, i) => {
+    const b = document.createElement('button');
+    b.textContent = r.emoji + ' ' + r.short + 'は？';
+    b.onclick = () => { $('num').value = '1'; $('unit').value = 'r' + i; calc(); };
+    box.append(b);
+  });
+}
+function buildAll() {
+  buildTabs();
+  buildUnits();
+  buildExamples();
+  $('q').textContent = KINDS[kind].q;
+  calc();
+}
+
+// ===== 計算と表示 =====
+let shareText = '';
+function readValue() {
+  // 全角数字やカンマも受け付ける
+  const raw = $('num').value.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，\s]/g, '');
+  const n = parseFloat(raw);
+  return isFinite(n) && n > 0 ? n : null;
+}
+function calc() {
+  const k = KINDS[kind];
+  const n = readValue();
+  const out = $('results');
+  out.innerHTML = '';
+  $('share').hidden = true;
+  if (n === null) { out.innerHTML = '<p class="empty">数字を入れてください</p>'; return; }
+
+  const u = $('unit').value;
+  let base, inputLabel, selfIndex = -1;
+  if (u.startsWith('u')) {
+    const [label, factor] = k.units[+u.slice(1)];
+    base = n * factor;
+    inputLabel = niceNumber(n) + label.replace(/（.*）/, '');
+  } else {
+    selfIndex = +u.slice(1);
+    const r = k.refs[selfIndex];
+    base = n * r.value;
+    inputLabel = r.short + (n === 1 ? '' : ' ' + niceNumber(n) + r.word.replace('分', '') + '分');
+  }
+
+  const lines = [];
+  k.refs.forEach((r, i) => {
+    const x = base / r.value;
+    const row = document.createElement('div');
+    row.className = 'res' + (i === selfIndex ? ' self' : '');
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = r.emoji + ' ' + r.name;
+    const val = document.createElement('div');
+    val.className = 'val';
+    // 「倍」で1未満のときは、％で表す（例：文京区民の約1.3%）
+    const asPercent = r.word === '倍' && x < 1;
+    const main = asPercent ? '約' + percent(x) : r.word === '倍' ? '約' + niceNumber(x) + '倍' : '約' + niceNumber(x) + ' ' + r.word;
+    val.textContent = main;
+    if (x < 1 && !asPercent) {
+      const s = document.createElement('small');
+      s.textContent = '（' + percent(x) + '）';
+      val.append(s);
+    }
+    row.append(name, val, pictures(r.emoji, x));
+    out.append(row);
+    if (i !== selfIndex) lines.push(r.short + (r.word === '倍' ? 'の' : '') + main + (x < 1 && !asPercent ? '（' + percent(x) + '）' : ''));
+  });
+
+  // 元の単位での大きさも添える（名所で入れたとき）
+  if (selfIndex >= 0) {
+    const note = document.createElement('p');
+    note.className = 'src';
+    note.textContent = '＝ 約' + niceNumber(base) + ' ' + k.units[0][0].replace(/（.*）/, '');
+    out.prepend(note);
+  }
+
+  shareText = '【文京区民専用ものさし】' + inputLabel + 'は、' + lines.join('、') + '。';
+  $('share').hidden = false;
+}
+
+// ===== 共有 =====
+$('share').onclick = async () => {
+  if (navigator.share) {
+    try { await navigator.share({ text: shareText }); } catch (e) { /* 取り消しは何もしない */ }
+    return;
+  }
+  try { await navigator.clipboard.writeText(shareText); alert('結果の文章をコピーしました。'); }
+  catch (e) { prompt('この文章をコピーしてください', shareText); }
+};
+
+$('num').addEventListener('input', calc);
+$('unit').addEventListener('change', calc);
+
+// ===== 出典の一覧 =====
+for (const s of Object.values(SOURCES)) {
+  const li = document.createElement('li');
+  li.textContent = s;
+  $('sources').append(li);
+}
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+buildAll();
+</script>
+</body>
+</html>
