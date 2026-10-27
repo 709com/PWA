@@ -1,0 +1,232 @@
+<!doctype html>
+<!-- このファイルは「プッシュ通知の実験」の本体です。アプリを閉じていても届く通知（プッシュ通知）を受け取る準備が、iPhoneでどこまでできるかを順番に確かめます。 -->
+<!-- 今はサーバーをつないでいないため、外部への送信はなく、プッシュ通知は届きません。サーバーをつなぐときは、事前にリスクを説明します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プッシュ通知の実験</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="通知の実験">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#7c4dc9">
+
+<style>
+  :root { --bg:#f7f5fb; --card:#fff; --text:#221b2e; --sub:#645a74; --accent:#7c4dc9; --line:#e6e0f0; --ok:#1e9e5a; --ng:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16131c; --card:#211c2a; --text:#f0ecf6; --sub:#a99fb8; --accent:#a782f0; --line:#342c40; --ok:#45c27f; --ng:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.6; }
+  main { max-width:560px; margin:0 auto;
+         padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.35rem; margin:4px 0 6px; }
+  .lead { color:var(--sub); font-size:.92rem; margin:0 0 14px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+  h2 { font-size:1rem; margin:0 0 6px; }
+  button { font:inherit; border:none; cursor:pointer; touch-action:manipulation; background:var(--accent); color:#fff;
+           border-radius:10px; padding:9px 14px; font-weight:700; margin:6px 6px 0 0; }
+  button.sub { background:var(--bg); color:var(--text); border:1px solid var(--line); font-weight:500; }
+  button:disabled { opacity:.4; }
+  .st { font-weight:700; }
+  .ok { color:var(--ok); } .ng { color:var(--ng); } .wait { color:var(--sub); }
+  .hint { font-size:.84rem; color:var(--sub); margin:6px 0 0; }
+  ul { padding-left:1.2em; margin:6px 0 0; font-size:.9rem; }
+  li { margin-bottom:4px; }
+  code { font-size:.8rem; background:var(--bg); padding:1px 5px; border-radius:6px; word-break:break-all; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:12px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; margin:0; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>🔔 プッシュ通知の実験</h1>
+  <p class="lead">アプリを閉じていても届く通知（プッシュ通知）を受け取る準備が、このiPhoneでどこまでできるかを、上から順に確かめます。</p>
+
+  <section>
+    <h2>① ホーム画面から開いているか</h2>
+    <p>結果：<span id="r1" class="st wait">確認中…</span></p>
+    <p class="hint">iPhoneでは、ホーム画面に追加したアプリでないと通知を使えません。</p>
+  </section>
+
+  <section>
+    <h2>② 通知の機能があるか</h2>
+    <p>結果：<span id="r2" class="st wait">確認中…</span></p>
+    <p class="hint">iOS 16.4以降が必要です。</p>
+  </section>
+
+  <section>
+    <h2>③ 通知の許可</h2>
+    <p>結果：<span id="r3" class="st wait">確認中…</span></p>
+    <button id="ask" disabled>通知を許可する</button>
+    <p class="hint">許可を取り消すときは、iPhoneの「設定」→「通知」→「通知の実験」から変更できます。</p>
+  </section>
+
+  <section>
+    <h2>④ この端末で通知を出してみる</h2>
+    <p>アプリを開いている状態で、iPhoneの中から通知を出します（サーバーは使いません）。</p>
+    <button id="now" disabled>すぐに通知</button>
+    <button id="later" class="sub" disabled>10秒後に通知</button>
+    <p class="hint">「10秒後」は、押したあとにアプリを閉じると<b>届きません</b>。閉じるとアプリが止まるためです。この限界を確かめるためのボタンです。</p>
+  </section>
+
+  <section>
+    <h2>⑤ プッシュ通知の「宛先」をつくる</h2>
+    <p>結果：<span id="r5" class="st wait">未実施</span></p>
+    <button id="sub" disabled>宛先をつくる</button>
+    <button id="unsub" class="sub" disabled>宛先を消す</button>
+    <p class="hint" id="r5detail"></p>
+    <p class="hint">「宛先」は、サーバーがこのiPhoneに通知を届けるための住所のようなものです。iPhoneの中でつくるだけで、どこにも送りません。今回は試験用の鍵でつくるので、<b>この宛先に通知が届くことはありません</b>。</p>
+  </section>
+
+  <section>
+    <h2>本物のプッシュ通知に必要なもの（次の段階）</h2>
+    <ul>
+      <li><b>通知を送るサーバー</b>：決まった時刻に通知を送る係。GitHub Pagesでは動かせないので、別のサービス（無料枠のあるものを想定）に登録が必要です。</li>
+      <li><b>サーバー用の鍵</b>：パスワードのようなもの。公開されているこのリポジトリには入れられないので、サーバー側だけで管理します。</li>
+      <li><b>外部への送信</b>：⑤の宛先と通知の文面を、サーバーに預けることになります。文面に個人情報を入れない運用が必要です。</li>
+      <li>通知はAppleのサーバーを経由して届きます。</li>
+    </ul>
+  </section>
+
+  <footer>版 <span id="ver"></span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const $ = (id) => document.getElementById(id);
+function mark(id, ok, text) { $(id).textContent = text; $(id).className = 'st ' + (ok === true ? 'ok' : ok === false ? 'ng' : 'wait'); }
+
+const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+const hasNotify = () => 'Notification' in window && 'serviceWorker' in navigator;
+const hasPush = () => 'PushManager' in window;
+
+// ===== ①〜③と⑤の状態を確認して表示する =====
+async function check() {
+  mark('r1', isStandalone(), isStandalone() ? 'はい（ホーム画面から開いています）' : 'いいえ（ブラウザで開いています。ホーム画面に追加してから開いてください）');
+
+  if (hasNotify() && hasPush()) mark('r2', true, 'あります（通知・プッシュ通知とも）');
+  else if (hasNotify()) mark('r2', null, '通知はありますが、プッシュ通知の機能がありません');
+  else mark('r2', false, 'ありません' + (isStandalone() ? '（iOSが古い可能性があります）' : '（ホーム画面から開くと使える場合があります）'));
+
+  const perm = hasNotify() ? Notification.permission : 'unsupported';
+  if (perm === 'granted') mark('r3', true, '許可されています');
+  else if (perm === 'denied') mark('r3', false, '拒否されています（iPhoneの「設定」から変更できます）');
+  else if (perm === 'default') mark('r3', null, 'まだ許可していません');
+  else mark('r3', false, '使えません');
+  $('ask').disabled = perm !== 'default';
+  $('now').disabled = $('later').disabled = perm !== 'granted';
+
+  let subscription = null;
+  if (perm === 'granted' && hasPush()) {
+    const reg = await navigator.serviceWorker.ready;
+    subscription = await reg.pushManager.getSubscription().catch(() => null);
+  }
+  $('sub').disabled = !(perm === 'granted' && hasPush()) || !!subscription;
+  $('unsub').disabled = !subscription;
+  if (subscription) showSubscription(subscription);
+  else { mark('r5', null, '未実施'); $('r5detail').textContent = ''; }
+}
+
+// ===== ③ 通知の許可 =====
+$('ask').onclick = async () => {
+  // iPhoneでは、ボタンを押したときにしか許可を求められない
+  try { await Notification.requestPermission(); } catch (e) {}
+  check();
+};
+
+// ===== ④ この端末で通知を出す =====
+async function localNotify(body) {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification('プッシュ通知の実験', { body, icon: 'icon-180.png' });
+  } catch (e) {
+    alert('通知を出せませんでした：' + e.message);
+  }
+}
+$('now').onclick = () => localNotify('これはiPhoneの中から出した通知です。');
+$('later').onclick = () => {
+  $('later').disabled = true;
+  $('later').textContent = '10秒待っています…';
+  setTimeout(() => {
+    localNotify('10秒たちました（アプリを開いたままだったので届きました）。');
+    $('later').disabled = false;
+    $('later').textContent = '10秒後に通知';
+  }, 10000);
+};
+
+// ===== ⑤ プッシュ通知の宛先をつくる =====
+// 本物の運用では、サーバーの「公開鍵」を使う。今回はサーバーがないので、iPhoneの中で試験用の鍵をその場でつくる
+async function testServerKey() {
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  return new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+  // 対になる秘密の鍵はどこにも保存せず捨てる（＝この宛先には誰も通知を送れない）
+}
+$('sub').onclick = async () => {
+  mark('r5', null, 'つくっています…');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: await testServerKey() });
+    showSubscription(sub);
+  } catch (e) {
+    mark('r5', false, 'つくれませんでした');
+    $('r5detail').textContent = '理由（英語）：' + e.message;
+  }
+  check();
+};
+$('unsub').onclick = async () => {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) await sub.unsubscribe();
+  check();
+};
+function showSubscription(sub) {
+  // 宛先の全文は表示しない（端末を特定できる情報のため）。どこの会社のサーバー経由かだけ示す
+  const host = new URL(sub.endpoint).host;
+  mark('r5', true, 'つくれました');
+  $('r5detail').innerHTML = '';
+  $('r5detail').append('通知の経由先：', Object.assign(document.createElement('code'), { textContent: host }),
+    host.includes('apple') ? '（Appleのサーバー）' : '');
+}
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { reg.update(); check(); } });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+check();
+</script>
+</body>
+</html>
