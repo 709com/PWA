@@ -1,0 +1,16 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です。",
+  "id": "./",
+  "name": "水分・服薬カウンター",
+  "short_name": "水と薬",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#1f7ae0",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,392 @@
+<!doctype html>
+<!-- このファイルは「水分・服薬カウンター」の本体です。画面の形（HTML）、見た目（CSS）、動き（JavaScript）をすべてこの1つにまとめています。 -->
+<!-- 記録はiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>水分・服薬カウンター</title>
+
+<!-- ホーム画面に追加したときの設定（名前・アイコン・全画面起動） -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="水と薬">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1f7ae0">
+
+<style>
+  /* ===== 色の設定（右側はダークモード用） ===== */
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --sub:#5b6474; --accent:#1f7ae0;
+          --accent-soft:#e3effc; --ok:#1e9e5a; --ok-soft:#e1f5ea; --line:#e3e6eb; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1e232b; --text:#eef1f5; --sub:#9aa3b2; --accent:#5aa2f5;
+            --accent-soft:#1d3350; --ok:#45c27f; --ok-soft:#173a29; --line:#2c323c; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.5;
+         -webkit-user-select:none; user-select:none; }
+  main { max-width:560px; margin:0 auto;
+         padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.35rem; margin:4px 0 12px; }
+  h2 { font-size:1rem; margin:0 0 10px; color:var(--sub); font-weight:600; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+
+  /* ===== 更新のお知らせ ===== */
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:12px 14px; margin-bottom:14px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* ===== 水分 ===== */
+  .count { font-size:2.6rem; font-weight:700; line-height:1.1; }
+  .count small { font-size:1rem; color:var(--sub); font-weight:500; }
+  .bar { height:12px; background:var(--accent-soft); border-radius:99px; overflow:hidden; margin:10px 0 14px; }
+  .bar div { height:100%; width:0; background:var(--accent); border-radius:99px; transition:width .25s; }
+  .water-buttons { display:flex; gap:10px; }
+  #plus { flex:1; background:var(--accent); color:#fff; border-radius:14px; padding:18px; font-size:1.3rem; font-weight:700; }
+  #minus { width:72px; background:var(--accent-soft); color:var(--accent); border-radius:14px; font-size:1.5rem; font-weight:700; }
+  #plus:active, #minus:active, .med:active { transform:scale(.97); }
+
+  /* ===== 服薬 ===== */
+  .meds { display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px; }
+  .med { background:var(--bg); border:2px solid var(--line); border-radius:14px; padding:14px 10px; text-align:center; }
+  .med b { display:block; font-size:1.1rem; word-break:break-all; }
+  .med span { font-size:.85rem; color:var(--sub); }
+  .med.done { background:var(--ok-soft); border-color:var(--ok); }
+  .med.done span { color:var(--ok); font-weight:700; }
+
+  /* ===== 履歴 ===== */
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  td { padding:7px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  td.num { text-align:right; white-space:nowrap; }
+  .muted { color:var(--sub); }
+
+  /* ===== 設定 ===== */
+  details summary { font-weight:600; color:var(--sub); cursor:pointer; }
+  details[open] summary { margin-bottom:12px; }
+  label.row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+  input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 10px;
+          -webkit-user-select:text; user-select:text; }
+  input[type=number] { width:96px; text-align:right; }
+  .med-edit { display:flex; gap:8px; margin-bottom:8px; }
+  .med-edit input { flex:1; min-width:0; }
+  .small-btn { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
+  .danger { color:var(--danger); border-color:var(--danger); }
+  .hint { font-size:.82rem; color:var(--sub); margin:6px 0 0; }
+
+  footer { text-align:center; font-size:.8rem; color:var(--sub); margin-top:8px; }
+  #net.off { color:var(--danger); font-weight:700; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+
+  <h1 id="today">今日</h1>
+
+  <!-- 水分 -->
+  <section>
+    <h2>💧 水分</h2>
+    <div class="count"><span id="cups">0</span><small> ／ <span id="goal">8</span>杯（<span id="ml">0</span>ml）</small></div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="water-buttons">
+      <button id="plus">＋1杯</button>
+      <button id="minus" aria-label="1杯取り消す">−</button>
+    </div>
+  </section>
+
+  <!-- 服薬 -->
+  <section>
+    <h2>💊 服薬 <small style="font-weight:400">（もう一度押すと取り消し）</small></h2>
+    <div class="meds" id="meds"></div>
+  </section>
+
+  <!-- 過去7日間 -->
+  <section>
+    <h2>📅 過去7日間</h2>
+    <table><tbody id="history"></tbody></table>
+  </section>
+
+  <!-- 設定 -->
+  <section>
+    <details>
+      <summary>⚙️ 設定</summary>
+      <label class="row">目標杯数 <span><input type="number" id="set-goal" min="1" max="30" inputmode="numeric"> 杯</span></label>
+      <label class="row">1杯の量 <span><input type="number" id="set-cup" min="10" max="2000" step="10" inputmode="numeric"> ml</span></label>
+      <h2 style="margin-top:16px">薬の名前</h2>
+      <div id="med-list"></div>
+      <button class="small-btn" id="add-med">＋ 薬を追加</button>
+      <p class="hint">名前を空にすると、その薬は削除されます。</p>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+      <button class="small-btn danger" id="reset">全データを削除</button>
+      <p class="hint">記録はこのiPhoneの中だけに保存されています。ホーム画面のアイコンを削除すると、記録も消えます。</p>
+    </details>
+  </section>
+
+  <footer><span id="net">オンライン</span> ・ 版 <span id="ver"></span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+// 保存場所の名前。他のアプリとデータが混ざらないよう「water:」を頭に付ける
+const KEY_SETTINGS = 'water:settings';
+const KEY_DAYS = 'water:days';
+const KEEP_DAYS = 60; // 何日分の記録を残すか
+
+const DEFAULT_SETTINGS = {
+  goal: 8,
+  cup: 200,
+  meds: [ { id: 'm1', name: '朝' }, { id: 'm2', name: '夜' } ]
+};
+
+// ===== 保存と読み込み =====
+function load(key, fallback) {
+  try {
+    const text = localStorage.getItem(key);
+    return text ? JSON.parse(text) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+function save(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    alert('保存できませんでした。iPhoneの空き容量やプライベートブラウズ設定をご確認ください。');
+  }
+}
+
+let settings = load(KEY_SETTINGS, structuredClone(DEFAULT_SETTINGS));
+let days = load(KEY_DAYS, {}); // 例：{ "2026-10-27": { cups: 3, meds: { m1: "08:15" } } }
+
+// ===== 日付の扱い =====
+function dateKey(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function todayKey() { return dateKey(new Date()); }
+function todayRecord() {
+  const k = todayKey();
+  if (!days[k]) days[k] = { cups: 0, meds: {} };
+  return days[k];
+}
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function label(d) { return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEK[d.getDay()] + '）'; }
+
+// 古い記録を消して、保存場所があふれないようにする
+function trimOld() {
+  const limit = new Date();
+  limit.setDate(limit.getDate() - KEEP_DAYS);
+  const limitKey = dateKey(limit);
+  for (const k of Object.keys(days)) if (k < limitKey) delete days[k];
+}
+
+// ===== 画面の表示 =====
+const $ = (id) => document.getElementById(id);
+
+function render() {
+  const rec = todayRecord();
+  $('today').textContent = label(new Date());
+
+  // 水分
+  $('cups').textContent = rec.cups;
+  $('goal').textContent = settings.goal;
+  $('ml').textContent = (rec.cups * settings.cup).toLocaleString();
+  $('bar').style.width = Math.min(100, rec.cups / settings.goal * 100) + '%';
+
+  // 服薬ボタン
+  const box = $('meds');
+  box.innerHTML = '';
+  if (settings.meds.length === 0) {
+    box.innerHTML = '<p class="muted">薬は登録されていません（設定から追加できます）</p>';
+  }
+  for (const m of settings.meds) {
+    const time = rec.meds[m.id];
+    const btn = document.createElement('button');
+    btn.className = 'med' + (time ? ' done' : '');
+    const b = document.createElement('b');
+    b.textContent = m.name; // 名前は文字としてだけ表示（安全のため）
+    const s = document.createElement('span');
+    s.textContent = time ? '済 ' + time : '未';
+    btn.append(b, s);
+    btn.onclick = () => toggleMed(m.id);
+    box.append(btn);
+  }
+
+  renderHistory();
+}
+
+function renderHistory() {
+  const body = $('history');
+  body.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const rec = days[dateKey(d)];
+    const tr = document.createElement('tr');
+
+    const tdDate = document.createElement('td');
+    tdDate.textContent = i === 0 ? '今日' : label(d);
+
+    const tdCups = document.createElement('td');
+    tdCups.className = 'num';
+    tdCups.textContent = rec ? rec.cups + '杯' : '—';
+
+    const tdMeds = document.createElement('td');
+    if (settings.meds.length && rec) {
+      tdMeds.textContent = settings.meds.map((m) => m.name + (rec.meds[m.id] ? '◯' : '×')).join(' ');
+    } else {
+      tdMeds.textContent = rec ? '' : '記録なし';
+      tdMeds.className = 'muted';
+    }
+    tr.append(tdDate, tdCups, tdMeds);
+    body.append(tr);
+  }
+}
+
+// ===== ボタンの動き =====
+function now() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+$('plus').onclick = () => {
+  todayRecord().cups++;
+  save(KEY_DAYS, days);
+  render();
+};
+$('minus').onclick = () => {
+  const rec = todayRecord();
+  if (rec.cups > 0) rec.cups--;
+  save(KEY_DAYS, days);
+  render();
+};
+function toggleMed(id) {
+  const rec = todayRecord();
+  if (rec.meds[id]) delete rec.meds[id];
+  else rec.meds[id] = now();
+  save(KEY_DAYS, days);
+  render();
+}
+
+// ===== 設定 =====
+function renderSettings() {
+  $('set-goal').value = settings.goal;
+  $('set-cup').value = settings.cup;
+  const list = $('med-list');
+  list.innerHTML = '';
+  for (const m of settings.meds) {
+    const row = document.createElement('div');
+    row.className = 'med-edit';
+    const input = document.createElement('input');
+    input.value = m.name;
+    input.maxLength = 20;
+    input.onchange = () => {
+      const name = input.value.trim();
+      if (name) m.name = name;
+      else settings.meds = settings.meds.filter((x) => x.id !== m.id);
+      save(KEY_SETTINGS, settings);
+      renderSettings();
+      render();
+    };
+    row.append(input);
+    list.append(row);
+  }
+}
+$('set-goal').onchange = (e) => {
+  const v = parseInt(e.target.value, 10);
+  if (v >= 1 && v <= 30) settings.goal = v;
+  save(KEY_SETTINGS, settings);
+  renderSettings();
+  render();
+};
+$('set-cup').onchange = (e) => {
+  const v = parseInt(e.target.value, 10);
+  if (v >= 10 && v <= 2000) settings.cup = v;
+  save(KEY_SETTINGS, settings);
+  renderSettings();
+  render();
+};
+$('add-med').onclick = () => {
+  const name = prompt('薬の名前（例：昼、ビタミン）');
+  if (!name || !name.trim()) return;
+  settings.meds.push({ id: 'm' + Date.now(), name: name.trim().slice(0, 20) });
+  save(KEY_SETTINGS, settings);
+  renderSettings();
+  render();
+};
+$('reset').onclick = () => {
+  if (!confirm('すべての記録と設定を削除します。元に戻せません。よろしいですか？')) return;
+  localStorage.removeItem(KEY_SETTINGS);
+  localStorage.removeItem(KEY_DAYS);
+  settings = structuredClone(DEFAULT_SETTINGS);
+  days = {};
+  renderSettings();
+  render();
+};
+
+// ===== 日付が変わったら表示を切り替える =====
+let shownDay = todayKey();
+function checkDayChange() {
+  if (todayKey() !== shownDay) {
+    shownDay = todayKey();
+    render();
+  }
+}
+setInterval(checkDayChange, 60 * 1000);           // 開いたままのとき：1分ごとに確認
+document.addEventListener('visibilitychange', () => { // アプリに戻ってきたとき
+  if (!document.hidden) checkDayChange();
+});
+
+// ===== 電波の状態 =====
+function updateNet() {
+  const on = navigator.onLine;
+  $('net').textContent = on ? 'オンライン' : 'オフライン（記録はできます）';
+  $('net').className = on ? '' : 'off';
+}
+window.addEventListener('online', updateNet);
+window.addEventListener('offline', updateNet);
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // 新しい版が待っていたら、お知らせを出す
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    // アプリに戻ってきたときに、新しい版がないか確認する
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  // 新しい版に切り替わったら、画面を読み込み直す（初めて開いたときは不要なので除く）
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+trimOld();
+save(KEY_DAYS, days);
+$('ver').textContent = APP_VERSION;
+updateNet();
+renderSettings();
+render();
+</script>
+</body>
+</html>
