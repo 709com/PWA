@@ -1,0 +1,359 @@
+<!doctype html>
+<!-- このファイルは「文京区議会議員専用タイマー」の本体です。持ち時間を決めて、経過時間（上）と残り時間（下）を表示します。 -->
+<!-- 設定と動作中の状態はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文京区議会議員専用タイマー</title>
+
+<!-- ホーム画面に追加したときの設定（名前・アイコン・全画面起動） -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="議員タイマー">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1c345c">
+
+<style>
+  /* ===== 色の設定（状態ごとに背景色が変わる） ===== */
+  :root { --bg:#f4f6fa; --card:#fff; --text:#16213a; --sub:#5b6474; --accent:#1c345c; --line:#dfe3ea; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161e; --card:#1d232d; --text:#eef1f5; --sub:#9aa3b2; --accent:#7ea3e0; --line:#2c323c; --danger:#ef6b61; }
+  }
+  body.warn { --bg:#fff3c4; --card:#fffaf0; --text:#3d3000; --sub:#6b5a1d; }   /* 予告：黄色 */
+  body.one  { --bg:#ffd8b0; --card:#fff4ea; --text:#4a2400; --sub:#7a4a1d; }   /* 残り1分：オレンジ */
+  body.over { --bg:#d93a30; --card:#e8564c; --text:#fff;    --sub:#ffe0dc; --line:#f08a82; } /* 時間切れ：赤 */
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--text); transition:background .4s;
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.5;
+         -webkit-user-select:none; user-select:none; }
+  main { max-width:560px; margin:0 auto; min-height:100%; display:flex; flex-direction:column;
+         padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.05rem; margin:4px 0 12px; text-align:center; color:var(--sub); font-weight:600; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:10px;
+          padding:8px 6px; width:72px; text-align:right; -webkit-user-select:text; user-select:text; }
+
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:12px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* ===== 時間の選択 ===== */
+  .pick { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #p30 { background:var(--bg); border:2px solid var(--line); border-radius:12px; padding:10px 18px; font-weight:700; font-size:1.1rem; }
+  #p30.on { border-color:var(--accent); color:var(--accent); }
+  .custom { display:flex; align-items:center; gap:4px; }
+  .chosen { margin:10px 0 0; font-size:.9rem; color:var(--sub); }
+
+  /* ===== 時間の表示 ===== */
+  .clock { flex:1; display:flex; flex-direction:column; justify-content:center; gap:6px; padding:8px 0; }
+  .row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .row .lbl { font-size:1.1rem; color:var(--sub); font-weight:700; white-space:nowrap; }
+  .num { font-variant-numeric:tabular-nums; font-weight:700; letter-spacing:.02em; line-height:1; }
+  #elapsed { font-size:clamp(2.6rem, 15vw, 5rem); color:var(--sub); }
+  #remain  { font-size:clamp(3.6rem, 24vw, 9rem); }
+  .divider { border-top:1px solid var(--line); margin:6px 0; }
+  body.over #remain { font-size:clamp(3rem, 19vw, 7.5rem); } /* 「+」が付く分だけ小さくする */
+  #status { text-align:center; font-weight:700; min-height:1.5em; color:var(--sub); }
+
+  /* ===== 操作ボタン ===== */
+  .controls { display:flex; gap:10px; margin-bottom:12px; }
+  #start { flex:2; background:var(--accent); color:#fff; border-radius:16px; padding:20px; font-size:1.35rem; font-weight:700; }
+  #start:disabled { opacity:.35; }
+  #reset { flex:1; background:var(--card); border:2px solid var(--line); border-radius:16px; font-size:1.15rem; font-weight:700; }
+  body.over #start { background:#fff; color:#c8372d; }
+  #start:active, #reset:active { transform:scale(.97); }
+
+  details summary { font-weight:600; color:var(--sub); cursor:pointer; }
+  details[open] summary { margin-bottom:12px; }
+  label.set { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+  .hint { font-size:.82rem; color:var(--sub); margin:6px 0 0; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+
+  /* 動作中・一時停止中は、時間の選択と設定を隠して数字を大きく見せる */
+  body.active .pick-box, body.active .settings { display:none; }
+
+  /* 横向き：数字を左右に並べて最大化し、見出しなどは隠す */
+  @media (orientation: landscape) and (max-height: 520px) {
+    h1, .settings, footer { display:none; }
+    main { max-width:none; }
+    .clock { flex-direction:row; align-items:center; justify-content:space-around; }
+    .divider { display:none; }
+    .row { flex-direction:column; align-items:center; gap:4px; }
+    #elapsed { font-size:13vh; }
+    #remain { font-size:30vh; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>文京区議会議員専用タイマー</h1>
+
+  <!-- 時間の選択（止まっているときだけ表示） -->
+  <section class="pick-box">
+    <div class="pick">
+      <button id="p30">30分</button>
+      <span class="custom">
+        <input id="in-min" type="number" min="0" max="300" inputmode="numeric" placeholder="分">分
+        <input id="in-sec" type="number" min="0" max="59" inputmode="numeric" placeholder="秒">秒
+      </span>
+    </div>
+    <p class="chosen" id="chosen">時間を選んでください</p>
+  </section>
+
+  <!-- 経過時間（上）と残り時間（下） -->
+  <div class="clock">
+    <div class="row"><span class="lbl">経過</span><span class="num" id="elapsed">00:00</span></div>
+    <div class="divider"></div>
+    <div class="row"><span class="lbl" id="remain-lbl">残り</span><span class="num" id="remain">00:00</span></div>
+    <div id="status"></div>
+  </div>
+
+  <div class="controls">
+    <button id="start" disabled>スタート</button>
+    <button id="reset">リセット</button>
+  </div>
+
+  <!-- 設定 -->
+  <section class="settings">
+    <details>
+      <summary>⚙️ 設定</summary>
+      <label class="set">予告（黄色）を出す時間 <span>残り <input id="set-warn" type="number" min="1" max="60" inputmode="numeric"> 分</span></label>
+      <label class="set">音で知らせる <input id="set-sound" type="checkbox" style="width:auto"></label>
+      <p class="hint">音は初期設定でオフです。オンにすると、予告・残り1分・時間切れで短い音が鳴ります。消音スイッチがオンのときは鳴らないことがあります。</p>
+      <p class="hint">残り1分でオレンジ、時間切れで赤になります。アプリを閉じている間は音が鳴りません（開き直すと正しい時間に戻ります）。</p>
+    </details>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ <span id="wl">画面の自動消灯：通常</span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_SETTINGS = 'timer:settings';
+const KEY_STATE = 'timer:state';
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) {
+  try { const t = localStorage.getItem(key); return t ? Object.assign(fallback, JSON.parse(t)) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* 保存できなくても動作は続ける */ }
+}
+
+let settings = load(KEY_SETTINGS, { warnMin: 3, sound: false });
+// 状態：持ち時間、これまでに経過した時間、動いている場合は動き出した時刻、鳴らし済みの合図
+let state = load(KEY_STATE, { durationMs: 0, accMs: 0, startedAt: null, fired: {} });
+
+// ===== 時間の計算 =====
+// 経過時間は「動き出した時刻からの差」で計算するので、アプリを閉じて開き直しても正確に戻る
+function elapsedMs() {
+  return state.accMs + (state.startedAt ? Date.now() - state.startedAt : 0);
+}
+function fmt(ms) {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return h > 0 ? h + ':' + p(m) + ':' + p(s) : p(m) + ':' + p(s);
+}
+const running = () => state.startedAt !== null;
+const active = () => running() || state.accMs > 0;
+
+// ===== 画面の表示 =====
+function render() {
+  const el = elapsedMs();
+  const rem = state.durationMs - el;
+  $('elapsed').textContent = fmt(el);
+  // 残り時間は切り上げ表示（「00:00」になった瞬間が時間切れ）
+  $('remain').textContent = rem > 0 ? fmt(rem + 999) : '+' + fmt(-rem);
+  $('remain-lbl').textContent = rem > 0 ? '残り' : '超過';
+
+  let phase = '';
+  if (active() || state.durationMs > 0) {
+    if (rem <= 0 && active()) phase = 'over';
+    else if (rem <= 60000 && active()) phase = 'one';
+    else if (rem <= settings.warnMin * 60000 && active()) phase = 'warn';
+  }
+  document.body.className = phase + (active() ? ' active' : '');
+
+  $('status').textContent = !active() ? '' :
+    running() ? (phase === 'over' ? '時間切れ' : phase === 'one' ? '残り1分' : phase === 'warn' ? '予告' : '') :
+    '一時停止中';
+  $('start').textContent = running() ? '一時停止' : (state.accMs > 0 ? '再開' : 'スタート');
+  $('start').disabled = state.durationMs <= 0;
+
+  checkSignals(rem);
+}
+
+// ===== 時間の選択 =====
+function chooseDuration(ms) {
+  state.durationMs = ms;
+  save(KEY_STATE, state);
+  $('chosen').textContent = ms > 0
+    ? '持ち時間：' + Math.floor(ms / 60000) + '分' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '秒'
+    : '時間を選んでください';
+  $('p30').classList.toggle('on', ms === 30 * 60000);
+  render();
+}
+$('p30').onclick = () => {
+  $('in-min').value = ''; $('in-sec').value = '';
+  chooseDuration(30 * 60000);
+};
+function fromInputs() {
+  const m = Math.min(300, Math.max(0, parseInt($('in-min').value, 10) || 0));
+  const s = Math.min(59, Math.max(0, parseInt($('in-sec').value, 10) || 0));
+  chooseDuration((m * 60 + s) * 1000);
+}
+$('in-min').oninput = fromInputs;
+$('in-sec').oninput = fromInputs;
+
+// ===== スタート・一時停止・リセット =====
+$('start').onclick = () => {
+  unlockAudio(); // iPhoneは、ボタンを押したときでないと音の準備ができない
+  if (running()) {
+    state.accMs = elapsedMs();
+    state.startedAt = null;
+    releaseWakeLock();
+  } else {
+    if (state.durationMs <= 0) return;
+    state.startedAt = Date.now();
+    requestWakeLock();
+  }
+  save(KEY_STATE, state);
+  render();
+};
+$('reset').onclick = () => {
+  if (active() && !confirm('タイマーをリセットします。よろしいですか？')) return;
+  state.accMs = 0;
+  state.startedAt = null;
+  state.fired = {};
+  save(KEY_STATE, state);
+  releaseWakeLock();
+  render();
+};
+
+// ===== 音の合図（予告・残り1分・時間切れ） =====
+let audioCtx = null;
+function unlockAudio() {
+  if (!settings.sound) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+}
+function beep(times, freq) {
+  if (!settings.sound || !audioCtx) return;
+  for (let i = 0; i < times; i++) {
+    const t = audioCtx.currentTime + i * 0.35;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.3);
+  }
+}
+// 境目を通り過ぎたら1回だけ合図する。アプリを閉じている間に過ぎた合図は、後から鳴らさない
+function checkSignals(rem) {
+  if (!running()) return;
+  const marks = [
+    { key: 'warn', at: settings.warnMin * 60000, times: 1, freq: 880 },
+    { key: 'one',  at: 60000, times: 2, freq: 880 },
+    { key: 'end',  at: 0, times: 3, freq: 1320 },
+  ];
+  let changed = false;
+  for (const mk of marks) {
+    if (!state.fired[mk.key] && rem <= mk.at) {
+      state.fired[mk.key] = true;
+      changed = true;
+      if (mk.at - rem < 3000) beep(mk.times, mk.freq);
+    }
+  }
+  if (changed) save(KEY_STATE, state);
+}
+
+// ===== 画面を消さない機能（スリープ防止） =====
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) { $('wl').textContent = '画面の自動消灯：この端末では止められません'; return; }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    $('wl').textContent = '画面の自動消灯：止めています';
+    wakeLock.addEventListener('release', () => { $('wl').textContent = '画面の自動消灯：通常'; });
+  } catch (e) {
+    $('wl').textContent = '画面の自動消灯：止められませんでした';
+  }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+// アプリに戻ってきたとき：動いていればスリープ防止をかけ直し、表示を更新する
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (running()) requestWakeLock();
+  render();
+});
+
+// ===== 設定 =====
+$('set-warn').value = settings.warnMin;
+$('set-sound').checked = settings.sound;
+$('set-warn').onchange = (e) => {
+  const v = parseInt(e.target.value, 10);
+  if (v >= 1 && v <= 60) settings.warnMin = v;
+  e.target.value = settings.warnMin;
+  save(KEY_SETTINGS, settings);
+  render();
+};
+$('set-sound').onchange = (e) => {
+  settings.sound = e.target.checked;
+  save(KEY_SETTINGS, settings);
+  if (settings.sound) { unlockAudio(); beep(1, 880); } // 試しに1回鳴らす
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+chooseDuration(state.durationMs);
+if (state.durationMs > 0 && state.durationMs !== 30 * 60000) {
+  $('in-min').value = Math.floor(state.durationMs / 60000);
+  $('in-sec').value = Math.floor(state.durationMs / 1000) % 60;
+}
+if (running()) requestWakeLock();
+setInterval(render, 250);
+</script>
+</body>
+</html>

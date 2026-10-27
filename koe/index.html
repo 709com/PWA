@@ -1,0 +1,323 @@
+<!doctype html>
+<!-- このファイルは「子どもの声の記録帳」の本体です。マイクで録音し、日付つきでiPhoneの中に保存・再生します。 -->
+<!-- 録音はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。共有ボタンを押したときだけ、あなたが選んだ先へ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>子どもの声の記録帳</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="声の記録帳">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#d66078">
+
+<style>
+  :root { --bg:#fbf5f6; --card:#fff; --text:#2a1d22; --sub:#6e5a62; --accent:#d66078; --accent-soft:#fbe3e8; --line:#eedfe3; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1a1416; --card:#261d21; --text:#f3eaed; --sub:#b19ca4; --accent:#ee8299; --accent-soft:#4a2630; --line:#3a2d32; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.5; }
+  main { max-width:560px; margin:0 auto;
+         padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.35rem; margin:4px 0 12px; }
+  h2 { font-size:1rem; margin:0 0 10px; color:var(--sub); font-weight:600; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:14px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* ===== 録音 ===== */
+  .rec-area { text-align:center; }
+  #rec { width:120px; height:120px; border-radius:50%; background:var(--accent); color:#fff; font-size:1.15rem; font-weight:700;
+         margin:12px auto 8px; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+  #rec.on { background:var(--danger); animation:pulse 1.2s infinite; }
+  #rec:disabled { opacity:.4; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(200,55,45,.5); } 50% { box-shadow:0 0 0 14px rgba(200,55,45,0); } }
+  #rec-time { font-size:1.6rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .hint { font-size:.82rem; color:var(--sub); margin:6px 0 0; }
+  #msg { color:var(--danger); font-weight:600; margin:8px 0 0; }
+
+  /* ===== 一覧 ===== */
+  .clip { border-top:1px solid var(--line); padding:12px 0; }
+  .clip:first-child { border-top:none; padding-top:0; }
+  .clip .title { font-weight:700; word-break:break-all; }
+  .clip .meta { font-size:.85rem; color:var(--sub); }
+  .clip .btns { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .clip .btns button { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:7px 12px; font-size:.9rem; }
+  .clip .btns .play { background:var(--accent-soft); color:var(--accent); border-color:transparent; font-weight:700; }
+  .clip .btns .del { color:var(--danger); }
+  .empty { color:var(--sub); }
+  audio { width:100%; margin-top:8px; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>🎙️ 子どもの声の記録帳</h1>
+
+  <!-- 録音 -->
+  <section class="rec-area">
+    <input id="who" maxlength="20" placeholder="だれの声？（例：長女、ぜんいん）">
+    <button id="rec"><span id="rec-label">● 録音</span></button>
+    <div id="rec-time">00:00</div>
+    <p class="hint">1回の録音は最長10分です。録音中にアプリを閉じると、そこまでを保存します。</p>
+    <p id="msg"></p>
+  </section>
+
+  <!-- 一覧 -->
+  <section>
+    <h2>📼 記録（新しい順）</h2>
+    <div id="list"></div>
+    <audio id="player" controls hidden></audio>
+  </section>
+
+  <section>
+    <h2>💾 保存について</h2>
+    <p class="hint" id="usage">使用量を確認中…</p>
+    <p class="hint">録音はこのiPhoneの中だけに保存されています。ホーム画面のアイコンを削除すると、録音も消えます。残したい録音は「共有・保存」から「"ファイル"に保存」などで書き出してください。</p>
+  </section>
+
+  <footer>版 <span id="ver"></span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const MAX_MS = 10 * 60 * 1000; // 1回の録音の上限（10分）
+const KEY_WHO = 'koe:who';     // 最後に入れた「だれの声」を覚えておく
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB）を使うための小さな道具 =====
+const DB_NAME = 'koe', STORE = 'clips';
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, mode);
+    const result = fn(tx.objectStore(STORE));
+    tx.oncomplete = () => resolve(result && result.result !== undefined ? result.result : undefined);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (item) => dbDo('readwrite', (s) => s.put(item));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 表示のための小さな道具 =====
+const p2 = (n) => String(n).padStart(2, '0');
+const fmtLen = (sec) => p2(Math.floor(sec / 60)) + ':' + p2(Math.floor(sec % 60));
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function fmtDate(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEK[d.getDay()] + '） ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+}
+function fileName(c) {
+  const d = new Date(c.createdAt);
+  const ext = c.mime.includes('mp4') ? 'm4a' : c.mime.includes('webm') ? 'webm' : 'audio';
+  return '声_' + (c.label || '記録') + '_' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '_' + p2(d.getHours()) + p2(d.getMinutes()) + '.' + ext;
+}
+
+// ===== 録音 =====
+let recorder = null, stream = null, chunks = [], recStart = 0, recTimer = null;
+
+function pickMime() {
+  // iPhoneは「audio/mp4」で録音できる。ほかのブラウザ用に候補を並べる
+  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+async function startRec() {
+  $('msg').textContent = '';
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    $('msg').textContent = 'この端末・ブラウザでは録音できません。';
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    $('msg').textContent = 'マイクを使う許可がありません。iPhoneの「設定」でマイクの許可を確認するか、アプリを開き直して「許可」を押してください。';
+    return;
+  }
+  const mime = pickMime();
+  recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = saveRec;
+  recorder.start(1000);
+  recStart = Date.now();
+  $('rec').classList.add('on');
+  $('rec-label').textContent = '■ 停止';
+  recTimer = setInterval(() => {
+    const ms = Date.now() - recStart;
+    $('rec-time').textContent = fmtLen(ms / 1000);
+    if (ms >= MAX_MS) stopRec();
+  }, 250);
+}
+
+function stopRec() {
+  if (!recorder || recorder.state === 'inactive') return;
+  recorder.stop();
+  clearInterval(recTimer);
+  $('rec').classList.remove('on');
+  $('rec-label').textContent = '● 録音';
+}
+
+async function saveRec() {
+  // マイクを止める（画面上部のマイク使用中の表示を消す）
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  const durationSec = (Date.now() - recStart) / 1000;
+  const mime = recorder.mimeType || (chunks[0] && chunks[0].type) || 'audio/mp4';
+  recorder = null;
+  $('rec-time').textContent = '00:00';
+  if (!chunks.length || durationSec < 0.5) { $('msg').textContent = '録音が短すぎたため保存しませんでした。'; return; }
+  const blob = new Blob(chunks, { type: mime });
+  const label = $('who').value.trim().slice(0, 20);
+  try {
+    await dbPut({ id: 'c' + Date.now(), createdAt: recStart, label, durationSec, mime, blob });
+  } catch (e) {
+    $('msg').textContent = '保存できませんでした。iPhoneの空き容量を確認してください。';
+  }
+  renderList();
+}
+
+$('rec').onclick = () => (recorder ? stopRec() : startRec());
+// アプリを閉じたら、そこまでの録音を保存する（閉じている間は録音できないため）
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopRec(); });
+
+$('who').value = localStorage.getItem(KEY_WHO) || '';
+$('who').onchange = () => { try { localStorage.setItem(KEY_WHO, $('who').value.trim()); } catch (e) {} };
+
+// ===== 一覧の表示と操作 =====
+let currentUrl = null;
+async function renderList() {
+  let clips = [];
+  try { clips = await dbAll(); } catch (e) { $('list').textContent = 'データベースを開けませんでした。'; return; }
+  clips.sort((a, b) => b.createdAt - a.createdAt);
+  const list = $('list');
+  list.innerHTML = '';
+  if (!clips.length) {
+    list.innerHTML = '<p class="empty">まだ記録はありません。</p>';
+  }
+  for (const c of clips) {
+    const row = document.createElement('div');
+    row.className = 'clip';
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = c.label || '（名前なし）';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = fmtDate(c.createdAt) + ' ・ ' + fmtLen(c.durationSec);
+    const btns = document.createElement('div');
+    btns.className = 'btns';
+    btns.append(
+      button('▶ 再生', 'play', () => play(c)),
+      button('名前変更', '', async () => {
+        const v = prompt('名前（例：長女 3歳の歌）', c.label);
+        if (v === null) return;
+        c.label = v.trim().slice(0, 20);
+        await dbPut(c);
+        renderList();
+      }),
+      button('共有・保存', '', () => share(c)),
+      button('削除', 'del', async () => {
+        if (!confirm('「' + (c.label || '名前なし') + '」を削除します。元に戻せません。よろしいですか？')) return;
+        await dbDel(c.id);
+        renderList();
+      })
+    );
+    row.append(title, meta, btns);
+    list.append(row);
+  }
+  showUsage();
+}
+function button(text, cls, onclick) {
+  const b = document.createElement('button');
+  b.textContent = text;
+  if (cls) b.className = cls;
+  b.onclick = onclick;
+  return b;
+}
+function play(c) {
+  const player = $('player');
+  if (currentUrl) URL.revokeObjectURL(currentUrl);
+  currentUrl = URL.createObjectURL(c.blob);
+  player.src = currentUrl;
+  player.hidden = false;
+  player.play().catch(() => {});
+}
+async function share(c) {
+  const file = new File([c.blob], fileName(c), { type: c.mime });
+  // iPhoneの共有メニュー（AirDrop、「"ファイル"に保存」など）を開く
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: fileName(c) }); } catch (e) { /* 取り消しは何もしない */ }
+    return;
+  }
+  // 共有メニューが使えないときは、ダウンロードとして渡す
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+// ===== 使用量の表示 =====
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = '使用量はこの端末では確認できません。'; return; }
+  const { usage, quota } = await navigator.storage.estimate();
+  const mb = (n) => (n / 1024 / 1024).toFixed(1) + 'MB';
+  $('usage').textContent = '使用量：' + mb(usage || 0) + (quota ? '（目安の上限 ' + mb(quota) + '）' : '');
+}
+// 「この記録は大事なので、勝手に消さないで」とブラウザにお願いする（認められるかは端末しだい）
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || recorder) return; // 録音中は読み込み直さない
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+renderList();
+</script>
+</body>
+</html>

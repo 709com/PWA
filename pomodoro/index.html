@@ -1,0 +1,328 @@
+<!doctype html>
+<!-- このファイルは「ポモドーロタイマー」の本体です。作業と休憩を交互に計り、終わったら通知を出し、今日の完了数をアイコンの数字（バッジ）で表示します。 -->
+<!-- 記録はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。通知もiPhoneの中で出しています（サーバーは使いません）。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ポモドーロタイマー</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="ポモドーロ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#de483c">
+
+<style>
+  :root { --bg:#fbf6f5; --card:#fff; --text:#2b1d1b; --sub:#6d5b58; --accent:#de483c; --accent-soft:#fbe2df; --line:#eee0dd; --danger:#c8372d; }
+  body.break { --accent:#2f9e6b; --accent-soft:#dcf2e7; --bg:#f3faf6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1a1514; --card:#261e1d; --text:#f4ecea; --sub:#b3a19d; --accent:#f07468; --accent-soft:#4a2723; --line:#3a2e2c; --danger:#ef6b61; }
+    body.break { --accent:#5ccf98; --accent-soft:#1d3d2e; --bg:#121a16; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); transition:background .4s;
+         font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.5;
+         -webkit-user-select:none; user-select:none; }
+  main { max-width:560px; margin:0 auto;
+         padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.35rem; margin:4px 0 12px; }
+  h2 { font-size:1rem; margin:0 0 10px; color:var(--sub); font-weight:600; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; width:80px; text-align:right; }
+
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:14px;
+            align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .timer { text-align:center; }
+  #phase { font-size:1.2rem; font-weight:700; color:var(--accent); }
+  #clock { font-size:clamp(4rem, 24vw, 7rem); font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; margin:4px 0 10px; }
+  .bar { height:10px; background:var(--accent-soft); border-radius:99px; overflow:hidden; margin-bottom:14px; }
+  .bar div { height:100%; width:0; background:var(--accent); border-radius:99px; }
+  .controls { display:flex; gap:8px; }
+  #start { flex:1.6; background:var(--accent); color:#fff; border-radius:14px; padding:18px; font-size:1.25rem; font-weight:700; }
+  .controls .sub { flex:1; background:var(--bg); border:1px solid var(--line); border-radius:14px; font-weight:600; white-space:nowrap; padding:0 6px; font-size:.95rem; }
+  #note { min-height:1.4em; font-size:.9rem; color:var(--sub); margin:10px 0 0; }
+  #tomatoes { font-size:1.4rem; letter-spacing:2px; word-break:break-all; }
+
+  .notify-state { font-weight:700; }
+  .ok { color:#2f9e6b; } .ng { color:var(--danger); }
+  .small-btn { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 12px; margin:6px 6px 0 0; }
+  .primary { background:var(--accent); color:#fff; border-color:transparent; font-weight:700; }
+  details summary { font-weight:600; color:var(--sub); cursor:pointer; }
+  details[open] summary { margin-bottom:12px; }
+  label.set { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+  .hint { font-size:.82rem; color:var(--sub); margin:6px 0 0; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>🍅 ポモドーロ</h1>
+
+  <section class="timer">
+    <div id="phase">作業</div>
+    <div id="clock">25:00</div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="controls">
+      <button id="start">スタート</button>
+      <button id="skip" class="sub">次へ</button>
+      <button id="reset" class="sub">リセット</button>
+    </div>
+    <p id="note"></p>
+  </section>
+
+  <section>
+    <h2>今日の完了</h2>
+    <div id="tomatoes"></div>
+    <p class="hint">完了した作業の数を、ホーム画面のアイコンの右上に数字で表示します（通知を許可した場合のみ）。</p>
+  </section>
+
+  <section>
+    <h2>🔔 通知</h2>
+    <p>状態：<span id="nstate" class="notify-state">確認中…</span></p>
+    <button id="ask" class="small-btn primary" hidden>通知を許可する</button>
+    <button id="test" class="small-btn" hidden>テスト通知を出す</button>
+    <p class="hint"><b>アプリを開いている間だけ</b>、時間になると通知を出します。アプリを閉じている・画面を消している間は、時間になっても通知は来ません（iPhoneの仕組み上、アプリ単体ではできません）。次に開いたとき「終了していました」と表示します。</p>
+  </section>
+
+  <section>
+    <details>
+      <summary>⚙️ 設定</summary>
+      <label class="set">作業 <span><input id="s-work" type="number" min="1" max="120" inputmode="numeric"> 分</span></label>
+      <label class="set">休憩 <span><input id="s-short" type="number" min="1" max="60" inputmode="numeric"> 分</span></label>
+      <label class="set">長い休憩（4回ごと） <span><input id="s-long" type="number" min="1" max="60" inputmode="numeric"> 分</span></label>
+      <label class="set">終了時に音を鳴らす <input id="s-sound" type="checkbox" style="width:auto"></label>
+      <p class="hint">設定の変更は、次の回から反映されます。</p>
+    </details>
+  </section>
+
+  <footer>版 <span id="ver"></span></footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_SETTINGS = 'pomodoro:settings';
+const KEY_STATE = 'pomodoro:state';
+const $ = (id) => document.getElementById(id);
+const NAMES = { work: '作業', short: '休憩', long: '長い休憩' };
+
+function load(key, fallback) {
+  try { const t = localStorage.getItem(key); return t ? Object.assign(fallback, JSON.parse(t)) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+
+function dayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+
+let settings = load(KEY_SETTINGS, { work: 25, short: 5, long: 15, sound: true });
+// 状態：今の段階、その長さ、経過済みの時間、動き出した時刻、今日の完了数
+let state = load(KEY_STATE, { phase: 'work', durationMs: 25 * 60000, accMs: 0, startedAt: null, day: dayKey(), done: 0 });
+
+const running = () => state.startedAt !== null;
+const elapsed = () => state.accMs + (running() ? Date.now() - state.startedAt : 0);
+const p2 = (n) => String(n).padStart(2, '0');
+const fmt = (ms) => { const s = Math.ceil(Math.max(0, ms) / 1000); return p2(Math.floor(s / 60)) + ':' + p2(s % 60); };
+const hm = (ms) => { const d = new Date(ms); return d.getHours() + '時' + p2(d.getMinutes()) + '分'; };
+
+// ===== 日付が変わったら完了数を0に戻す =====
+function checkDay() {
+  if (state.day !== dayKey()) { state.day = dayKey(); state.done = 0; save(KEY_STATE, state); updateBadge(); }
+}
+
+// ===== 段階を切り替える =====
+function phaseLength(phase) { return settings[phase] * 60000; }
+function setPhase(phase) {
+  state.phase = phase;
+  state.durationMs = phaseLength(phase);
+  state.accMs = 0;
+  state.startedAt = null;
+  save(KEY_STATE, state);
+}
+function nextPhase() {
+  if (state.phase === 'work') return state.done > 0 && state.done % 4 === 0 ? 'long' : 'short';
+  return 'work';
+}
+
+// 段階が終わったときの処理。closedWhile=true は「閉じている間に終わっていた」場合
+function finishPhase(closedWhile) {
+  const endedAt = state.startedAt + (state.durationMs - state.accMs);
+  const finished = state.phase;
+  if (finished === 'work') state.done++;
+  const next = nextPhase();
+  setPhase(next);
+  updateBadge();
+  const text = NAMES[finished] + 'が終わりました。次は' + NAMES[next] + '（' + settings[next] + '分）です。';
+  if (closedWhile) {
+    $('note').textContent = NAMES[finished] + 'は ' + hm(endedAt) + ' に終了していました。次は' + NAMES[next] + 'です。';
+  } else {
+    $('note').textContent = text;
+    notify(NAMES[finished] + 'が終わりました', '次は' + NAMES[next] + '（' + settings[next] + '分）。アプリを開いてスタートしてください。');
+    beep();
+  }
+}
+
+// ===== 画面の表示（1秒に数回呼ばれる） =====
+function render() {
+  checkDay();
+  if (running() && elapsed() >= state.durationMs) finishPhase(document.hidden);
+  const rem = state.durationMs - elapsed();
+  document.body.className = state.phase === 'work' ? '' : 'break';
+  $('phase').textContent = NAMES[state.phase] + (running() ? '中' : state.accMs > 0 ? '（一時停止中）' : '');
+  $('clock').textContent = fmt(rem);
+  $('bar').style.width = Math.min(100, elapsed() / state.durationMs * 100) + '%';
+  $('start').textContent = running() ? '一時停止' : state.accMs > 0 ? '再開' : 'スタート';
+  $('tomatoes').textContent = state.done ? '🍅'.repeat(Math.min(state.done, 30)) + ' ' + state.done + '回' : 'まだありません';
+  document.title = running() ? fmt(rem) + ' ' + NAMES[state.phase] : 'ポモドーロタイマー';
+}
+
+// ===== ボタン =====
+$('start').onclick = () => {
+  unlockAudio();
+  $('note').textContent = '';
+  if (running()) { state.accMs = elapsed(); state.startedAt = null; }
+  else state.startedAt = Date.now();
+  save(KEY_STATE, state);
+  render();
+};
+$('skip').onclick = () => {
+  if (!confirm('今の' + NAMES[state.phase] + 'を終わりにして、次へ進みます。（作業を途中で終えた場合は完了に数えません）')) return;
+  setPhase(state.phase === 'work' ? 'short' : 'work');
+  $('note').textContent = '';
+  render();
+};
+$('reset').onclick = () => {
+  if (!confirm('今の段階を最初からやり直します。よろしいですか？')) return;
+  setPhase(state.phase);
+  $('note').textContent = '';
+  render();
+};
+
+// ===== 音 =====
+let audioCtx = null;
+function unlockAudio() {
+  if (!settings.sound) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+}
+function beep() {
+  if (!settings.sound || !audioCtx) return;
+  [0, 0.3, 0.6].forEach((delay, i) => {
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.frequency.value = i === 2 ? 1320 : 990;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.3);
+  });
+}
+
+// ===== 通知 =====
+const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+function showNotifyState() {
+  const ask = $('ask'), test = $('test'), st = $('nstate');
+  ask.hidden = true; test.hidden = true;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    st.textContent = isStandalone() ? 'この端末では使えません（iOS 16.4以降が必要です）' : 'ホーム画面に追加して開くと使えます';
+    st.className = 'notify-state ng';
+    return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') { st.textContent = '許可されています'; st.className = 'notify-state ok'; test.hidden = false; }
+  else if (p === 'denied') { st.textContent = '許可されていません（iPhoneの「設定」→「通知」→「ポモドーロ」で変更できます）'; st.className = 'notify-state ng'; }
+  else { st.textContent = 'まだ許可していません'; st.className = 'notify-state'; ask.hidden = false; }
+}
+$('ask').onclick = async () => {
+  // iPhoneでは、ボタンを押したときにしか許可を求められない
+  try { await Notification.requestPermission(); } catch (e) {}
+  showNotifyState();
+  updateBadge();
+};
+$('test').onclick = () => notify('テスト通知', '通知はこのように表示されます。');
+async function notify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, { body, icon: 'icon-180.png', tag: 'pomodoro' });
+  } catch (e) { /* 通知が出せなくても動作は続ける */ }
+}
+
+// ===== アイコンのバッジ（右上の数字） =====
+function updateBadge() {
+  if (!('setAppBadge' in navigator)) return;
+  const p = state.done > 0 ? navigator.setAppBadge(state.done) : navigator.clearAppBadge();
+  p.catch(() => {});
+}
+
+// ===== 設定 =====
+$('s-work').value = settings.work; $('s-short').value = settings.short; $('s-long').value = settings.long;
+$('s-sound').checked = settings.sound;
+for (const [id, key, max] of [['s-work', 'work', 120], ['s-short', 'short', 60], ['s-long', 'long', 60]]) {
+  $(id).onchange = (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (v >= 1 && v <= max) settings[key] = v;
+    e.target.value = settings[key];
+    save(KEY_SETTINGS, settings);
+    // 止まっていて、まだ始めていない段階なら、すぐに反映する
+    if (!running() && state.accMs === 0) setPhase(state.phase);
+    render();
+  };
+}
+$('s-sound').onchange = (e) => { settings.sound = e.target.checked; save(KEY_SETTINGS, settings); };
+
+// アプリに戻ってきたとき：閉じている間に終わっていないか確認する
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (running() && elapsed() >= state.durationMs) finishPhase(true);
+  showNotifyState();
+  render();
+});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (worker) => {
+      $('update').style.display = 'flex';
+      $('update-btn').onclick = () => worker.postMessage('SKIP_WAITING');
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w);
+      });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+// まだ始めていない段階なら、最新の設定の長さに合わせる
+if (!running() && state.accMs === 0) setPhase(state.phase);
+if (running() && elapsed() >= state.durationMs) finishPhase(true);
+showNotifyState();
+updateBadge();
+render();
+setInterval(render, 250);
+</script>
+</body>
+</html>
