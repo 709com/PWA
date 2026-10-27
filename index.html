@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- このファイルは、PWA実験室のトップページです。作ったアプリの一覧を表示し、各アプリへのリンクを置いています。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PWA実験室</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --sub:#5b6474; --accent:#1f7ae0; --line:#e3e6eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1e232b; --text:#eef1f5; --sub:#9aa3b2; --accent:#5aa2f5; --line:#2c323c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.6; }
+  main { max-width:640px; margin:0 auto; padding:24px 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .lead { color:var(--sub); margin:0 0 20px; font-size:.95rem; }
+  .app { display:block; background:var(--card); border:1px solid var(--line); border-radius:14px;
+         padding:16px; margin-bottom:12px; color:inherit; text-decoration:none; }
+  .app b { font-size:1.1rem; }
+  .app small { display:block; color:var(--sub); }
+  .tag { display:inline-block; font-size:.75rem; color:var(--accent); border:1px solid var(--accent);
+         border-radius:99px; padding:0 8px; margin-right:4px; }
+  .note { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; font-size:.9rem; color:var(--sub); }
+  .note b { color:var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>PWA実験室</h1>
+  <p class="lead">iPhoneのホーム画面に追加して試すWebアプリの一覧です。</p>
+
+  <p class="lead">アプリは準備中です。</p>
+
+  <div class="note">
+    <b>ホーム画面への追加方法（Safari推奨）</b><br>
+    アプリを開く → 画面下の共有ボタン（□に↑）→「ホーム画面に追加」→「追加」。<br>
+    入力したデータはiPhoneの中だけに保存され、外部には送信されません。
+  </div>
+</main>
+</body>
+</html>
