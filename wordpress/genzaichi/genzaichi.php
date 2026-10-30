@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 現在地（最寄駅）表示
  * Description: iPhoneのショートカットから送られた現在地をもとに最寄駅を計算し、地図と文字で表示します。正確な位置は保存せず、駅名と時刻だけを過去7日分保存します。表示したいページに [genzaichi] と書いてください。
- * Version: 1.0.0
+ * Version: 1.1.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // WordPressの外から直接開かれたときは何もしない
 }
 
-define('GZ_VERSION', '1.0.0');
+define('GZ_VERSION', '1.1.0');
 define('GZ_KEEP_DAYS', 7);       // 履歴を残す日数
 define('GZ_MIN_INTERVAL', 20);   // 連続送信を受け付けない秒数
 
@@ -250,14 +250,14 @@ add_shortcode('genzaichi', function ($atts) {
     wp_enqueue_script('gz-map', $base . 'genzaichi.js', array('gz-leaflet'), GZ_VERSION, true);
     ob_start();
     ?>
-    <div class="gz-wrap" data-api="<?php echo esc_url(rest_url('genzaichi/v1/data')); ?>">
+    <div class="gz-wrap" data-api="<?php echo esc_url(rest_url('genzaichi/v1/data')); ?>" data-area="<?php echo esc_url($base . 'bunkyo.json?v=' . GZ_VERSION); ?>">
         <p class="gz-status" style="font-weight:bold;">読み込み中…</p>
         <p class="gz-date-row" style="margin:.5em 0;">表示する日：<select class="gz-date"></select></p>
         <div class="gz-map" style="height:<?php echo (int) $height; ?>px;border-radius:8px;"></div>
         <ol class="gz-list" style="font-size:.9em;margin:.8em 0 .4em 1.4em;"></ol>
         <p class="gz-note" style="font-size:.75em;color:#666;line-height:1.5;">
             1時間ごとの記録をもとに、最寄駅どうしを直線で結んでいます（実際に通った道ではありません）。<br>
-            駅の位置：国土数値情報（鉄道データ）国土交通省を加工して作成 ／ 地図：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>
+            駅の位置・区の境界：国土数値情報（鉄道データ・行政区域）国土交通省を加工して作成 ／ 地図：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>
         </p>
     </div>
     <?php
