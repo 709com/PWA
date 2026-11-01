@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 現在地（最寄駅）表示
  * Description: iPhoneのショートカットから送られた現在地をもとに最寄駅を計算し、地図と文字で表示します。正確な位置は保存せず、駅名と時刻だけを過去7日分保存します。表示したいページに [genzaichi] と書いてください。
- * Version: 1.2.0
+ * Version: 1.3.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // WordPressの外から直接開かれたときは何もしない
 }
 
-define('GZ_VERSION', '1.2.0');
+define('GZ_VERSION', '1.3.0');
 define('GZ_KEEP_DAYS', 7);       // 履歴を残す日数
 define('GZ_MIN_INTERVAL', 20);   // 連続送信を受け付けない秒数
 
@@ -34,9 +34,52 @@ function gz_defaults() {
 function gz_settings() {
     return array_merge(gz_defaults(), (array) get_option('gz_settings', array()));
 }
+// 記録は「時間枠（○時00分・○時30分）ごとに1件」の形で保存する（gz_points）
+// 1件 = d:日付, s:時間枠の時刻, t:実際に届いた時刻, n:駅名, la/lo:駅の位置, m:駅からの距離
+function gz_points() {
+    $p = get_option('gz_points', null);
+    if (is_array($p)) {
+        return $p;
+    }
+    // 1.2.0までの形（gz_history）から移し替える（初回だけ）
+    $points = array();
+    foreach ((array) get_option('gz_history', array()) as $e) {
+        foreach (array_unique(array($e['t1'], $e['t2'])) as $ts) {
+            $points = gz_add_point($points, array(
+                'd' => $e['d'], 's' => gz_slot($ts), 't' => $ts,
+                'n' => $e['n'], 'la' => $e['la'], 'lo' => $e['lo'], 'm' => $e['m'],
+            ));
+        }
+    }
+    update_option('gz_points', $points, false);
+    delete_option('gz_history');
+    return $points;
+}
+// 記録を1件足す。直前の記録と同じ日・同じ時間枠なら、直前の記録を消して最新に置き換える
+function gz_add_point($points, $p) {
+    $last = end($points);
+    if ($last && $last['d'] === $p['d'] && $last['s'] === $p['s']) {
+        array_pop($points);
+    }
+    $points[] = $p;
+    return $points;
+}
+// 表示用に、同じ駅が続いた記録を1行にまとめる（t1:最初の時間枠, t2:最後の時間枠, ta:最後に実際に届いた時刻）
 function gz_history() {
-    $h = get_option('gz_history', array());
-    return is_array($h) ? $h : array();
+    $entries = array();
+    foreach (gz_points() as $p) {
+        $i = count($entries) - 1;
+        if ($i >= 0 && $entries[$i]['d'] === $p['d'] && $entries[$i]['n'] === $p['n']
+            && abs($entries[$i]['la'] - $p['la']) < 0.0001 && abs($entries[$i]['lo'] - $p['lo']) < 0.0001) {
+            $entries[$i]['t2'] = $p['s'];
+            $entries[$i]['ta'] = $p['t'];
+            $entries[$i]['m']  = $p['m'];
+        } else {
+            $entries[] = array('d' => $p['d'], 'n' => $p['n'], 'la' => $p['la'], 'lo' => $p['lo'], 'm' => $p['m'],
+                'tl' => $p['s'], 't1' => $p['s'], 't2' => $p['s'], 'ta' => $p['t']);
+        }
+    }
+    return $entries;
 }
 
 // ===== 時刻（WordPressの設定のタイムゾーンで扱う） =====
@@ -48,17 +91,20 @@ function gz_now() {
 // ・それ以外（例：15:06〜15:54） → 15:30（手動で送ったものを想定）
 // ※「3時間たったら非公開」などの判定は、ここではなく実際に届いた時刻で行う
 define('GZ_ROUND_MARGIN_MIN', 5);
-function gz_time_label($ts) {
+function gz_slot($ts) {
     $t = (new DateTimeImmutable('@' . $ts))->setTimezone(wp_timezone());
     $sec = (int) $t->format('i') * 60 + (int) $t->format('s'); // その時の何分何秒か（秒に直したもの）
     $hour = $t->setTime((int) $t->format('G'), 0, 0);
     if ($sec <= GZ_ROUND_MARGIN_MIN * 60) {
-        return $hour->format('G:i');                     // 例：15:03 → 15:00
+        return $hour->getTimestamp();                          // 例：15:03 → 15:00
     }
     if ($sec >= (60 - GZ_ROUND_MARGIN_MIN) * 60) {
-        return $hour->modify('+1 hour')->format('G:i');  // 例：14:59 → 15:00
+        return $hour->modify('+1 hour')->getTimestamp();       // 例：14:59 → 15:00
     }
-    return $hour->format('G') . ':30';                   // 例：15:12 → 15:30
+    return $hour->modify('+30 minutes')->getTimestamp();       // 例：15:12 → 15:30
+}
+function gz_time_label($ts) {
+    return (new DateTimeImmutable('@' . gz_slot($ts)))->setTimezone(wp_timezone())->format('G:i');
 }
 
 // ===== 最寄駅の計算 =====
@@ -108,30 +154,21 @@ function gz_nearest_station($lat, $lon) {
 // 正確な位置は保存せず、駅名・駅の位置（公開データ）・駅からの距離・時刻だけを記録する
 function gz_record($station, $ts) {
     $today = (new DateTimeImmutable('@' . $ts))->setTimezone(wp_timezone())->format('Y-m-d');
-    $history = gz_history();
-    $last = end($history);
-    if ($last && $last['d'] === $today && $last['n'] === $station['name']
-        && abs($last['la'] - $station['lat']) < 0.0001 && abs($last['lo'] - $station['lon']) < 0.0001) {
-        // 同じ駅にいる：印は増やさず、最後の時刻だけ更新する
-        $history[count($history) - 1]['t2'] = $ts;
-        $history[count($history) - 1]['m'] = $station['dist'];
-    } else {
-        $history[] = array(
-            'd'  => $today,
-            'n'  => $station['name'],
-            'la' => $station['lat'],
-            'lo' => $station['lon'],
-            'm'  => $station['dist'],
-            't1' => $ts,
-            't2' => $ts,
-        );
-    }
+    $points = gz_add_point(gz_points(), array(
+        'd'  => $today,
+        's'  => gz_slot($ts),
+        't'  => $ts,
+        'n'  => $station['name'],
+        'la' => $station['lat'],
+        'lo' => $station['lon'],
+        'm'  => $station['dist'],
+    ));
     // 7日より前の記録を消す
     $limit = gz_now()->modify('-' . (GZ_KEEP_DAYS - 1) . ' days')->format('Y-m-d');
-    $history = array_values(array_filter($history, function ($e) use ($limit) {
-        return $e['d'] >= $limit;
+    $points = array_values(array_filter($points, function ($p) use ($limit) {
+        return $p['d'] >= $limit;
     }));
-    update_option('gz_history', $history, false);
+    update_option('gz_points', $points, false);
 }
 
 // ===== 表示する文章 =====
@@ -151,7 +188,7 @@ function gz_status_text() {
     if ($isNight) {
         return '本日の活動は終了しました。';
     }
-    if ($now->getTimestamp() - $last['t2'] > $s['stale_hours'] * 3600) {
+    if ($now->getTimestamp() - $last['ta'] > $s['stale_hours'] * 3600) { // 判定は実際に届いた時刻で行う
         return '現在は非公開です。';
     }
     $time = gz_time_label($last['t2']);
@@ -314,7 +351,7 @@ add_action('admin_post_gz_clear', function () {
         wp_die('権限がありません。');
     }
     check_admin_referer('gz_clear');
-    update_option('gz_history', array(), false);
+    update_option('gz_points', array(), false);
     wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => 'cleared'), admin_url('options-general.php')));
     exit;
 });
@@ -385,5 +422,6 @@ register_uninstall_hook(__FILE__, 'gz_uninstall');
 function gz_uninstall() {
     delete_option('gz_settings');
     delete_option('gz_history');
+    delete_option('gz_points');
     delete_option('gz_last_post');
 }
