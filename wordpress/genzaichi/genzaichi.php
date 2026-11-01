@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 現在地（最寄駅）表示
  * Description: iPhoneのショートカットから送られた現在地をもとに最寄駅を計算し、地図と文字で表示します。正確な位置は保存せず、駅名と時刻だけを過去7日分保存します。表示したいページに [genzaichi] と書いてください。
- * Version: 1.1.0
+ * Version: 1.2.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // WordPressの外から直接開かれたときは何もしない
 }
 
-define('GZ_VERSION', '1.1.0');
+define('GZ_VERSION', '1.2.0');
 define('GZ_KEEP_DAYS', 7);       // 履歴を残す日数
 define('GZ_MIN_INTERVAL', 20);   // 連続送信を受け付けない秒数
 
@@ -43,8 +43,22 @@ function gz_history() {
 function gz_now() {
     return new DateTimeImmutable('now', wp_timezone());
 }
+// 表示用の時刻は「00分」か「30分」の二段階にそろえる
+// ・毎時ちょうどの前後5分以内（例：14:55〜15:05）に届いたもの → 15:00（自動実行を想定）
+// ・それ以外（例：15:06〜15:54） → 15:30（手動で送ったものを想定）
+// ※「3時間たったら非公開」などの判定は、ここではなく実際に届いた時刻で行う
+define('GZ_ROUND_MARGIN_MIN', 5);
 function gz_time_label($ts) {
-    return (new DateTimeImmutable('@' . $ts))->setTimezone(wp_timezone())->format('G:i');
+    $t = (new DateTimeImmutable('@' . $ts))->setTimezone(wp_timezone());
+    $sec = (int) $t->format('i') * 60 + (int) $t->format('s'); // その時の何分何秒か（秒に直したもの）
+    $hour = $t->setTime((int) $t->format('G'), 0, 0);
+    if ($sec <= GZ_ROUND_MARGIN_MIN * 60) {
+        return $hour->format('G:i');                     // 例：15:03 → 15:00
+    }
+    if ($sec >= (60 - GZ_ROUND_MARGIN_MIN) * 60) {
+        return $hour->modify('+1 hour')->format('G:i');  // 例：14:59 → 15:00
+    }
+    return $hour->format('G') . ':30';                   // 例：15:12 → 15:30
 }
 
 // ===== 最寄駅の計算 =====
