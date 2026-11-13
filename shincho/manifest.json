@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、「身長の記録」をホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です。",
+  "id": "./",
+  "name": "身長の記録",
+  "short_name": "身長メモ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f8f3",
+  "theme_color": "#3a8f45",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

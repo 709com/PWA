@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、「予防接種スケジュール帳」をホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です。",
+  "id": "./",
+  "name": "予防接種スケジュール帳",
+  "short_name": "接種メモ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f8f7",
+  "theme_color": "#2a8c82",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

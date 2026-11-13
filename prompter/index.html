@@ -1,0 +1,491 @@
+<!doctype html>
+<!-- このファイルは「原稿プロンプター」の本体です。原稿を貼り付けて保存し、大きな文字で一定の速さで自動スクロールして読み上げに使います。 -->
+<!-- 原稿はiPhoneの中のデータベース（IndexedDB）、表示の設定は localStorage だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>原稿プロンプター</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="プロンプター">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2c3e50">
+<style>
+  :root { --bg:#f3f5f7; --card:#fff; --text:#1b2430; --sub:#5d6875; --accent:#2c3e50; --accent-soft:#e3e9ef; --line:#dce2e8; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121519; --card:#1c2128; --text:#e8edf2; --sub:#9aa5b2; --accent:#8fb3d9; --accent-soft:#223244; --line:#2c343e; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:14em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  @media (prefers-color-scheme: dark) { #update { color:#121519; } }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; display:flex; gap:10px; align-items:center; }
+  .card .info { flex:1; min-width:0; cursor:pointer; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:2px; }
+  .card .play { background:var(--accent); color:#fff; border-radius:12px; padding:12px 14px; font-weight:700; white-space:nowrap; }
+  @media (prefers-color-scheme: dark) { .card .play { color:#121519; } }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  @media (prefers-color-scheme: dark) { #add { color:#121519; } }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  @media (prefers-color-scheme: dark) { .primary { color:#121519; } }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+
+  /* ===== 読み上げ画面 ===== */
+  #stage { position:fixed; inset:0; z-index:20; display:none; background:#000; color:#fff; }
+  #stage.open { display:block; }
+  #stage.inv { background:#fff; color:#000; }
+  #scroller { position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  #scroller::-webkit-scrollbar { display:none; }
+  #script { white-space:pre-wrap; word-break:break-word; font-weight:600; line-height:1.55;
+            padding:45vh max(20px, env(safe-area-inset-right)) 70vh max(20px, env(safe-area-inset-left)); }
+  #stage.mirror #script { transform:scaleX(-1); }
+  /* 目線の位置の目印 */
+  #guide { position:absolute; left:0; right:0; top:38%; height:0; border-top:2px solid rgba(255,80,80,.55); pointer-events:none; }
+  #guide::before { content:'▶'; position:absolute; left:4px; top:-0.8em; color:rgba(255,80,80,.8); font-size:1.1rem; }
+  #stage.mirror #guide::before { left:auto; right:4px; content:'◀'; }
+  #topbar { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; gap:8px;
+            padding:calc(6px + env(safe-area-inset-top)) 12px 6px; background:rgba(0,0,0,.6); color:#fff; font-size:1rem; pointer-events:none; }
+  #stage.inv #topbar { background:rgba(255,255,255,.75); color:#000; }
+  #elapsed { font-variant-numeric:tabular-nums; font-weight:700; font-size:1.25rem; }
+  #state { font-weight:700; }
+  #controls { position:absolute; left:0; right:0; bottom:0; background:rgba(20,20,20,.92); color:#fff;
+              padding:8px 8px calc(8px + env(safe-area-inset-bottom)); transition:transform .2s; }
+  #stage.inv #controls { background:rgba(235,235,235,.95); color:#000; }
+  #controls.hide { transform:translateY(110%); }
+  .crow { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap; max-width:640px; margin:0 auto; }
+  .crow + .crow { margin-top:6px; }
+  .cb { background:rgba(255,255,255,.14); color:inherit; border-radius:10px; min-width:48px; min-height:46px; padding:6px 10px; font-size:1rem; }
+  #stage.inv .cb { background:rgba(0,0,0,.08); }
+  .cb.on { background:#e8a33a; color:#000; }
+  .cb.big { background:#2f9e6b; color:#fff; font-weight:700; min-width:96px; }
+  .grp { display:flex; align-items:center; gap:4px; }
+  .grp .v { min-width:4.2em; text-align:center; font-size:.85rem; line-height:1.2; }
+  #showctl { position:absolute; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); display:none; }
+  #controls.hide ~ #showctl { display:block; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📜 原稿プロンプター</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <p class="note" style="margin:0 0 10px">原稿を選んで「▶ 読む」を押すと、大きな文字でゆっくり流れます。画面をタップすると止まります。</p>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ 原稿はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="原稿を追加">＋</button>
+
+<!-- 原稿の入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">原稿を追加</h2>
+    <div class="warn">区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-title">題名</label>
+    <input id="e-title" maxlength="80" placeholder="例：本会議 一般質問（2月）">
+    <label class="f" for="e-body">原稿（ほかのアプリからコピーして貼り付けできます）</label>
+    <textarea id="e-body" placeholder="ここに原稿を貼り付けてください"></textarea>
+    <p class="note" id="e-count"></p>
+    <div class="actions">
+      <button class="plain" id="e-file-btn">📄 テキストファイルを読み込む</button>
+      <input type="file" id="e-file" accept=".txt,text/plain" hidden>
+    </div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="primary" id="e-play">保存して読む ▶</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、原稿もすべて消えます。大切な原稿は書き出して「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <label class="f" style="margin-top:22px">表示をはじめの状態に戻す</label>
+    <div class="actions"><button class="plain" id="reset-view">文字の大きさ・速さなどを戻す</button></div>
+    <p class="note">「全画面」は、iPhoneでは使えないことがあります。ホーム画面に追加して開くと、最初から全画面に近い表示になります。</p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<!-- 読み上げ画面 -->
+<div id="stage" aria-label="読み上げ画面">
+  <div id="scroller"><div id="script"></div></div>
+  <div id="guide"></div>
+  <div id="topbar"><span id="state">一時停止中</span><span id="pct"></span><span id="elapsed">0:00</span></div>
+  <div id="controls">
+    <div class="crow">
+      <button class="cb big" id="c-play">▶ 開始</button>
+      <button class="cb" id="c-top" aria-label="最初に戻る">⏮ 最初</button>
+      <div class="grp"><button class="cb" id="c-slow" aria-label="遅く">🐢</button><span class="v">速さ<br><b id="v-speed"></b></span><button class="cb" id="c-fast" aria-label="速く">🐇</button></div>
+      <div class="grp"><button class="cb" id="c-small" aria-label="文字を小さく">A−</button><span class="v">文字<br><b id="v-size"></b></span><button class="cb" id="c-big" aria-label="文字を大きく">A＋</button></div>
+    </div>
+    <div class="crow">
+      <button class="cb" id="c-inv">◐ 白黒反転</button>
+      <button class="cb" id="c-mirror">⇆ 左右反転</button>
+      <button class="cb" id="c-fs">⛶ 全画面</button>
+      <button class="cb" id="c-hide" aria-label="操作ボタンをかくす">▼</button>
+      <button class="cb" id="c-close">✕ 閉じる</button>
+    </div>
+  </div>
+  <button class="cb" id="showctl" aria-label="操作ボタンを出す">▲ 操作</button>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_VIEW = 'prompter:view';     // 文字の大きさ・速さ・反転などの表示設定
+const DEFAULT_VIEW = { size: 44, speed: 7, invert: false, mirror: false };
+const SIZE_MIN = 20, SIZE_MAX = 120, SPEED_MIN = 1, SPEED_MAX = 20;
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('prompter', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const charCount = (s) => (s || '').replace(/\s/g, '').length;
+
+let items = [];
+let view = Object.assign({}, DEFAULT_VIEW, load(KEY_VIEW, {}));
+
+// ===== 原稿の一覧 =====
+function render() {
+  const list = $('list');
+  list.innerHTML = '';
+  if (!items.length) { list.append(el('p', 'empty', 'まだ原稿はありません。右下の「＋」から追加してください。')); return; }
+  items.sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const it of items) {
+    const c = el('div', 'card');
+    const info = el('div', 'info');
+    info.append(el('div', 't', it.title || '（題名なし）'));
+    info.append(el('div', 'm', charCount(it.body).toLocaleString() + '文字 ・ 更新 ' + fmtDate(it.updatedAt)));
+    info.onclick = () => openEdit(it);
+    const play = el('button', 'play', '▶ 読む');
+    play.onclick = () => openStage(it);
+    c.append(info, play);
+    list.append(c);
+  }
+}
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+function openEdit(it) {
+  editing = it || null;
+  $('edit-title').textContent = it ? '原稿を編集' : '原稿を追加';
+  $('e-title').value = it ? it.title : '';
+  $('e-body').value = it ? it.body : '';
+  $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtDate(it.createdAt) + ' ／ 更新 ' + fmtDate(it.updatedAt) : '';
+  updateCount();
+  $('edit').classList.add('open');
+  $('edit').scrollTo(0, 0);
+}
+function updateCount() { $('e-count').textContent = '空白をのぞいて ' + charCount($('e-body').value).toLocaleString() + '文字'; }
+$('e-body').addEventListener('input', updateCount);
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+async function saveEdit() {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'p' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.title = $('e-title').value.trim().slice(0, 80);
+  it.body = $('e-body').value;
+  it.updatedAt = now;
+  if (!it.body.trim()) { alert('原稿を入れてください。'); return null; }
+  if (!it.title) it.title = it.body.trim().split('\n')[0].slice(0, 30);
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return null; }
+  closeSheet('edit');
+  await reload();
+  return it;
+}
+$('e-save').onclick = saveEdit;
+$('e-play').onclick = async () => { const it = await saveEdit(); if (it) openStage(it); };
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('「' + (editing.title || '題名なし') + '」を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+// テキストファイルの読み込み（文字コードは UTF-8 → だめなら Shift_JIS で読む）
+$('e-file-btn').onclick = () => $('e-file').click();
+$('e-file').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (err) { try { text = new TextDecoder('shift_jis').decode(buf); } catch (err2) { alert('ファイルを読み取れませんでした。'); return; } }
+  text = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  if ($('e-body').value.trim() && !confirm('いま入っている原稿を、ファイルの中身で置き換えます。よろしいですか？')) return;
+  $('e-body').value = text;
+  if (!$('e-title').value.trim()) $('e-title').value = f.name.replace(/\.[^.]+$/, '').slice(0, 80);
+  updateCount();
+};
+
+// ===== 読み上げ画面 =====
+let playing = false, pos = 0, lastT = 0, elapsedMs = 0, raf = 0, wakeLock = null, current = null;
+const scroller = $('scroller');
+
+function applyView() {
+  $('script').style.fontSize = view.size + 'px';
+  $('stage').classList.toggle('inv', view.invert);
+  $('stage').classList.toggle('mirror', view.mirror);
+  $('c-inv').classList.toggle('on', view.invert);
+  $('c-mirror').classList.toggle('on', view.mirror);
+  $('v-speed').textContent = view.speed;
+  $('v-size').textContent = view.size;
+  save(KEY_VIEW, view);
+}
+// 1秒あたりに流れる量（速さ1で文字の大きさの約0.12行ぶん）
+const pxPerSec = () => view.speed * view.size * 0.12;
+
+function fmtElapsed(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + p2(s % 60); }
+function showStatus() {
+  $('elapsed').textContent = fmtElapsed(elapsedMs);
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  $('pct').textContent = max > 0 ? Math.min(100, Math.round(scroller.scrollTop / max * 100)) + '%' : '';
+  $('state').textContent = playing ? '▶ 再生中' : '⏸ 一時停止中';
+  $('c-play').textContent = playing ? '⏸ 止める' : '▶ 開始';
+}
+function tick(t) {
+  if (!playing) return;
+  const dt = Math.min(100, t - lastT); lastT = t;
+  elapsedMs += dt;
+  pos += pxPerSec() * dt / 1000;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  if (pos >= max) { pos = max; scroller.scrollTop = pos; pause(); showStatus(); return; }
+  scroller.scrollTop = pos;
+  showStatus();
+  raf = requestAnimationFrame(tick);
+}
+function play() {
+  if (playing) return;
+  const max = scroller.scrollHeight - scroller.clientHeight;
+  if (scroller.scrollTop >= max - 1) { scroller.scrollTop = 0; }  // 最後まで来ていたら最初から
+  pos = scroller.scrollTop;
+  playing = true;
+  lastT = performance.now();
+  raf = requestAnimationFrame(tick);
+  keepAwake();
+  $('controls').classList.add('hide');
+  showStatus();
+}
+function pause() {
+  playing = false;
+  cancelAnimationFrame(raf);
+  $('controls').classList.remove('hide');
+  showStatus();
+}
+// 画面が消えないようにする（対応している端末だけ）
+async function keepAwake() {
+  if (!('wakeLock' in navigator) || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) { wakeLock = null; }
+}
+function letSleep() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (playing) pause(); }
+  else if ($('stage').classList.contains('open')) keepAwake();
+});
+
+function openStage(it) {
+  current = it;
+  $('script').textContent = it.body;
+  elapsedMs = 0; pos = 0;
+  $('stage').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  applyView();
+  scroller.scrollTop = 0;
+  $('controls').classList.remove('hide');
+  playing = false;
+  showStatus();
+  keepAwake();
+}
+function closeStage() {
+  pause();
+  letSleep();
+  exitFs();
+  $('stage').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// 画面をタップすると一時停止・再開（指でずらしたときは位置を合わせるだけ）
+let touchMoved = false;
+scroller.addEventListener('touchstart', () => { touchMoved = false; }, { passive: true });
+scroller.addEventListener('touchmove', () => { touchMoved = true; if (playing) pause(); }, { passive: true });
+scroller.addEventListener('scroll', () => { if (!playing) { pos = scroller.scrollTop; showStatus(); } }, { passive: true });
+scroller.addEventListener('click', () => { if (touchMoved) return; playing ? pause() : play(); });
+scroller.addEventListener('wheel', () => { if (playing) pause(); }, { passive: true });
+
+$('c-play').onclick = () => (playing ? pause() : play());
+$('c-top').onclick = () => { scroller.scrollTop = 0; pos = 0; elapsedMs = 0; showStatus(); };
+$('c-slow').onclick = () => { view.speed = Math.max(SPEED_MIN, view.speed - 1); applyView(); };
+$('c-fast').onclick = () => { view.speed = Math.min(SPEED_MAX, view.speed + 1); applyView(); };
+function resize(step) {
+  // 文字の大きさを変えても、読んでいた場所がずれないようにする
+  const max0 = scroller.scrollHeight - scroller.clientHeight;
+  const ratio = max0 > 0 ? scroller.scrollTop / max0 : 0;
+  view.size = Math.max(SIZE_MIN, Math.min(SIZE_MAX, view.size + step));
+  applyView();
+  const max1 = scroller.scrollHeight - scroller.clientHeight;
+  pos = scroller.scrollTop = ratio * max1;
+  showStatus();
+}
+$('c-small').onclick = () => resize(-4);
+$('c-big').onclick = () => resize(4);
+$('c-inv').onclick = () => { view.invert = !view.invert; applyView(); };
+$('c-mirror').onclick = () => { view.mirror = !view.mirror; applyView(); };
+$('c-hide').onclick = () => $('controls').classList.add('hide');
+$('showctl').onclick = () => { if (playing) pause(); else $('controls').classList.remove('hide'); };
+$('c-close').onclick = closeStage;
+
+// 全画面（対応していない端末ではボタンをかくす）
+const fsEl = document.documentElement;
+const canFs = !!(fsEl.requestFullscreen || fsEl.webkitRequestFullscreen);
+$('c-fs').hidden = !canFs;
+function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function exitFs() { if (!isFs()) return; (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+$('c-fs').onclick = () => {
+  try {
+    if (isFs()) exitFs();
+    else { const r = (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl); if (r && r.catch) r.catch(() => {}); }
+  } catch (e) {}
+};
+document.addEventListener('fullscreenchange', () => $('c-fs').classList.toggle('on', isFs()));
+
+// パソコンのキーボード：スペースで停止・再開、↑↓で速さ
+document.addEventListener('keydown', (e) => {
+  if (!$('stage').classList.contains('open')) return;
+  if (e.key === ' ') { e.preventDefault(); playing ? pause() : play(); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); $('c-fast').click(); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); $('c-slow').click(); }
+  if (e.key === 'Escape') closeStage();
+});
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('settings').classList.add('open'); $('settings').scrollTo(0, 0); };
+$('s-close').onclick = () => closeSheet('settings');
+$('reset-view').onclick = () => { view = Object.assign({}, DEFAULT_VIEW); save(KEY_VIEW, view); alert('表示をはじめの状態に戻しました。'); };
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'prompter-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'prompter', version: APP_VERSION, exportedAt: d.toISOString(), items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'prompter' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の原稿を読み込みます。同じ原稿は、ファイルの内容で上書きします（ほかの原稿は消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  await reload();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // 入力中・読み上げ中は読み込み直さない
+    if (!hadController || reloaded || $('edit').classList.contains('open') || $('stage').classList.contains('open')) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

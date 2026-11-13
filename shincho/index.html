@@ -1,0 +1,432 @@
+<!doctype html>
+<!-- このファイルは「身長の記録」の本体です。子どもごとに日付と身長（任意で体重）を記録し、成長のようすを折れ線グラフ（子どもごとに色分け）で見られます。 -->
+<!-- 記録はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。平均値などとの比較はしません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>身長の記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="身長メモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3a8f45">
+<style>
+  :root { --bg:#f3f8f3; --card:#fff; --text:#1c2a1e; --sub:#5d6b5f; --accent:#3a8f45; --accent-soft:#e1f1e3; --line:#dce6dd; --danger:#c8372d; --grid:#e6ece6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111713; --card:#1a231c; --text:#e8f1e9; --sub:#9db09f; --accent:#66c271; --accent-soft:#1c3520; --line:#2a382c; --danger:#ef6b61; --grid:#26322a; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+  input[type=date] { min-height:46px; -webkit-appearance:none; appearance:none; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { background:var(--card); border:2px solid var(--line); border-radius:99px; padding:6px 14px; font-size:.92rem; }
+  .chip.on { border-color:var(--kc, var(--accent)); background:var(--kc, var(--accent)); color:#fff; font-weight:700; }
+
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:12px; }
+  .ghead { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+  .ghead b { font-size:1rem; }
+  .seg { display:flex; background:var(--bg); border:1px solid var(--line); border-radius:10px; overflow:hidden; flex:none; }
+  .seg button { padding:6px 14px; font-size:.9rem; }
+  .seg button.on { background:var(--accent); color:#fff; font-weight:700; }
+  canvas { display:block; width:100%; height:260px; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:.85rem; margin-top:6px; }
+  .legend span::before { content:''; display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--kc); margin-right:5px; vertical-align:-1px; }
+
+  .big { display:block; width:100%; background:var(--accent); color:#fff; border-radius:14px; padding:14px; font-weight:700; font-size:1.05rem; margin-bottom:12px; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  th { text-align:left; font-size:.78rem; color:var(--sub); font-weight:600; padding:4px; border-bottom:1px solid var(--line); }
+  td { padding:10px 4px; border-bottom:1px solid var(--line); }
+  tr:last-child td { border-bottom:none; }
+  tbody tr { cursor:pointer; }
+  td.num, th.num { text-align:right; white-space:nowrap; }
+  .kid { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; color:#fff; background:var(--kc); font-weight:700; white-space:nowrap; max-width:7em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+  .empty { color:var(--sub); text-align:center; padding:20px 0; }
+  .muted { color:var(--sub); }
+
+  /* 全面の画面 */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row2 > div { min-width:0; }
+  .unit { display:flex; align-items:center; gap:6px; }
+  .unit span { flex:none; color:var(--sub); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .kidrow { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .kidrow .dot { flex:none; width:18px; height:18px; border-radius:50%; background:var(--kc); }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📏 身長の記録</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="chips" id="kid-chips"></div>
+
+  <section>
+    <div class="ghead">
+      <b id="g-title">身長のうつりかわり</b>
+      <div class="seg" id="g-kind"><button data-v="h">身長</button><button data-v="w">体重</button></div>
+    </div>
+    <canvas id="chart" aria-label="成長のグラフ"></canvas>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <button class="big" id="add">＋ 記録する</button>
+
+  <section>
+    <table>
+      <thead><tr><th>日付</th><th>子ども</th><th class="num">身長</th><th class="num">体重</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="empty" id="empty" hidden>まだ記録はありません。「＋ 記録する」から追加してください。</p>
+  </section>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">記録する</h2>
+    <label class="f" for="e-kid">子ども</label>
+    <select id="e-kid"></select>
+    <label class="f" for="e-date">はかった日</label>
+    <input id="e-date" type="date">
+    <div class="row2">
+      <div><label class="f" for="e-h">身長</label><div class="unit"><input id="e-h" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="例：112.5"><span>cm</span></div></div>
+      <div><label class="f" for="e-w">体重（なくてもよい）</label><div class="unit"><input id="e-w" type="number" inputmode="decimal" step="0.1" min="0" max="200"><span>kg</span></div></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">子どもの呼び名（本名ではなく「長男」「〇〇ちゃん」など家の中の呼び名で）</label>
+    <div id="kid-edit"></div>
+    <button class="plain" id="kid-add">＋ 子どもを追加</button>
+    <div class="actions"><button class="primary" id="kid-save">呼び名を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KIDS = 'shincho:kids';    // 子どもの呼び名
+const KEY_VIEW = 'shincho:view';    // 最後に選んだ子ども・グラフの種類
+const KID_COLORS = ['#e0533d', '#2f7fd0', '#2f9e6b', '#c9861a', '#8a5cd0', '#c2417f', '#4a8a9a', '#7a7a2a'];
+const DEFAULT_KIDS = [1, 2, 3, 4].map((n) => ({ id: 'k' + n, name: '子ども' + n }));
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('shincho', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function dateKey(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function parseKey(k) { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); }
+function fmtDay(k) { const d = parseKey(k); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate(); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const num = (v) => { const n = parseFloat(String(v).replace(/[^\d.]/g, '')); return isFinite(n) ? Math.round(n * 10) / 10 : null; };
+
+let kids = load(KEY_KIDS, DEFAULT_KIDS);
+let items = [];
+let view = load(KEY_VIEW, { kid: '', kind: 'h' });
+const kidName = (id) => { const k = kids.find((x) => x.id === id); return k ? k.name : '（不明）'; };
+const kidColor = (id) => { const i = kids.findIndex((x) => x.id === id); return KID_COLORS[(i < 0 ? 7 : i) % KID_COLORS.length]; };
+
+// ===== 画面の表示 =====
+function render() {
+  if (!kids.some((k) => k.id === view.kid)) view.kid = '';
+  save(KEY_VIEW, view);
+  const chips = $('kid-chips'); chips.innerHTML = '';
+  [{ id: '', name: '全員' }, ...kids].forEach((k) => {
+    const b = el('button', 'chip' + (view.kid === k.id ? ' on' : ''), k.name);
+    if (k.id) b.style.setProperty('--kc', kidColor(k.id));
+    b.onclick = () => { view.kid = k.id; render(); };
+    chips.append(b);
+  });
+  document.querySelectorAll('#g-kind button').forEach((b) => b.classList.toggle('on', b.dataset.v === view.kind));
+  $('g-title').textContent = view.kind === 'h' ? '身長のうつりかわり（cm）' : '体重のうつりかわり（kg）';
+
+  const shown = items.filter((i) => !view.kid || i.kid === view.kid)
+    .sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt); // 新しい順
+  const tb = $('rows'); tb.innerHTML = '';
+  for (const it of shown) {
+    const tr = el('tr');
+    const kc = el('td'); const k = el('span', 'kid', kidName(it.kid)); k.style.setProperty('--kc', kidColor(it.kid)); kc.append(k);
+    tr.append(el('td', '', fmtDay(it.date)), kc, el('td', 'num', it.h != null ? it.h.toFixed(1) + ' cm' : '—'), el('td', 'num' + (it.w == null ? ' muted' : ''), it.w != null ? it.w.toFixed(1) + ' kg' : '—'));
+    tr.onclick = () => openEdit(it);
+    tb.append(tr);
+  }
+  $('empty').hidden = shown.length > 0;
+  drawChart();
+}
+document.querySelectorAll('#g-kind button').forEach((b) => b.onclick = () => { view.kind = b.dataset.v; render(); });
+
+// ===== グラフ（canvasに手で描く） =====
+function niceStep(range, maxTicks) {
+  const steps = [0.5, 1, 2, 5, 10, 20, 50, 100];
+  return steps.find((s) => range / s <= maxTicks) || 100;
+}
+function drawChart() {
+  const cv = $('chart');
+  const css = getComputedStyle(document.documentElement);
+  const C = (n) => css.getPropertyValue(n).trim();
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  g.font = '12px -apple-system, "Hiragino Sans", sans-serif';
+
+  const key = view.kind;
+  const pts = items.filter((i) => (!view.kid || i.kid === view.kid) && i[key] != null);
+  const legend = $('legend'); legend.innerHTML = '';
+  if (!pts.length) {
+    g.fillStyle = C('--sub'); g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(key === 'h' ? '身長の記録がまだありません' : '体重の記録がまだありません', W / 2, H / 2);
+    return;
+  }
+  // 横軸（日付）と縦軸（値）のはんい
+  const t = (k) => parseKey(k).getTime();
+  let t0 = Math.min(...pts.map((p) => t(p.date))), t1 = Math.max(...pts.map((p) => t(p.date)));
+  if (t1 - t0 < 60 * 86400000) { const mid = (t0 + t1) / 2; t0 = mid - 30 * 86400000; t1 = mid + 30 * 86400000; }
+  let v0 = Math.min(...pts.map((p) => p[key])), v1 = Math.max(...pts.map((p) => p[key]));
+  const pad = Math.max((v1 - v0) * 0.1, key === 'h' ? 2 : 1);
+  v0 -= pad; v1 += pad;
+  const step = niceStep(v1 - v0, 5);
+  v0 = Math.floor(v0 / step) * step; v1 = Math.ceil(v1 / step) * step;
+
+  const L = 44, R = 12, T = 10, B = 26;
+  const x = (tt) => L + (tt - t0) / (t1 - t0) * (W - L - R);
+  const y = (v) => T + (1 - (v - v0) / (v1 - v0)) * (H - T - B);
+
+  // 目盛り
+  g.strokeStyle = C('--grid'); g.lineWidth = 1; g.fillStyle = C('--sub');
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (let v = v0; v <= v1 + 1e-9; v += step) {
+    g.beginPath(); g.moveTo(L, y(v)); g.lineTo(W - R, y(v)); g.stroke();
+    g.fillText(step < 1 ? v.toFixed(1) : String(Math.round(v)), L - 6, y(v));
+  }
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  const spanDays = (t1 - t0) / 86400000;
+  const n = Math.max(2, Math.min(4, Math.floor((W - L - R) / 80)));
+  for (let i = 0; i <= n; i++) {
+    const tt = t0 + (t1 - t0) * i / n; const d = new Date(tt);
+    const label = spanDays > 400 ? d.getFullYear() + '/' + (d.getMonth() + 1) : (d.getMonth() + 1) + '/' + d.getDate();
+    g.textAlign = i === 0 ? 'left' : i === n ? 'right' : 'center';
+    g.fillText(label, x(tt) + (i === 0 ? -4 : 0), H - B + 7);
+  }
+
+  // 子どもごとの線
+  const kidIds = [...new Set(pts.map((p) => p.kid))];
+  kidIds.sort((a, b) => kids.findIndex((k) => k.id === a) - kids.findIndex((k) => k.id === b));
+  for (const id of kidIds) {
+    const mine = pts.filter((p) => p.kid === id).sort((a, b) => t(a.date) - t(b.date));
+    const col = kidColor(id);
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.5; g.lineJoin = 'round';
+    g.beginPath();
+    mine.forEach((p, i) => { const px = x(t(p.date)), py = y(p[key]); if (i) g.lineTo(px, py); else g.moveTo(px, py); });
+    g.stroke();
+    mine.forEach((p) => { g.beginPath(); g.arc(x(t(p.date)), y(p[key]), 4, 0, Math.PI * 2); g.fill(); });
+    const last = mine[mine.length - 1];
+    const lg = el('span', '', kidName(id) + '　' + last[key].toFixed(1) + (key === 'h' ? 'cm' : 'kg') + '（' + fmtDay(last.date) + '）');
+    lg.style.setProperty('--kc', col);
+    legend.append(lg);
+  }
+}
+window.addEventListener('resize', drawChart);
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawChart);
+
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+function openEdit(it) {
+  editing = it || null;
+  const sel = $('e-kid'); sel.innerHTML = '';
+  kids.forEach((k) => sel.add(new Option(k.name, k.id)));
+  if (it && !kids.some((k) => k.id === it.kid)) sel.add(new Option('（不明）', it.kid));
+  $('edit-title').textContent = it ? '記録を直す' : '記録する';
+  sel.value = it ? it.kid : (view.kid || kids[0].id);
+  $('e-date').value = it ? it.date : dateKey(new Date());
+  $('e-h').value = it && it.h != null ? it.h : '';
+  $('e-w').value = it && it.w != null ? it.w : '';
+  $('e-del').hidden = !it;
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = async () => {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 's' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.kid = $('e-kid').value;
+  it.date = $('e-date').value;
+  it.h = num($('e-h').value);
+  it.w = $('e-w').value.trim() ? num($('e-w').value) : null;
+  it.updatedAt = now;
+  if (!it.date) { alert('はかった日を入れてください。'); return; }
+  if (it.h == null || it.h < 20 || it.h > 250) { alert('身長を cm で入れてください（例：112.5）。'); return; }
+  if (it.w != null && (it.w <= 0 || it.w > 200)) { alert('体重は kg で入れてください。わからなければ空のままで大丈夫です。'); return; }
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  closeSheet('edit');
+  reload();
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm(fmtDay(editing.date) + ' の記録を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// ===== 設定：子どもの呼び名 =====
+function buildKidEdit() {
+  const box = $('kid-edit'); box.innerHTML = '';
+  kids.forEach((k, i) => addKidRow(k, i));
+}
+function addKidRow(k, i) {
+  const row = el('div', 'kidrow');
+  row.style.setProperty('--kc', KID_COLORS[i % KID_COLORS.length]);
+  const inp = el('input'); inp.value = k.name; inp.maxLength = 12; inp.dataset.id = k.id;
+  row.append(el('span', 'dot'), inp);
+  $('kid-edit').append(row);
+  return inp;
+}
+$('kid-add').onclick = () => {
+  const n = $('kid-edit').querySelectorAll('input').length;
+  if (n >= 8) { alert('8人までです。'); return; }
+  addKidRow({ id: 'k' + Date.now().toString(36), name: '' }, n).focus();
+};
+$('kid-save').onclick = () => {
+  const rows = [...$('kid-edit').querySelectorAll('input')];
+  kids = rows.map((inp, i) => ({ id: inp.dataset.id, name: inp.value.trim() || (kids.find((k) => k.id === inp.dataset.id) || {}).name || '子ども' + (i + 1) }));
+  save(KEY_KIDS, kids);
+  buildKidEdit(); render();
+  alert('呼び名を保存しました。');
+};
+$('open-settings').onclick = () => { buildKidEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => { closeSheet('settings'); drawChart(); };
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'shincho-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'shincho', version: APP_VERSION, exportedAt: d.toISOString(), kids, items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'shincho' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id && it.date) await dbPut(it); }
+  if (Array.isArray(data.kids)) {
+    data.kids.forEach((k) => { if (k && k.id && !kids.some((x) => x.id === k.id)) kids.push({ id: k.id, name: String(k.name || '子ども') }); });
+    save(KEY_KIDS, kids); buildKidEdit();
+  }
+  await reload();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

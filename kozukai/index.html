@@ -1,0 +1,449 @@
+<!doctype html>
+<!-- このファイルは「おこづかい帳」の本体です。子どもごとに入金・出金（日付・金額・内容）を記録し、残高と月ごとの集計を表示します。 -->
+<!-- 記録はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。アプリは記録と計算だけをします。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おこづかい帳</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="おこづかい">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#a8691a">
+<style>
+  :root { --bg:#faf6ef; --card:#fff; --text:#2a2217; --sub:#6c6152; --accent:#a8691a; --accent-soft:#f5e9d6; --line:#e8dfd0; --danger:#c8372d;
+          --in:#2f8f4e; --in-soft:#e3f4e8; --out:#c8372d; --out-soft:#fbe6e4; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16130e; --card:#211c15; --text:#f2ece2; --sub:#b2a693; --accent:#e0a14a; --accent-soft:#3a2c17; --line:#383024; --danger:#ef6b61;
+            --in:#5fcf86; --in-soft:#183324; --out:#ef6b61; --out-soft:#3a1d1a; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+  input[type=date] { min-height:46px; -webkit-appearance:none; appearance:none; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* 子どもごとの残高 */
+  .kids { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .kidcard { background:var(--card); border:2px solid var(--line); border-left:6px solid var(--kc); border-radius:12px; padding:8px 10px; text-align:left; min-width:0; }
+  .kidcard .n { font-size:.85rem; color:var(--sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kidcard .b { font-size:1.15rem; font-weight:700; white-space:nowrap; }
+  .kidcard.on { border-color:var(--kc); background:var(--accent-soft); }
+  .minus { color:var(--out); }
+
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .bal { text-align:center; }
+  .bal .who { font-size:.95rem; color:var(--sub); }
+  .bal .yen { font-size:2.3rem; font-weight:800; line-height:1.2; margin:2px 0 12px; word-break:break-all; }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .btn-in, .btn-out { border-radius:14px; padding:16px 8px; font-size:1.15rem; font-weight:700; color:#fff; }
+  .btn-in { background:var(--in); }
+  .btn-out { background:var(--out); }
+  .btn-in:active, .btn-out:active { transform:scale(.97); }
+
+  .month { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .month b { font-size:1.1rem; }
+  .month button { background:var(--bg); border:1px solid var(--line); border-radius:10px; width:48px; height:42px; font-size:1.2rem; }
+  .sum { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; text-align:center; margin-bottom:6px; }
+  .sum div { background:var(--bg); border-radius:10px; padding:6px 2px; min-width:0; }
+  .sum small { display:block; font-size:.75rem; color:var(--sub); }
+  .sum b { font-size:.98rem; white-space:nowrap; }
+  .in { color:var(--in); }
+  .out { color:var(--out); }
+  .tx { display:flex; align-items:center; gap:10px; padding:10px 2px; border-top:1px solid var(--line); cursor:pointer; }
+  .tx .d { flex:none; width:3.2em; font-size:.85rem; color:var(--sub); }
+  .tx .m { flex:1; min-width:0; word-break:break-word; }
+  .tx .a { flex:none; font-weight:700; white-space:nowrap; }
+  .empty { color:var(--sub); text-align:center; padding:14px 0 4px; }
+  h3 { font-size:1rem; margin:0 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th { font-size:.75rem; color:var(--sub); font-weight:600; padding:4px; border-bottom:1px solid var(--line); text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  td { padding:9px 4px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  tbody tr { cursor:pointer; }
+  tbody tr.on td { background:var(--accent-soft); }
+  tr:last-child td { border-bottom:none; }
+
+  /* 全面の画面 */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .seg { display:grid; grid-template-columns:1fr 1fr; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .seg button { padding:12px 4px; font-weight:700; }
+  .seg button.on[data-v="in"] { background:var(--in); color:#fff; }
+  .seg button.on[data-v="out"] { background:var(--out); color:#fff; }
+  .unit { display:flex; align-items:center; gap:6px; }
+  .unit span { flex:none; color:var(--sub); }
+  .unit input { font-size:1.3rem; font-weight:700; text-align:right; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .kidrow { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .kidrow .dot { flex:none; width:18px; height:18px; border-radius:50%; background:var(--kc); }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>💰 おこづかい帳</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="kids" id="kids"></div>
+
+  <section class="bal">
+    <div class="who" id="who"></div>
+    <div class="yen" id="yen"></div>
+    <div class="btns">
+      <button class="btn-in" id="add-in">＋ 入金</button>
+      <button class="btn-out" id="add-out">− 出金</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="month">
+      <button id="m-prev" aria-label="前の月">‹</button>
+      <b id="m-label"></b>
+      <button id="m-next" aria-label="次の月">›</button>
+    </div>
+    <div class="sum">
+      <div><small>入金</small><b class="in" id="s-in"></b></div>
+      <div><small>出金</small><b class="out" id="s-out"></b></div>
+      <div><small>差し引き</small><b id="s-net"></b></div>
+    </div>
+    <div id="tx"></div>
+  </section>
+
+  <section>
+    <h3>月ごとの集計</h3>
+    <table>
+      <thead><tr><th>月</th><th>入金</th><th>出金</th><th>月末の残高</th></tr></thead>
+      <tbody id="months"></tbody>
+    </table>
+    <p class="empty" id="months-empty" hidden>まだ記録はありません</p>
+  </section>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">記録する</h2>
+    <div class="seg" id="e-type"><button data-v="in" type="button">＋ 入金</button><button data-v="out" type="button">− 出金</button></div>
+    <label class="f" for="e-kid">子ども</label>
+    <select id="e-kid"></select>
+    <label class="f" for="e-date">日付</label>
+    <input id="e-date" type="date">
+    <label class="f" for="e-amt">金額</label>
+    <div class="unit"><input id="e-amt" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="0"><span>円</span></div>
+    <label class="f" for="e-memo">内容</label>
+    <input id="e-memo" maxlength="40" list="memo-list" placeholder="例：今月のおこづかい、おかし、本">
+    <datalist id="memo-list"></datalist>
+    <div class="warn" style="margin-top:8px">お店の名前や人の名前など、個人を特定できる情報は書かないでください。</div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">子どもの呼び名（本名ではなく「長男」「〇〇ちゃん」など家の中の呼び名で）</label>
+    <div id="kid-edit"></div>
+    <button class="plain" id="kid-add">＋ 子どもを追加</button>
+    <div class="actions"><button class="primary" id="kid-save">呼び名を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KIDS = 'kozukai:kids';   // 子どもの呼び名
+const KEY_VIEW = 'kozukai:view';   // 最後に選んだ子ども
+const KID_COLORS = ['#e0533d', '#2f7fd0', '#2f9e6b', '#c9861a', '#8a5cd0', '#c2417f', '#4a8a9a', '#7a7a2a'];
+const DEFAULT_KIDS = [1, 2, 3, 4].map((n) => ({ id: 'k' + n, name: '子ども' + n }));
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('kozukai', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function dateKey(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const yen = (n) => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('ja-JP') + '円';
+const signed = (it) => it.type === 'in' ? it.amount : -it.amount;
+const monthOf = (k) => k.slice(0, 7);
+const monthLabel = (m) => Number(m.slice(0, 4)) + '年' + Number(m.slice(5, 7)) + '月';
+function shiftMonth(m, n) { const d = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1 + n, 1); return d.getFullYear() + '-' + p2(d.getMonth() + 1); }
+// 全角の数字やカンマも受け付けて、整数の円にする
+function parseYen(s) { const t = String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^\d]/g, ''); return t ? parseInt(t, 10) : 0; }
+
+let kids = load(KEY_KIDS, DEFAULT_KIDS);
+let items = [];
+let view = load(KEY_VIEW, { kid: 'k1' });
+let month = monthOf(dateKey(new Date()));
+const kidName = (id) => { const k = kids.find((x) => x.id === id); return k ? k.name : '（不明）'; };
+const kidColor = (id) => { const i = kids.findIndex((x) => x.id === id); return KID_COLORS[(i < 0 ? 7 : i) % KID_COLORS.length]; };
+const balanceOf = (id) => items.filter((i) => i.kid === id).reduce((s, i) => s + signed(i), 0);
+
+// ===== 画面の表示 =====
+function render() {
+  if (!kids.some((k) => k.id === view.kid)) view.kid = kids[0].id;
+  save(KEY_VIEW, view);
+  // 子どもごとの残高
+  const box = $('kids'); box.innerHTML = '';
+  kids.forEach((k) => {
+    const b = el('button', 'kidcard' + (k.id === view.kid ? ' on' : ''));
+    b.style.setProperty('--kc', kidColor(k.id));
+    const bal = balanceOf(k.id);
+    b.append(el('div', 'n', k.name), el('div', 'b' + (bal < 0 ? ' minus' : ''), yen(bal)));
+    b.onclick = () => { view.kid = k.id; render(); };
+    box.append(b);
+  });
+  const bal = balanceOf(view.kid);
+  $('who').textContent = kidName(view.kid) + ' の残高';
+  $('yen').textContent = yen(bal);
+  $('yen').className = 'yen' + (bal < 0 ? ' minus' : '');
+
+  // その月の記録
+  const mine = items.filter((i) => i.kid === view.kid);
+  $('m-label').textContent = monthLabel(month);
+  const inMonth = mine.filter((i) => monthOf(i.date) === month).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt);
+  const sIn = inMonth.filter((i) => i.type === 'in').reduce((s, i) => s + i.amount, 0);
+  const sOut = inMonth.filter((i) => i.type === 'out').reduce((s, i) => s + i.amount, 0);
+  $('s-in').textContent = yen(sIn); $('s-out').textContent = yen(sOut);
+  $('s-net').textContent = (sIn - sOut > 0 ? '+' : '') + yen(sIn - sOut);
+  const tx = $('tx'); tx.innerHTML = '';
+  if (!inMonth.length) tx.append(el('p', 'empty', 'この月の記録はありません'));
+  inMonth.forEach((it) => {
+    const r = el('div', 'tx');
+    r.append(el('span', 'd', Number(it.date.slice(5, 7)) + '/' + Number(it.date.slice(8, 10))), el('span', 'm', it.memo || (it.type === 'in' ? '入金' : '出金')),
+             el('span', 'a ' + it.type, (it.type === 'in' ? '+' : '−') + it.amount.toLocaleString('ja-JP') + '円'));
+    r.onclick = () => openEdit(it);
+    tx.append(r);
+  });
+
+  // 月ごとの集計（記録のある最初の月から今月まで、新しい順）
+  const tb = $('months'); tb.innerHTML = '';
+  $('months-empty').hidden = mine.length > 0;
+  if (mine.length) {
+    const first = mine.map((i) => monthOf(i.date)).sort()[0];
+    const thisMonth = monthOf(dateKey(new Date()));
+    const lastData = mine.map((i) => monthOf(i.date)).sort().pop();
+    const last = lastData > thisMonth ? lastData : thisMonth;
+    const rows = [];
+    let run = 0;
+    for (let m = first; m <= last; m = shiftMonth(m, 1)) {
+      const xs = mine.filter((i) => monthOf(i.date) === m);
+      const a = xs.filter((i) => i.type === 'in').reduce((s, i) => s + i.amount, 0);
+      const b = xs.filter((i) => i.type === 'out').reduce((s, i) => s + i.amount, 0);
+      run += a - b;
+      rows.push({ m, a, b, run });
+    }
+    rows.reverse().forEach((r) => {
+      const tr = el('tr', r.m === month ? 'on' : '');
+      tr.append(el('td', '', monthLabel(r.m)), el('td', 'in', r.a ? yen(r.a) : '—'), el('td', 'out', r.b ? yen(r.b) : '—'), el('td', r.run < 0 ? 'minus' : '', yen(r.run)));
+      tr.onclick = () => { month = r.m; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      tb.append(tr);
+    });
+  }
+}
+$('m-prev').onclick = () => { month = shiftMonth(month, -1); render(); };
+$('m-next').onclick = () => { month = shiftMonth(month, 1); render(); };
+
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+let etype = 'in';
+function setType(t) { etype = t; document.querySelectorAll('#e-type button').forEach((b) => b.classList.toggle('on', b.dataset.v === t)); buildMemoList(); }
+document.querySelectorAll('#e-type button').forEach((b) => b.onclick = () => setType(b.dataset.v));
+function buildMemoList() {
+  // これまでに入力した内容を候補に出す
+  const dl = $('memo-list'); dl.innerHTML = '';
+  [...new Set(items.filter((i) => i.type === etype && i.memo).sort((a, b) => b.createdAt - a.createdAt).map((i) => i.memo))].slice(0, 15).forEach((m) => dl.append(new Option(m)));
+}
+function openEdit(it, type) {
+  editing = it || null;
+  const sel = $('e-kid'); sel.innerHTML = '';
+  kids.forEach((k) => sel.add(new Option(k.name, k.id)));
+  if (it && !kids.some((k) => k.id === it.kid)) sel.add(new Option('（不明）', it.kid));
+  $('edit-title').textContent = it ? '記録を直す' : '記録する';
+  sel.value = it ? it.kid : view.kid;
+  const today = dateKey(new Date());
+  $('e-date').value = it ? it.date : (monthOf(today) === month ? today : month + '-01');
+  $('e-amt').value = it ? String(it.amount) : '';
+  $('e-memo').value = it ? it.memo : '';
+  setType(it ? it.type : type);
+  $('e-del').hidden = !it;
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add-in').onclick = () => openEdit(null, 'in');
+$('add-out').onclick = () => openEdit(null, 'out');
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = async () => {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'z' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.kid = $('e-kid').value;
+  it.type = etype;
+  it.date = $('e-date').value;
+  it.amount = parseYen($('e-amt').value);
+  it.memo = $('e-memo').value.trim().slice(0, 40);
+  it.updatedAt = now;
+  if (!it.date) { alert('日付を入れてください。'); return; }
+  if (!it.amount || it.amount > 9999999) { alert('金額を円で入れてください。'); return; }
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  view.kid = it.kid; month = monthOf(it.date);
+  closeSheet('edit');
+  reload();
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('この記録（' + (editing.type === 'in' ? '入金 ' : '出金 ') + yen(editing.amount) + '）を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// ===== 設定：子どもの呼び名 =====
+function buildKidEdit() {
+  const box = $('kid-edit'); box.innerHTML = '';
+  kids.forEach((k, i) => addKidRow(k, i));
+}
+function addKidRow(k, i) {
+  const row = el('div', 'kidrow');
+  row.style.setProperty('--kc', KID_COLORS[i % KID_COLORS.length]);
+  const inp = el('input'); inp.value = k.name; inp.maxLength = 12; inp.dataset.id = k.id;
+  row.append(el('span', 'dot'), inp);
+  $('kid-edit').append(row);
+  return inp;
+}
+$('kid-add').onclick = () => {
+  const n = $('kid-edit').querySelectorAll('input').length;
+  if (n >= 8) { alert('8人までです。'); return; }
+  addKidRow({ id: 'k' + Date.now().toString(36), name: '' }, n).focus();
+};
+$('kid-save').onclick = () => {
+  const rows = [...$('kid-edit').querySelectorAll('input')];
+  kids = rows.map((inp, i) => ({ id: inp.dataset.id, name: inp.value.trim() || (kids.find((k) => k.id === inp.dataset.id) || {}).name || '子ども' + (i + 1) }));
+  save(KEY_KIDS, kids);
+  buildKidEdit(); render();
+  alert('呼び名を保存しました。');
+};
+$('open-settings').onclick = () => { buildKidEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => closeSheet('settings');
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'kozukai-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'kozukai', version: APP_VERSION, exportedAt: d.toISOString(), kids, items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'kozukai' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id && it.date && (it.type === 'in' || it.type === 'out') && Number.isFinite(it.amount)) await dbPut(it); }
+  if (Array.isArray(data.kids)) {
+    data.kids.forEach((k) => { if (k && k.id && !kids.some((x) => x.id === k.id)) kids.push({ id: k.id, name: String(k.name || '子ども') }); });
+    save(KEY_KIDS, kids); buildKidEdit();
+  }
+  await reload();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

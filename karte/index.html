@@ -1,0 +1,451 @@
+<!doctype html>
+<!-- このファイルは「区民の声カルテ」の本体です。受けた相談を分野・地域（町名まで）・内容・対応状況・次の対応日つきで記録し、絞り込み・検索・書き出しができます。 -->
+<!-- 記録はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。書き出しボタンを押したときだけ、あなたが選んだ先へ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>区民の声カルテ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="声カルテ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1f7a6e">
+<style>
+  :root { --bg:#f3f8f7; --card:#fff; --text:#1b2a29; --sub:#566866; --accent:#1f7a6e; --accent-soft:#dff0ed; --line:#dbe5e3; --danger:#c8372d;
+          --s1:#9aa6b0; --s2:#f0a828; --s3:#2f8fd8; --s4:#8a5cd0; --s5:#2f9e6b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111917; --card:#1a2422; --text:#e8f1ef; --sub:#99aba8; --accent:#5cc0b0; --accent-soft:#1b3632; --line:#2a3836; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:7em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* 個人情報の注意（目立たせる） */
+  .privacy { background:#fdecea; color:#7a1d16; border:2px solid #e8a39c; border-radius:12px; padding:10px 12px; font-size:.86rem; margin-bottom:10px; }
+  .privacy b { display:block; font-size:.95rem; }
+  @media (prefers-color-scheme: dark) { .privacy { background:#3a1a17; color:#f6c7c2; border-color:#7a3a33; } }
+
+  /* 絞り込み */
+  .filters { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px; }
+  .filters select { padding:7px 6px; font-size:.88rem; }
+  .chk { display:flex; align-items:center; gap:6px; font-size:.85rem; color:var(--sub); margin:6px 0 0; }
+  .chk input { width:auto; }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 10px; }
+
+  /* カード */
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card[data-s="受付"]     { border-left-color:var(--s1); }
+  .card[data-s="確認中"]   { border-left-color:var(--s2); }
+  .card[data-s="区へ伝達"] { border-left-color:var(--s3); }
+  .card[data-s="回答済み"] { border-left-color:var(--s4); }
+  .card[data-s="完了"]     { border-left-color:var(--s5); opacity:.7; }
+  .card .t { font-weight:700; word-break:break-word; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:4px; }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin:0 4px 2px 0; background:var(--accent-soft); color:var(--accent); }
+  .due { display:inline-block; font-size:.78rem; font-weight:700; border-radius:99px; padding:0 8px; margin:0 4px 2px 0; background:var(--accent-soft); color:var(--accent); }
+  .due.today { background:#fff0d6; color:#8a5a00; }
+  .due.over { background:#fdecea; color:var(--danger); }
+  @media (prefers-color-scheme: dark) { .due.today { background:#3a2e12; color:#f3dca6; } .due.over { background:#3a1a17; } }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  /* 編集・設定の画面（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row2 > div { min-width:0; }
+  .steps { display:grid; grid-template-columns:repeat(5, 1fr); gap:4px; }
+  .steps button { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 0; font-size:.8rem; line-height:1.2; }
+  .steps button.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .catrow { display:flex; gap:6px; margin-bottom:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🗂️ 区民の声カルテ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="privacy"><b>⚠️ 名前・住所・電話番号は書きません</b>地域は町名まで。番地・建物名・個人名など、個人を特定できる情報は書かないでください。</div>
+
+  <input id="q" type="search" placeholder="🔍 文字で検索（内容・地域・対応メモ）">
+  <div class="filters" style="margin-top:6px">
+    <select id="f-cat" aria-label="分野で絞り込み"></select>
+    <select id="f-st" aria-label="対応状況で絞り込み"></select>
+    <select id="f-area" aria-label="地域で絞り込み"></select>
+  </div>
+  <label class="chk"><input type="checkbox" id="f-done"> 完了したものも表示する</label>
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="相談を追加">＋</button>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">相談を記録</h2>
+    <div class="privacy"><b>⚠️ 個人を特定できる情報は書きません</b>お名前・住所（番地）・電話番号・メールアドレス・建物名は書きません。「どんな相談か」だけを残します。</div>
+    <div class="row2">
+      <div><label class="f" for="e-cat">分野</label><select id="e-cat"></select></div>
+      <div><label class="f" for="e-date">受けた日</label><input id="e-date" type="date"></div>
+    </div>
+    <label class="f" for="e-area">地域（町名まで。番地は書かない）</label>
+    <input id="e-area" list="area-list" maxlength="20" placeholder="町名だけ（丁目・番地は書かない）">
+    <datalist id="area-list"></datalist>
+    <label class="f" for="e-body">相談の内容</label>
+    <textarea id="e-body" placeholder="例：通学路の横断歩道の白線が消えかけている。（キーボードのマイクで話して入力もできます）"></textarea>
+    <label class="f">対応状況</label>
+    <div class="steps" id="e-steps"></div>
+    <label class="f" for="e-next">次の対応日</label>
+    <input id="e-next" type="date">
+    <label class="f" for="e-memo">対応メモ（区のどの課に伝えたか、回答の内容など）</label>
+    <textarea id="e-memo" style="min-height:4.5em"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">分野（名前を空にして保存すると消えます。すでにその分野の記録はそのまま残ります）</label>
+    <div id="cat-edit"></div>
+    <button class="plain" id="cat-add">＋ 分野を追加</button>
+    <div class="actions"><button class="primary" id="cat-save">分野を保存</button></div>
+
+    <label class="f" style="margin-top:22px">書き出し</label>
+    <p class="note" style="margin-top:0">表の形（CSV）は、Excelや Googleスプレッドシートで開けます。いま一覧に表示している記録だけを書き出します。</p>
+    <div class="actions"><button class="plain" id="export-csv">表の形で書き出す（CSV）</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">バックアップを書き出す</button>
+      <button class="plain" id="import-btn">バックアップを読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note" id="usage"></p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CATS = 'karte:cats';          // 分野の一覧
+const KEY_FILTER = 'karte:filter';      // 最後に選んだ絞り込み
+const STATES = ['受付', '確認中', '区へ伝達', '回答済み', '完了'];
+const DEFAULT_CATS = ['子育て', '教育', '福祉・介護', '健康', '道路・交通', '公園・緑', '防災・防犯', 'ごみ・環境', '住まい', '区の手続き', 'その他'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('karte', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function ymdLabel(s) { if (!s) return ''; const [y, m, d] = s.split('-').map(Number); return y + '/' + m + '/' + d; }
+// 「2026-11-20」までの日数（今日=0、過ぎたらマイナス）
+function daysUntil(s) { const [y, m, d] = s.split('-').map(Number); const t = new Date(); return Math.round((new Date(y, m - 1, d) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function fillSelect(sel, values, firstLabel) {
+  sel.innerHTML = '';
+  if (firstLabel) sel.add(new Option(firstLabel, ''));
+  values.forEach((v) => sel.add(new Option(v, v)));
+}
+
+let cats = load(KEY_CATS, DEFAULT_CATS);
+let items = [];
+let filter = load(KEY_FILTER, { cat: '', st: '', area: '', done: false });
+
+// ===== 一覧の表示 =====
+function areas() { return [...new Set(items.map((i) => i.area).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja')); }
+function buildFilters() {
+  const allCats = [...new Set([...cats, ...items.map((i) => i.category).filter(Boolean)])];
+  fillSelect($('f-cat'), allCats, '全分野');
+  fillSelect($('f-st'), STATES, '全状況');
+  fillSelect($('f-area'), areas(), '全地域');
+  $('f-cat').value = allCats.includes(filter.cat) ? filter.cat : '';
+  $('f-st').value = STATES.includes(filter.st) ? filter.st : '';
+  $('f-area').value = areas().includes(filter.area) ? filter.area : '';
+  $('f-done').checked = !!filter.done;
+  const dl = $('area-list'); dl.innerHTML = '';
+  areas().forEach((s) => dl.append(new Option(s)));
+}
+function shownItems() {
+  const q = $('q').value.trim().toLowerCase();
+  return items.filter((i) =>
+    (!filter.cat || i.category === filter.cat) &&
+    (!filter.st || i.status === filter.st) &&
+    (!filter.area || i.area === filter.area) &&
+    (filter.done || filter.st === '完了' || i.status !== '完了') &&
+    (!q || [i.body, i.area, i.memo, i.category].join('\n').toLowerCase().includes(q)));
+}
+function render() {
+  filter = { cat: $('f-cat').value, st: $('f-st').value, area: $('f-area').value, done: $('f-done').checked };
+  save(KEY_FILTER, filter);
+  const shown = shownItems();
+  // 完了は下へ。それ以外は次の対応日が近い順（日付なしはその後ろ）、同じなら新しく受けた順
+  const key = (i) => (i.status === '完了' ? '2' : i.next ? '0' + i.next : '1');
+  shown.sort((a, b) => key(a).localeCompare(key(b)) || (b.date || '').localeCompare(a.date || '') || b.updatedAt - a.updatedAt);
+
+  const open = items.filter((i) => i.status !== '完了');
+  const overdue = open.filter((i) => i.next && daysUntil(i.next) <= 0).length;
+  $('counts').textContent = '対応中 ' + open.length + '件' + (overdue ? '（うち対応日が今日・過ぎたもの ' + overdue + '件）' : '') +
+    ' ／ 完了 ' + (items.length - open.length) + '件' + (shown.length !== items.length ? '　表示中 ' + shown.length + '件' : '');
+
+  const list = $('list');
+  list.innerHTML = '';
+  if (!shown.length) {
+    list.append(el('p', 'empty', items.length ? '条件に合う記録はありません' : 'まだ記録はありません。右下の「＋」から追加してください。'));
+    return;
+  }
+  for (const it of shown) {
+    const c = el('div', 'card');
+    c.dataset.s = it.status;
+    c.append(el('div', 't', it.body || '（内容なし）'));
+    const m = el('div', 'm');
+    if (it.next && it.status !== '完了') {
+      const n = daysUntil(it.next);
+      m.append(el('span', 'due' + (n < 0 ? ' over' : n === 0 ? ' today' : ''),
+        '次の対応 ' + ymdLabel(it.next) + (n < 0 ? '（' + -n + '日過ぎ）' : n === 0 ? '（今日）' : '（あと' + n + '日）')));
+    }
+    m.append(el('span', 'tag', it.status), el('span', 'tag', it.category || '分野なし'));
+    if (it.area) m.append(el('span', 'tag', it.area));
+    if (it.date) m.append(document.createTextNode(' 受付 ' + ymdLabel(it.date)));
+    c.append(m);
+    c.onclick = () => openEdit(it);
+    list.append(c);
+  }
+}
+['q', 'f-cat', 'f-st', 'f-area', 'f-done'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', render));
+
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  buildFilters();
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+let curState = STATES[0];
+function buildSteps() {
+  const box = $('e-steps'); box.innerHTML = '';
+  STATES.forEach((s) => {
+    const b = el('button', s === curState ? 'on' : '', s);
+    b.type = 'button';
+    b.onclick = () => { curState = s; buildSteps(); };
+    box.append(b);
+  });
+}
+function openEdit(it) {
+  editing = it || null;
+  const allCats = [...new Set([...cats, ...(it && it.category ? [it.category] : [])])];
+  fillSelect($('e-cat'), allCats);
+  $('edit-title').textContent = it ? '記録を編集' : '相談を記録';
+  $('e-cat').value = it ? it.category : (filter.cat || allCats[0]);
+  $('e-date').value = it ? (it.date || '') : todayStr();
+  $('e-area').value = it ? (it.area || '') : (filter.area || '');
+  $('e-body').value = it ? it.body : '';
+  curState = it ? it.status : STATES[0];
+  buildSteps();
+  $('e-next').value = it ? (it.next || '') : '';
+  $('e-memo').value = it ? (it.memo || '') : '';
+  $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtDate(it.createdAt) + ' ／ 更新 ' + fmtDate(it.updatedAt) : '';
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+
+// 個人を特定できそうな書き方を見つけたら、保存の前に知らせる（見落とし防止。完全ではありません）
+function privacyHints(area, text) {
+  const hints = [];
+  if (/[0-9０-９]|番地|番|号|丁目|マンション|アパート|ハイツ|コーポ/.test(area)) hints.push('地域に、丁目・番地・建物名のような書き方があります（町名までにしてください）');
+  if (/0[0-9０-９]{1,4}[-ー－‐ ]?[0-9０-９]{1,4}[-ー－‐ ]?[0-9０-９]{3,4}/.test(text)) hints.push('電話番号のような数字があります');
+  if (/[^\s@＠]+[@＠][^\s@＠]+\.[^\s@＠]+/.test(text)) hints.push('メールアドレスのような文字があります');
+  if (/(^|[^0-9０-９])[0-9０-９]{1,3}[-ー－‐][0-9０-９]{1,3}[-ー－‐][0-9０-９]{1,3}($|[^0-9０-９])|[0-9０-９]+番地|[0-9０-９]+号室/.test(text)) hints.push('番地・部屋番号のような書き方があります');
+  return hints;
+}
+$('e-save').onclick = async () => {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'k' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.category = $('e-cat').value;
+  it.date = $('e-date').value;
+  it.area = $('e-area').value.trim().slice(0, 20);
+  it.body = $('e-body').value;
+  it.status = curState;
+  it.next = $('e-next').value;
+  it.memo = $('e-memo').value;
+  it.updatedAt = now;
+  if (!it.body.trim()) { alert('相談の内容を入れてください。'); return; }
+  const hints = privacyHints(it.area, it.body + '\n' + it.memo);
+  if (hints.length && !confirm('個人を特定できる情報が入っていないか確認してください。\n\n・' + hints.join('\n・') + '\n\nこのまま保存しますか？（「キャンセル」で直せます）')) return;
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  closeSheet('edit');
+  reload();
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('この記録を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// ===== 設定：分野 =====
+function buildCatEdit() {
+  const box = $('cat-edit'); box.innerHTML = '';
+  cats.forEach((c) => addCatRow(c));
+}
+function addCatRow(value) {
+  const row = el('div', 'catrow');
+  const inp = el('input'); inp.value = value; inp.maxLength = 20;
+  row.append(inp);
+  $('cat-edit').append(row);
+  return inp;
+}
+$('cat-add').onclick = () => addCatRow('').focus();
+$('cat-save').onclick = () => {
+  const vals = [...$('cat-edit').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+  cats = vals.length ? [...new Set(vals)] : DEFAULT_CATS.slice();
+  save(KEY_CATS, cats);
+  buildCatEdit();
+  buildFilters(); render();
+  alert('分野を保存しました。');
+};
+$('open-settings').onclick = () => { buildCatEdit(); showUsage(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => closeSheet('settings');
+
+// ===== ファイルを渡す（共有シート、なければダウンロード） =====
+async function giveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function stamp() { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); }
+
+// ===== 書き出し：表の形（CSV） =====
+$('export-csv').onclick = () => {
+  const rows = shownItems();
+  if (!rows.length) { alert('書き出す記録がありません。'); return; }
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['受けた日', '分野', '地域', '相談の内容', '対応状況', '次の対応日', '対応メモ', '最終更新'];
+  const body = rows.map((i) => [i.date, i.category, i.area, i.body, i.status, i.next, i.memo, fmtDate(i.updatedAt)].map(q).join(','));
+  // 先頭の ﻿ は、Excelで文字化けしないための印
+  giveFile('karte-' + stamp() + '.csv', '﻿' + [head.map(q).join(','), ...body].join('\r\n'), 'text/csv');
+};
+
+// ===== 設定：バックアップ =====
+$('export').onclick = () => {
+  const data = JSON.stringify({ app: 'karte', version: APP_VERSION, exportedAt: new Date().toISOString(), cats, items }, null, 1);
+  giveFile('karte-backup-' + stamp() + '.json', data, 'application/json');
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'karte' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
+  await reload();
+  alert('読み込みました。');
+};
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }
+  const { usage } = await navigator.storage.estimate();
+  $('usage').textContent = '使用量：約' + Math.max(0.1, (usage || 0) / 1024 / 1024).toFixed(1) + 'MB';
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// 日付が変わったときに「あと○日」を直すため、画面に戻ってきたら描き直す
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!doctype html>
+<!-- このファイルは「持ち物チェック」の本体です。子どもごと・曜日ごとの持ち物を登録しておき、その日の分にチェックを付けられます（チェックは日付が変わると自動で外れます）。 -->
+<!-- 登録内容とチェックはiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>持ち物チェック</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="持ち物">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#d9711f">
+<style>
+  :root { --bg:#fbf6f1; --card:#fff; --text:#2a2118; --sub:#6e6256; --accent:#d9711f; --accent-soft:#fbe9d9; --line:#eadfd3; --danger:#c8372d;
+          --ok:#2f8f4e; --ok-soft:#e3f4e8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17130f; --card:#221c16; --text:#f3ece4; --sub:#b3a595; --accent:#f09a4f; --accent-soft:#3a2716; --line:#3a3026; --danger:#ef6b61;
+            --ok:#5fcf86; --ok-soft:#183324; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .day { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .day b { font-size:1.15rem; }
+  .seg { display:flex; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; flex:none; }
+  .seg button { padding:8px 14px; font-size:.92rem; }
+  .seg button.on { background:var(--accent); color:#fff; font-weight:700; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { background:var(--card); border:2px solid var(--line); border-radius:99px; padding:6px 14px; font-size:.92rem; }
+  .chip.on { border-color:var(--kc, var(--accent)); background:var(--kc, var(--accent)); color:#fff; font-weight:700; }
+  .hint { font-size:.8rem; color:var(--sub); margin:0 0 10px; }
+
+  /* 子どもごとのカード */
+  .kidbox { background:var(--card); border:1px solid var(--line); border-top:6px solid var(--kc); border-radius:14px; padding:10px 12px 6px; margin-bottom:12px; }
+  .kidbox h3 { display:flex; justify-content:space-between; align-items:center; margin:0 0 6px; font-size:1.05rem; }
+  .kidbox h3 span { font-size:.85rem; color:var(--sub); font-weight:500; }
+  .kidbox.all h3 span { color:var(--ok); font-weight:700; }
+  .item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px 4px; border-top:1px solid var(--line); background:none; font-size:1.05rem; }
+  .item:first-of-type { border-top:none; }
+  .item .box { flex:none; width:30px; height:30px; border-radius:8px; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; }
+  .item.on .box { background:var(--ok); border-color:var(--ok); }
+  .item.on .nm { text-decoration:line-through; color:var(--sub); }
+  .item .nm { flex:1; min-width:0; word-break:break-word; }
+  .item .tag { flex:none; font-size:.72rem; color:var(--sub); border:1px solid var(--line); border-radius:99px; padding:0 7px; }
+  .preview .item { cursor:default; }
+  .preview .item .box { display:none; }
+  .preview .item::before { content:'・'; color:var(--sub); }
+  .none { color:var(--sub); font-size:.9rem; padding:6px 0 10px; }
+  .done-msg { color:var(--ok); font-weight:700; text-align:center; padding:4px 0 8px; }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; }
+  .big { display:block; width:100%; background:var(--accent); color:#fff; border-radius:14px; padding:14px; font-weight:700; font-size:1.05rem; margin-top:6px; }
+
+  /* 全面の画面 */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .days { display:grid; grid-template-columns:repeat(7, 1fr); gap:5px; }
+  .days button { background:var(--card); border:2px solid var(--line); border-radius:10px; padding:10px 0; font-weight:700; }
+  .days button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .days.off { opacity:.35; pointer-events:none; }
+  .daily { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; font-weight:700; }
+  .daily input { width:24px; height:24px; margin:0; accent-color:var(--accent); }
+  .reglist { margin-top:8px; }
+  .reg { display:flex; justify-content:space-between; gap:8px; align-items:center; width:100%; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:6px; }
+  .reg b { flex:1; min-width:0; word-break:break-word; font-weight:600; }
+  .reg span { flex:none; font-size:.8rem; color:var(--sub); }
+  .kidrow { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .kidrow .dot { flex:none; width:18px; height:18px; border-radius:50%; background:var(--kc); }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🎒 持ち物チェック</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="day">
+    <b id="day-label"></b>
+    <div class="seg" id="when"><button data-v="0">今日</button><button data-v="1">明日</button></div>
+  </div>
+  <div class="chips" id="kid-chips"></div>
+  <p class="hint" id="hint"></p>
+  <div id="list"></div>
+  <button class="big" id="open-reg">＋ 持ち物を登録・直す</button>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 持ち物の登録 -->
+<div class="sheet" id="reg">
+  <div class="inner">
+    <h2>持ち物の登録</h2>
+    <label class="f" for="r-kid">だれの持ち物？</label>
+    <select id="r-kid"></select>
+    <div class="reglist" id="r-list"></div>
+
+    <h2 id="r-title" style="margin-top:20px">新しく追加</h2>
+    <div class="warn">持ち物の名前に、学校名や本名など個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="r-name">持ち物の名前</label>
+    <input id="r-name" maxlength="30" placeholder="例：体操服、水とう、連絡帳">
+    <label class="f">いつ持っていく？</label>
+    <label class="daily"><input type="checkbox" id="r-daily"> 毎日</label>
+    <div class="days" id="r-days"></div>
+    <div class="actions">
+      <button class="primary" id="r-save">追加する</button>
+      <button class="plain" id="r-new" hidden>やめる</button>
+      <button class="plain danger" id="r-del" hidden>削除</button>
+    </div>
+    <div class="actions"><button class="plain" id="r-close">閉じる</button></div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">子どもの呼び名（本名ではなく「長男」「〇〇ちゃん」など家の中の呼び名で）</label>
+    <div id="kid-edit"></div>
+    <button class="plain" id="kid-add">＋ 子どもを追加</button>
+    <div class="actions"><button class="primary" id="kid-save">呼び名を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、登録した持ち物もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KIDS = 'mochimono:kids';      // 子どもの呼び名
+const KEY_ITEMS = 'mochimono:items';    // 登録した持ち物
+const KEY_CHECKS = 'mochimono:checks';  // 今日のチェック（日付つき）
+const KEY_VIEW = 'mochimono:view';      // 最後に選んだ子ども
+const KID_COLORS = ['#e0533d', '#2f7fd0', '#2f9e6b', '#c9861a', '#8a5cd0', '#c2417f', '#4a8a9a', '#7a7a2a'];
+const DEFAULT_KIDS = [1, 2, 3, 4].map((n) => ({ id: 'k' + n, name: '子ども' + n }));
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 月曜から並べる
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { alert('保存できませんでした。'); } }
+const p2 = (n) => String(n).padStart(2, '0');
+function dateKey(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function dayAfter(n) { const d = new Date(); d.setDate(d.getDate() + n); return d; }
+
+let kids = load(KEY_KIDS, DEFAULT_KIDS);
+let items = load(KEY_ITEMS, []);
+let checks = load(KEY_CHECKS, { date: '', done: [] });
+let view = load(KEY_VIEW, { kid: '' });
+let offset = 0; // 0=今日、1=明日（見るだけ）
+const kidColor = (id) => { const i = kids.findIndex((x) => x.id === id); return KID_COLORS[(i < 0 ? 7 : i) % KID_COLORS.length]; };
+const daysText = (it) => it.daily ? '毎日' : WEEK_ORDER.filter((d) => it.days.includes(d)).map((d) => WEEK[d]).join('・') || '曜日なし';
+
+// 日付が変わっていたら、チェックを全部外す
+function resetIfNewDay() {
+  const today = dateKey(new Date());
+  if (checks.date !== today) { checks = { date: today, done: [] }; save(KEY_CHECKS, checks); return true; }
+  return false;
+}
+
+// ===== 画面の表示 =====
+function render() {
+  resetIfNewDay();
+  const d = dayAfter(offset);
+  const wd = d.getDay();
+  $('day-label').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEK[wd] + '）' + (offset ? 'の分' : '');
+  document.querySelectorAll('#when button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === offset));
+  $('hint').textContent = offset ? '明日の分は見るだけです。チェックは当日に付けられます。' : 'チェックは日付が変わると自動で外れます。';
+
+  const chips = $('kid-chips'); chips.innerHTML = '';
+  if (!kids.some((k) => k.id === view.kid)) view.kid = '';
+  [{ id: '', name: '全員' }, ...kids].forEach((k) => {
+    const b = el('button', 'chip' + (view.kid === k.id ? ' on' : ''), k.name);
+    if (k.id) b.style.setProperty('--kc', kidColor(k.id));
+    b.onclick = () => { view.kid = k.id; save(KEY_VIEW, view); render(); };
+    chips.append(b);
+  });
+
+  const list = $('list'); list.innerHTML = '';
+  if (!items.length) { list.append(el('p', 'empty', 'まだ持ち物が登録されていません。下の「＋ 持ち物を登録・直す」から追加してください。')); return; }
+  const shownKids = kids.filter((k) => !view.kid || k.id === view.kid);
+  for (const k of shownKids) {
+    const mine = items.filter((it) => it.kid === k.id && (it.daily || it.days.includes(wd)));
+    // 毎日のものを先に、あとは登録順
+    mine.sort((a, b) => (b.daily ? 1 : 0) - (a.daily ? 1 : 0));
+    const box = el('div', 'kidbox' + (offset ? ' preview' : ''));
+    box.style.setProperty('--kc', kidColor(k.id));
+    const n = mine.filter((it) => checks.done.includes(it.id)).length;
+    const h = el('h3', '', k.name);
+    if (mine.length && !offset) h.append(el('span', '', n + ' / ' + mine.length));
+    box.append(h);
+    if (!mine.length) box.append(el('div', 'none', 'この日の持ち物は登録されていません'));
+    for (const it of mine) {
+      const on = !offset && checks.done.includes(it.id);
+      const row = el('button', 'item' + (on ? ' on' : ''));
+      row.setAttribute('role', 'checkbox'); row.setAttribute('aria-checked', on ? 'true' : 'false');
+      row.append(el('span', 'box', on ? '✓' : ''), el('span', 'nm', it.name));
+      if (it.daily) row.append(el('span', 'tag', '毎日'));
+      if (!offset) row.onclick = () => toggle(it.id);
+      box.append(row);
+    }
+    if (mine.length && !offset && n === mine.length) { box.classList.add('all'); box.append(el('div', 'done-msg', '🎉 ぜんぶ そろった！')); }
+    list.append(box);
+  }
+}
+function toggle(id) {
+  if (resetIfNewDay()) { render(); return; }
+  const i = checks.done.indexOf(id);
+  if (i >= 0) checks.done.splice(i, 1); else checks.done.push(id);
+  save(KEY_CHECKS, checks);
+  render();
+}
+document.querySelectorAll('#when button').forEach((b) => b.onclick = () => { offset = Number(b.dataset.v); render(); });
+
+// ===== 持ち物の登録 =====
+let regKid = '';
+let editing = null;
+let pickDays = [];
+function buildDays() {
+  const box = $('r-days'); box.innerHTML = '';
+  WEEK_ORDER.forEach((d) => {
+    const b = el('button', pickDays.includes(d) ? 'on' : '', WEEK[d]);
+    b.type = 'button';
+    b.onclick = () => { const i = pickDays.indexOf(d); if (i >= 0) pickDays.splice(i, 1); else pickDays.push(d); buildDays(); };
+    box.append(b);
+  });
+  box.classList.toggle('off', $('r-daily').checked);
+}
+$('r-daily').onchange = buildDays;
+function openForm(it) {
+  editing = it || null;
+  $('r-title').textContent = it ? '「' + it.name + '」を直す' : '新しく追加';
+  $('r-name').value = it ? it.name : '';
+  $('r-daily').checked = it ? !!it.daily : false;
+  pickDays = it ? it.days.slice() : (offset ? [] : [new Date().getDay()]);
+  $('r-save').textContent = it ? '保存する' : '追加する';
+  $('r-new').hidden = !it; $('r-del').hidden = !it;
+  buildDays();
+}
+function buildRegList() {
+  const box = $('r-list'); box.innerHTML = '';
+  const mine = items.filter((it) => it.kid === regKid);
+  if (!mine.length) box.append(el('p', 'note', 'まだ登録はありません。下から追加してください。'));
+  mine.forEach((it) => {
+    const b = el('button', 'reg');
+    b.append(el('b', '', it.name), el('span', '', daysText(it) + ' ›'));
+    b.onclick = () => { openForm(it); $('r-title').scrollIntoView({ behavior: 'smooth' }); };
+    box.append(b);
+  });
+}
+function openReg() {
+  const sel = $('r-kid'); sel.innerHTML = '';
+  kids.forEach((k) => sel.add(new Option(k.name, k.id)));
+  regKid = view.kid || kids[0].id;
+  sel.value = regKid;
+  buildRegList(); openForm(null);
+  $('reg').classList.add('open'); window.scrollTo(0, 0);
+}
+$('r-kid').onchange = () => { regKid = $('r-kid').value; buildRegList(); openForm(null); };
+$('open-reg').onclick = openReg;
+$('r-new').onclick = () => openForm(null);
+$('r-save').onclick = () => {
+  const name = $('r-name').value.trim().slice(0, 30);
+  const daily = $('r-daily').checked;
+  if (!name) { alert('持ち物の名前を入れてください。'); return; }
+  if (!daily && !pickDays.length) { alert('「毎日」にするか、曜日を1つ以上えらんでください。'); return; }
+  if (editing) {
+    Object.assign(items.find((x) => x.id === editing.id) || {}, { name, daily, days: pickDays.slice() });
+  } else {
+    items.push({ id: 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), kid: regKid, name, daily, days: pickDays.slice() });
+  }
+  save(KEY_ITEMS, items);
+  buildRegList(); openForm(null); render();
+};
+$('r-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.name + '」を削除します。よろしいですか？')) return;
+  items = items.filter((x) => x.id !== editing.id);
+  save(KEY_ITEMS, items);
+  buildRegList(); openForm(null); render();
+};
+$('r-close').onclick = () => { $('reg').classList.remove('open'); render(); };
+
+// ===== 設定：子どもの呼び名 =====
+function buildKidEdit() {
+  const box = $('kid-edit'); box.innerHTML = '';
+  kids.forEach((k, i) => addKidRow(k, i));
+}
+function addKidRow(k, i) {
+  const row = el('div', 'kidrow');
+  row.style.setProperty('--kc', KID_COLORS[i % KID_COLORS.length]);
+  const inp = el('input'); inp.value = k.name; inp.maxLength = 12; inp.dataset.id = k.id;
+  row.append(el('span', 'dot'), inp);
+  $('kid-edit').append(row);
+  return inp;
+}
+$('kid-add').onclick = () => {
+  const n = $('kid-edit').querySelectorAll('input').length;
+  if (n >= 8) { alert('8人までです。'); return; }
+  addKidRow({ id: 'k' + Date.now().toString(36), name: '' }, n).focus();
+};
+$('kid-save').onclick = () => {
+  const rows = [...$('kid-edit').querySelectorAll('input')];
+  kids = rows.map((inp, i) => ({ id: inp.dataset.id, name: inp.value.trim() || (kids.find((k) => k.id === inp.dataset.id) || {}).name || '子ども' + (i + 1) }));
+  save(KEY_KIDS, kids);
+  buildKidEdit(); render();
+  alert('呼び名を保存しました。');
+};
+$('open-settings').onclick = () => { buildKidEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => { $('settings').classList.remove('open'); render(); };
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'mochimono-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'mochimono', version: APP_VERSION, exportedAt: d.toISOString(), kids, items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'mochimono' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の持ち物を読み込みます。同じものは、ファイルの内容で上書きします（ほかのものは消えません）。よろしいですか？')) return;
+  for (const it of data.items) {
+    if (!it || !it.id || !it.kid || !Array.isArray(it.days)) continue;
+    const i = items.findIndex((x) => x.id === it.id);
+    const clean = { id: String(it.id), kid: String(it.kid), name: String(it.name || '').slice(0, 30), daily: !!it.daily, days: it.days.filter((d) => d >= 0 && d <= 6) };
+    if (i >= 0) items[i] = clean; else items.push(clean);
+  }
+  if (Array.isArray(data.kids)) {
+    data.kids.forEach((k) => { if (k && k.id && !kids.some((x) => x.id === k.id)) kids.push({ id: k.id, name: String(k.name || '子ども') }); });
+    save(KEY_KIDS, kids); buildKidEdit();
+  }
+  save(KEY_ITEMS, items);
+  render();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('reg').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// 日付が変わったか、画面に戻ったときと1分ごとに確かめる
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('reg').classList.contains('open')) render(); });
+setInterval(() => { if (resetIfNewDay()) render(); }, 60000);
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>

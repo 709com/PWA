@@ -1,0 +1,241 @@
+<!doctype html>
+<!-- このファイルは「文京区の駅スタンプラリー」の本体です。ボタンを押したときだけ現在地を調べ、文京区内14駅のどれかから300m以内なら、その駅のスタンプを押します。 -->
+<!-- 位置情報はこのiPhoneの中で駅までの距離を計算するだけに使い、保存も外部への送信もしません。保存するのは、スタンプを押した駅と日時だけです（localStorage）。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文京区の駅スタンプラリー</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="駅スタンプ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c23b3b">
+<style>
+  :root { --bg:#fbf5f4; --card:#fff; --text:#2b1d1c; --sub:#6e5b59; --accent:#c23b3b; --accent-soft:#f8e1df; --line:#eedfdd;
+          --ok:#1e9e5a; --ok-soft:#e1f5ea; --warn-bg:#fff5e0; --warn-text:#6b4a00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#181212; --card:#241b1b; --text:#f3eaea; --sub:#b5a3a1; --accent:#ef7b72; --accent-soft:#45221f; --line:#382a29;
+            --ok:#45c27f; --ok-soft:#173a29; --warn-bg:#3a2e12; --warn-text:#f3dca6; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
+  main { max-width:560px; margin:0 auto; padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.3rem; margin:4px 0 2px; }
+  .unofficial { font-size:.8rem; color:var(--sub); margin:0 0 12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  h2 { font-size:1rem; margin:0 0 8px; color:var(--sub); font-weight:600; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:12px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* 達成数 */
+  .done-count { font-size:2.4rem; font-weight:800; line-height:1.1; }
+  .done-count small { font-size:1rem; color:var(--sub); font-weight:500; }
+  .bar { height:12px; background:var(--accent-soft); border-radius:99px; overflow:hidden; margin:10px 0 14px; }
+  .bar div { height:100%; width:0; background:var(--accent); border-radius:99px; transition:width .3s; }
+
+  #check { display:block; width:100%; background:var(--accent); color:#fff; border-radius:16px; padding:18px 12px; font-size:1.2rem; font-weight:800; }
+  #check:active { transform:scale(.98); }
+  #check:disabled { opacity:.6; }
+  .msg { margin-top:12px; border-radius:12px; padding:12px; font-weight:600; display:none; }
+  .msg.show { display:block; }
+  .msg.ok { background:var(--ok-soft); color:var(--ok); }
+  .msg.info { background:var(--bg); color:var(--text); }
+  .msg.warn { background:var(--warn-bg); color:var(--warn-text); }
+  .msg small { display:block; font-weight:500; color:var(--sub); margin-top:4px; }
+  .privacy { font-size:.82rem; color:var(--sub); margin:10px 0 0; }
+
+  /* 駅の一覧（スタンプ帳） */
+  .grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+  .st { background:var(--bg); border:2px dashed var(--line); border-radius:14px; padding:12px 8px; text-align:center; min-height:132px; }
+  .st .seal { width:58px; height:58px; margin:0 auto 6px; border-radius:50%; border:3px dashed var(--line); display:flex; align-items:center; justify-content:center;
+              font-size:.8rem; color:var(--sub); }
+  .st b { display:block; font-size:1.05rem; word-break:break-all; line-height:1.3; }
+  .st span { font-size:.75rem; color:var(--sub); }
+  .st.on { background:var(--accent-soft); border:2px solid var(--accent); }
+  .st.on .seal { border:3px solid var(--accent); color:var(--accent); font-weight:800; font-size:.95rem; transform:rotate(-12deg); }
+  .st.on span { color:var(--accent); font-weight:600; }
+  .st.new { animation:pop .6s ease-out; }
+  @keyframes pop { 0% { transform:scale(.8); } 60% { transform:scale(1.06); } 100% { transform:scale(1); } }
+
+  .plain { display:block; width:100%; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; font-weight:600; }
+  .danger { color:var(--accent); }
+  .note { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>🚉 文京区の駅スタンプラリー</h1>
+  <p class="unofficial">非公式・個人の試作です。文京区の公式アプリではありません。</p>
+
+  <section>
+    <h2>達成</h2>
+    <div class="done-count"><span id="done">0</span><small> / <span id="total">14</span>駅</small></div>
+    <div class="bar"><div id="bar"></div></div>
+    <button id="check">📍 いまいる場所でスタンプを押す</button>
+    <div class="msg" id="msg"></div>
+    <p class="privacy">🔒 位置情報は、このボタンを押したときだけ1回調べます。駅までの距離はこのiPhoneの中で計算し、位置を外部へ送ったり保存したりはしません。保存するのは、スタンプを押した駅と日時だけです。</p>
+  </section>
+
+  <section>
+    <h2>スタンプ帳（駅から300m以内で押せます）</h2>
+    <div class="grid" id="grid"></div>
+    <p class="note">⚠️ 歩きながらの操作はやめましょう。駅や道路では、まわりの人の通行のじゃまにならない場所で押してください。駅の位置は駅の代表的な地点なので、出口によっては300mより離れていることがあります。</p>
+  </section>
+
+  <section>
+    <button class="plain danger" id="reset">スタンプをすべて消す（リセット）</button>
+    <p class="note">駅の位置の出典：国土数値情報（鉄道データ）国土交通省を加工して作成</p>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ スタンプはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_STAMPS = 'stamp:stamps';  // { 駅名: 押した日時（ミリ秒） }
+const RADIUS = 300;                 // スタンプを押せる距離（m）
+const $ = (id) => document.getElementById(id);
+
+// ===== 文京区内の駅 [駅名, 緯度, 経度] =====
+// 出典：国土数値情報（鉄道データ）国土交通省を加工（/wordpress/genzaichi/bunkyo.json の stations と同じ）
+const STATIONS = [['水道橋', 35.70285, 139.75442], ['湯島', 35.70679, 139.76998], ['本郷三丁目', 35.70716, 139.76042], ['後楽園', 35.70787, 139.75142],
+  ['春日', 35.70925, 139.75264], ['江戸川橋', 35.70929, 139.73413], ['茗荷谷', 35.7172, 139.7369], ['根津', 35.71733, 139.76575],
+  ['東大前', 35.71811, 139.75783], ['護国寺', 35.71918, 139.72745], ['白山', 35.72155, 139.7523], ['本駒込', 35.72441, 139.7538],
+  ['千駄木', 35.72599, 139.76337], ['千石', 35.72796, 139.74474]];
+// 一覧を五十音順に並べるための読み
+const YOMI = { 水道橋: 'すいどうばし', 湯島: 'ゆしま', 本郷三丁目: 'ほんごうさんちょうめ', 後楽園: 'こうらくえん', 春日: 'かすが', 江戸川橋: 'えどがわばし',
+  茗荷谷: 'みょうがだに', 根津: 'ねづ', 東大前: 'とうだいまえ', 護国寺: 'ごこくじ', 白山: 'はくさん', 本駒込: 'ほんこまごめ', 千駄木: 'せんだぎ', 千石: 'せんごく' };
+const ORDER = STATIONS.map((s) => s[0]).sort((a, b) => YOMI[a].localeCompare(YOMI[b], 'ja'));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function fmtDist(m) { return m < 1000 ? '約' + Math.round(m / 10) * 10 + 'm' : '約' + (m / 1000).toFixed(1) + 'km'; }
+// 2点間の距離（m）。地球を球として計算する
+function distance(lat1, lon1, lat2, lon2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+let stamps = load(KEY_STAMPS, {});
+if (!stamps || typeof stamps !== 'object') stamps = {};
+
+// ===== スタンプ帳の表示 =====
+function render(newOnes) {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  for (const name of ORDER) {
+    const at = stamps[name];
+    const card = document.createElement('div');
+    card.className = 'st' + (at ? ' on' : '') + (newOnes && newOnes.includes(name) ? ' new' : '');
+    card.dataset.name = name;
+    const seal = document.createElement('div');
+    seal.className = 'seal';
+    seal.textContent = at ? '済' : 'まだ';
+    const b = document.createElement('b'); b.textContent = name + '駅';
+    const s = document.createElement('span'); s.textContent = at ? fmtDate(at) : '　';
+    card.append(seal, b, s);
+    grid.append(card);
+  }
+  const done = ORDER.filter((n) => stamps[n]).length;
+  $('done').textContent = done;
+  $('total').textContent = ORDER.length;
+  $('bar').style.width = (done / ORDER.length * 100) + '%';
+}
+
+function showMsg(kind, text, sub) {
+  const m = $('msg');
+  m.className = 'msg show ' + kind;
+  m.textContent = text;
+  if (sub) { const s = document.createElement('small'); s.textContent = sub; m.append(s); }
+}
+
+// ===== 現在地を調べてスタンプを押す =====
+function check() {
+  if (!navigator.geolocation) { showMsg('warn', 'この端末では位置情報が使えません。'); return; }
+  $('check').disabled = true;
+  showMsg('info', '📡 現在地を調べています…');
+  navigator.geolocation.getCurrentPosition((pos) => {
+    $('check').disabled = false;
+    const { latitude, longitude, accuracy } = pos.coords;
+    // すべての駅との距離を、この端末の中で計算する
+    const list = STATIONS.map(([name, la, lo]) => ({ name, d: distance(latitude, longitude, la, lo) })).sort((a, b) => a.d - b.d);
+    const near = list.filter((x) => x.d <= RADIUS);
+    const accNote = accuracy > 100 ? '（いまの位置の誤差は' + fmtDist(accuracy) + 'です。うまくいかないときは、空が見える場所でもう一度どうぞ）' : '';
+    if (!near.length) {
+      showMsg('info', 'いちばん近いのは ' + list[0].name + '駅（' + fmtDist(list[0].d) + '）です。あと' + fmtDist(list[0].d - RADIUS) + '近づくとスタンプを押せます。', accNote);
+      return;
+    }
+    const added = near.filter((x) => !stamps[x.name]).map((x) => x.name);
+    const now = Date.now();
+    added.forEach((n) => { stamps[n] = now; });
+    if (added.length) save(KEY_STAMPS, stamps);
+    render(added);
+    const done = ORDER.filter((n) => stamps[n]).length;
+    if (added.length) {
+      const all = done === ORDER.length ? '　🎉 全' + ORDER.length + '駅を達成しました！' : '';
+      showMsg('ok', '🎉 ' + added.map((n) => n + '駅').join('・') + 'のスタンプを押しました！' + all, '達成 ' + done + ' / ' + ORDER.length + '駅');
+      const first = document.querySelector('.st.new');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      showMsg('info', near.map((x) => x.name + '駅').join('・') + 'のスタンプは、もう押してあります（' + fmtDate(stamps[near[0].name]) + '）。', 'ほかの駅にも行ってみましょう。');
+    }
+  }, (err) => {
+    $('check').disabled = false;
+    if (err.code === 1) {
+      showMsg('warn', '位置情報の利用が許可されていません。',
+        'iPhoneの「設定」→「プライバシーとセキュリティ」→「位置情報サービス」で、位置情報サービスをオンにし、Safariのサイトが位置情報を使えるようにしてから、もう一度押してください。');
+    } else if (err.code === 3) {
+      showMsg('warn', '現在地を調べるのに時間がかかりすぎました。', '少し場所を変えて、もう一度押してください。');
+    } else {
+      showMsg('warn', '現在地がわかりませんでした。', '少し場所を変えて、もう一度押してください。');
+    }
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+$('check').onclick = check;
+
+$('reset').onclick = () => {
+  if (!confirm('押したスタンプをすべて消します。元に戻せません。よろしいですか？')) return;
+  stamps = {};
+  try { localStorage.removeItem(KEY_STAMPS); } catch (e) {}
+  $('msg').className = 'msg';
+  render();
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>
