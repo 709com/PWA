@@ -1,0 +1,561 @@
+<!doctype html>
+<!-- このファイルは「条例・計画の読書メモ」の本体です。条例や計画などの文書を登録し、章・ページごとにメモと「疑問」「質問に使えそう」の印をつけて、絞り込み・まとめて共有ができます。 -->
+<!-- 文書とメモはiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。共有ボタンを押したときだけ、あなたが選んだ先へ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>条例・計画の読書メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="読書メモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#8a5a2b">
+<style>
+  :root { --bg:#f7f4f0; --card:#fff; --text:#241c15; --sub:#6b5f53; --accent:#8a5a2b; --accent-soft:#f1e6da; --line:#e4dcd2; --danger:#c8372d;
+          --q:#c0392b; --q-soft:#fbe5e2; --u:#1f7a4d; --u-soft:#dff2e7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151210; --card:#201b17; --text:#efe8e1; --sub:#a99c8f; --accent:#d9a46f; --accent-soft:#3a2b1d; --line:#352d26; --danger:#ef6b61;
+            --q:#f08a7e; --q-soft:#3d211d; --u:#6fcf98; --u-soft:#1b3326; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:8em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
+  .tab { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 6px; font-weight:700; }
+  .tab[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:7px 13px; font-size:.9rem; }
+  .chip[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:700; }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 10px; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--accent); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:4px; }
+  .card .b { white-space:pre-wrap; word-break:break-word; margin-top:6px; }
+  .note-card { border-left-color:var(--line); }
+  .note-card.q { border-left-color:var(--q); }
+  .note-card.u { border-left-color:var(--u); }
+  .place { font-weight:700; color:var(--accent); }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .tag.q { background:var(--q-soft); color:var(--q); font-weight:700; }
+  .tag.u { background:var(--u-soft); color:var(--u); font-weight:700; }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  #note.open, #docedit.open { z-index:12; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; word-break:break-word; }
+  .topline { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:8px; }
+  .docinfo { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; font-size:.88rem; color:var(--sub); }
+  .docinfo .b { white-space:pre-wrap; word-break:break-word; color:var(--text); margin-top:4px; }
+  .docinfo a { color:var(--accent); word-break:break-all; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .marks { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .mark { background:var(--card); border:2px solid var(--line); border-radius:12px; padding:12px 8px; font-weight:700; }
+  .mark.q[aria-pressed="true"] { background:var(--q-soft); border-color:var(--q); color:var(--q); }
+  .mark.u[aria-pressed="true"] { background:var(--u-soft); border-color:var(--u); color:var(--u); }
+  .addnote { width:100%; background:var(--accent); color:#fff; border-radius:12px; padding:14px; font-weight:700; font-size:1.05rem; margin:10px 0; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📖 読書メモ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tab-docs" role="tab" aria-selected="true">📚 文書</button>
+    <button class="tab" id="tab-marks" role="tab" aria-selected="false">🏷 印のついたメモ</button>
+  </div>
+
+  <section id="pane-docs">
+    <input id="q" type="search" placeholder="🔍 文書名・メモの文字で検索">
+    <div class="counts" id="counts"></div>
+    <div id="docs"></div>
+  </section>
+
+  <section id="pane-marks" hidden>
+    <div class="chips" id="mark-chips"></div>
+    <div class="counts" id="mcounts"></div>
+    <div id="marked"></div>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="文書を登録">＋</button>
+
+<!-- 文書ごとのメモ一覧 -->
+<div class="sheet" id="doc">
+  <div class="inner">
+    <div class="topline">
+      <button class="iconbtn" id="d-back">← 一覧へ</button>
+      <div style="display:flex;gap:6px">
+        <button class="iconbtn" id="d-share">📤 共有</button>
+        <button class="iconbtn" id="d-edit">✏️ 文書の情報</button>
+      </div>
+    </div>
+    <h2 id="d-title"></h2>
+    <div class="docinfo" id="d-info"></div>
+    <button class="addnote" id="d-addnote">＋ メモを追加</button>
+    <div class="chips" id="d-chips"></div>
+    <div class="row2">
+      <select id="d-sort" aria-label="並べ方">
+        <option value="place">章・ページ順</option>
+        <option value="old">書いた順</option>
+        <option value="new">新しい順</option>
+      </select>
+      <div class="counts" id="d-counts" style="margin:0;align-self:center"></div>
+    </div>
+    <div id="d-notes" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- メモの入力・編集 -->
+<div class="sheet" id="note">
+  <div class="inner">
+    <h2 id="n-title">メモを追加</h2>
+    <p class="note" id="n-doc" style="margin:-6px 0 8px"></p>
+    <div class="warn">区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="n-place">章・ページ（例：第3章 p.12、第5条）</label>
+    <input id="n-place" maxlength="60" list="place-list" placeholder="例：第2章 p.8">
+    <datalist id="place-list"></datalist>
+    <label class="f" for="n-body">メモ（書いてあること、気づいたこと）</label>
+    <textarea id="n-body" placeholder="キーボードのマイクで話して入力もできます"></textarea>
+    <div class="marks">
+      <button class="mark q" id="n-q" aria-pressed="false">❓ 疑問</button>
+      <button class="mark u" id="n-u" aria-pressed="false">💡 質問に使えそう</button>
+    </div>
+    <div class="actions">
+      <button class="primary" id="n-save">保存する</button>
+      <button class="plain" id="n-next">保存して次のメモ</button>
+      <button class="plain" id="n-cancel">やめる</button>
+      <button class="plain danger" id="n-del" hidden>削除</button>
+    </div>
+    <p class="note" id="n-meta"></p>
+  </div>
+</div>
+
+<!-- 文書の登録・編集 -->
+<div class="sheet" id="docedit">
+  <div class="inner">
+    <h2 id="de-title">文書を登録</h2>
+    <label class="f" for="de-name">文書の名前</label>
+    <input id="de-name" maxlength="100" placeholder="例：文京区〇〇基本計画">
+    <div class="row2">
+      <div><label class="f" for="de-kind">種類</label><select id="de-kind"></select></div>
+      <div><label class="f" for="de-year">年度・版（なくてもよい）</label><input id="de-year" maxlength="30" placeholder="例：令和8年度"></div>
+    </div>
+    <label class="f" for="de-org">担当の部署・発行元（なくてもよい）</label>
+    <input id="de-org" maxlength="60">
+    <label class="f" for="de-url">入手先（URLや資料の名前。なくてもよい）</label>
+    <input id="de-url" maxlength="300" inputmode="url">
+    <label class="f" for="de-memo">文書全体のメモ（読む目的など）</label>
+    <textarea id="de-memo" style="min-height:5em"></textarea>
+    <div class="actions">
+      <button class="primary" id="de-save">保存する</button>
+      <button class="plain" id="de-cancel">やめる</button>
+      <button class="plain danger" id="de-del" hidden>文書とメモを削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、文書とメモもすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note" id="usage"></p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_UI = 'dokusho:ui';   // 最後に開いていたタブ・絞り込み・並べ方
+const KINDS = ['条例', '規則・要綱', '計画', '方針・指針', '予算・決算', '報告書・白書', '答申・提言', 'その他'];
+const MARKS = [{ k: 'q', label: '疑問', icon: '❓' }, { k: 'u', label: '質問に使えそう', icon: '💡' }];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB）：docs＝文書、notes＝メモ =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('dokusho', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      db.createObjectStore('docs', { keyPath: 'id' });
+      db.createObjectStore('notes', { keyPath: 'id' }).createIndex('docId', 'docId');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(store, mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, mode);
+    const r = fn(tx.objectStore(store));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = (st) => dbDo(st, 'readonly', (s) => s.getAll());
+const dbPut = (st, it) => dbDo(st, 'readwrite', (s) => s.put(it));
+const dbDel = (st, id) => dbDo(st, 'readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const newId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 6);
+const hasMark = (n, k) => (n.marks || []).includes(k);
+const markLabel = (k) => MARKS.find((m) => m.k === k);
+
+let docs = [], notes = [];
+let ui = Object.assign({ tab: 'docs', dmark: '', mmark: 'u', sort: 'place' }, load(KEY_UI, {}));
+const saveUi = () => save(KEY_UI, ui);
+
+// 印のボタン（絞り込み用）を作る
+function buildChips(box, value, withNone, onPick) {
+  box.innerHTML = '';
+  const opts = [{ k: '', text: 'すべて' }, ...MARKS.map((m) => ({ k: m.k, text: m.icon + ' ' + m.label }))];
+  if (withNone) opts.push({ k: 'none', text: '印なし' });
+  opts.forEach((o) => {
+    const b = el('button', 'chip', o.text);
+    b.setAttribute('aria-pressed', String(o.k === value));
+    b.onclick = () => onPick(o.k);
+    box.append(b);
+  });
+}
+function noteMatches(n, k) {
+  if (!k) return true;
+  if (k === 'none') return !(n.marks || []).length;
+  return hasMark(n, k);
+}
+function sortNotes(list, how) {
+  const by = {
+    place: (a, b) => (a.place || '').localeCompare(b.place || '', 'ja', { numeric: true }) || a.createdAt - b.createdAt,
+    old: (a, b) => a.createdAt - b.createdAt,
+    new: (a, b) => b.updatedAt - a.updatedAt,
+  };
+  return list.slice().sort(by[how] || by.place);
+}
+function noteCard(n, showDoc) {
+  const c = el('div', 'card note-card' + (hasMark(n, 'q') ? ' q' : hasMark(n, 'u') ? ' u' : ''));
+  const m = el('div', 'm');
+  if (showDoc) { const d = docs.find((x) => x.id === n.docId); m.append(el('span', '', '📄 ' + (d ? d.name : '（削除された文書）') + '　')); }
+  m.append(el('span', 'place', n.place || '（場所なし）'), document.createTextNode(' '));
+  MARKS.forEach((mk) => { if (hasMark(n, mk.k)) m.append(el('span', 'tag ' + mk.k, mk.icon + mk.label)); });
+  c.append(m);
+  c.append(el('div', 'b', n.body || ''));
+  c.onclick = () => openNote(n.docId, n);
+  return c;
+}
+
+// ===== 文書の一覧 =====
+function renderDocs() {
+  const q = $('q').value.trim().toLowerCase();
+  const shown = docs.filter((d) => !q || [d.name, d.kind, d.org, d.year, d.memo, ...notes.filter((n) => n.docId === d.id).map((n) => n.place + ' ' + n.body)]
+    .join('\n').toLowerCase().includes(q));
+  shown.sort((a, b) => b.updatedAt - a.updatedAt);
+  $('counts').textContent = '文書 ' + docs.length + '件 ・ メモ ' + notes.length + '件' + (shown.length !== docs.length ? '　表示中 ' + shown.length + '件' : '');
+  const box = $('docs'); box.innerHTML = '';
+  if (!shown.length) { box.append(el('p', 'empty', docs.length ? '条件に合う文書はありません' : 'まだ文書はありません。右下の「＋」から登録してください。')); return; }
+  for (const d of shown) {
+    const ns = notes.filter((n) => n.docId === d.id);
+    const c = el('div', 'card');
+    c.append(el('div', 't', d.name || '（名前なし）'));
+    const m = el('div', 'm');
+    m.append(el('span', 'tag', d.kind || 'その他'));
+    if (d.year) m.append(el('span', 'tag', d.year));
+    m.append(document.createTextNode(' メモ' + ns.length + '件'));
+    MARKS.forEach((mk) => { const k = ns.filter((n) => hasMark(n, mk.k)).length; if (k) m.append(document.createTextNode(' ・ ' + mk.icon + k)); });
+    c.append(m);
+    c.append(el('div', 'm', '更新 ' + fmtDate(d.updatedAt)));
+    c.onclick = () => openDoc(d.id);
+    box.append(c);
+  }
+}
+$('q').addEventListener('input', renderDocs);
+
+// ===== 印のついたメモ（全文書） =====
+function renderMarked() {
+  buildChips($('mark-chips'), ui.mmark, false, (k) => { ui.mmark = k; saveUi(); renderMarked(); });
+  const list = notes.filter((n) => (n.marks || []).length && noteMatches(n, ui.mmark));
+  $('mcounts').textContent = '印のついたメモ ' + list.length + '件';
+  const box = $('marked'); box.innerHTML = '';
+  if (!list.length) { box.append(el('p', 'empty', '印のついたメモはまだありません。')); return; }
+  // 文書ごとにまとめ、文書の中は章・ページ順
+  const order = docs.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((d) => d.id);
+  list.sort((a, b) => order.indexOf(a.docId) - order.indexOf(b.docId) || (a.place || '').localeCompare(b.place || '', 'ja', { numeric: true }));
+  list.forEach((n) => box.append(noteCard(n, true)));
+}
+
+function setTab(t) {
+  ui.tab = t; saveUi();
+  $('tab-docs').setAttribute('aria-selected', String(t === 'docs'));
+  $('tab-marks').setAttribute('aria-selected', String(t === 'marks'));
+  $('pane-docs').hidden = t !== 'docs';
+  $('pane-marks').hidden = t !== 'marks';
+  $('add').hidden = t !== 'docs';
+  t === 'docs' ? renderDocs() : renderMarked();
+}
+$('tab-docs').onclick = () => setTab('docs');
+$('tab-marks').onclick = () => setTab('marks');
+
+async function reload() {
+  try { [docs, notes] = await Promise.all([dbAll('docs'), dbAll('notes')]); } catch (e) { docs = []; notes = []; alert('データベースを開けませんでした。'); }
+  setTab(ui.tab);
+  if (openDocId) renderDoc();
+}
+
+// ===== 1つの文書の画面 =====
+let openDocId = null;
+function openDoc(id) {
+  openDocId = id;
+  renderDoc();
+  $('doc').classList.add('open');
+  $('doc').scrollTo(0, 0);
+}
+function renderDoc() {
+  const d = docs.find((x) => x.id === openDocId);
+  if (!d) { $('doc').classList.remove('open'); openDocId = null; return; }
+  $('d-title').textContent = d.name || '（名前なし）';
+  const info = $('d-info'); info.innerHTML = '';
+  info.append(el('div', '', [d.kind, d.year, d.org].filter(Boolean).join(' ／ ')));
+  if (d.url) {
+    const line = el('div', '');
+    if (/^https?:\/\//.test(d.url)) { const a = el('a', '', d.url); a.href = d.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; line.append('入手先：', a); }
+    else line.textContent = '入手先：' + d.url;
+    info.append(line);
+  }
+  if (d.memo) info.append(el('div', 'b', d.memo));
+  $('d-sort').value = ui.sort;
+  buildChips($('d-chips'), ui.dmark, true, (k) => { ui.dmark = k; saveUi(); renderDoc(); });
+  const all = notes.filter((n) => n.docId === d.id);
+  const list = sortNotes(all.filter((n) => noteMatches(n, ui.dmark)), ui.sort);
+  $('d-counts').textContent = 'メモ ' + all.length + '件' + (list.length !== all.length ? '（表示 ' + list.length + '件）' : '');
+  const box = $('d-notes'); box.innerHTML = '';
+  if (!list.length) box.append(el('p', 'empty', all.length ? '条件に合うメモはありません' : 'まだメモはありません。「＋ メモを追加」から書いてください。'));
+  list.forEach((n) => box.append(noteCard(n, false)));
+}
+$('d-sort').onchange = () => { ui.sort = $('d-sort').value; saveUi(); renderDoc(); };
+$('d-back').onclick = () => { $('doc').classList.remove('open'); openDocId = null; setTab(ui.tab); };
+$('d-addnote').onclick = () => openNote(openDocId, null);
+$('d-edit').onclick = () => openDocEdit(docs.find((x) => x.id === openDocId));
+
+// 文書ごとのメモをまとめて共有（いまの絞り込み・並べ方のとおり）
+function docText(d) {
+  const list = sortNotes(notes.filter((n) => n.docId === d.id && noteMatches(n, ui.dmark)), ui.sort);
+  const lines = ['【読書メモ】' + (d.name || '名前なし')];
+  const meta = [d.kind, d.year, d.org].filter(Boolean).join(' ／ ');
+  if (meta) lines.push(meta);
+  if (d.url) lines.push('入手先：' + d.url);
+  if (ui.dmark) lines.push('（' + (ui.dmark === 'none' ? '印なし' : markLabel(ui.dmark).label) + 'のメモだけ）');
+  if (d.memo) lines.push('', '■ 全体のメモ', d.memo);
+  lines.push('', '■ メモ（' + list.length + '件）');
+  list.forEach((n) => {
+    const tags = MARKS.filter((mk) => hasMark(n, mk.k)).map((mk) => '［' + mk.label + '］').join('');
+    lines.push('', '◆ ' + (n.place || '場所なし') + (tags ? ' ' + tags : ''), n.body || '');
+  });
+  return lines.join('\n');
+}
+$('d-share').onclick = async () => {
+  const d = docs.find((x) => x.id === openDocId);
+  if (!d) return;
+  const text = docText(d);
+  if (navigator.share) { try { await navigator.share({ title: d.name, text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// ===== 文書の登録・編集 =====
+let editingDoc = null;
+function openDocEdit(d) {
+  editingDoc = d || null;
+  $('de-title').textContent = d ? '文書の情報を直す' : '文書を登録';
+  $('de-kind').innerHTML = '';
+  KINDS.forEach((k) => $('de-kind').add(new Option(k, k)));
+  $('de-name').value = d ? d.name : '';
+  $('de-kind').value = d && KINDS.includes(d.kind) ? d.kind : (d ? 'その他' : '計画');
+  $('de-year').value = d ? d.year || '' : '';
+  $('de-org').value = d ? d.org || '' : '';
+  $('de-url').value = d ? d.url || '' : '';
+  $('de-memo').value = d ? d.memo || '' : '';
+  $('de-del').hidden = !d;
+  $('docedit').classList.add('open');
+  $('docedit').scrollTo(0, 0);
+}
+$('add').onclick = () => openDocEdit(null);
+$('de-cancel').onclick = () => $('docedit').classList.remove('open');
+$('de-save').onclick = async () => {
+  const now = Date.now();
+  const d = editingDoc ? { ...editingDoc } : { id: newId('d'), createdAt: now };
+  d.name = $('de-name').value.trim().slice(0, 100);
+  if (!d.name) { alert('文書の名前を入れてください。'); return; }
+  d.kind = $('de-kind').value;
+  d.year = $('de-year').value.trim().slice(0, 30);
+  d.org = $('de-org').value.trim().slice(0, 60);
+  d.url = $('de-url').value.trim().slice(0, 300);
+  d.memo = $('de-memo').value;
+  d.updatedAt = now;
+  try { await dbPut('docs', d); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  $('docedit').classList.remove('open');
+  await reload();
+  if (!editingDoc) openDoc(d.id);
+};
+$('de-del').onclick = async () => {
+  if (!editingDoc) return;
+  const n = notes.filter((x) => x.docId === editingDoc.id);
+  if (!confirm('「' + editingDoc.name + '」と、そのメモ' + n.length + '件を削除します。元に戻せません。よろしいですか？')) return;
+  for (const x of n) await dbDel('notes', x.id);
+  await dbDel('docs', editingDoc.id);
+  $('docedit').classList.remove('open');
+  $('doc').classList.remove('open'); openDocId = null;
+  reload();
+};
+
+// ===== メモの入力・編集 =====
+let editingNote = null, noteDocId = null;
+function setMarkBtn(k, on) { $('n-' + k).setAttribute('aria-pressed', String(on)); }
+MARKS.forEach((mk) => { $('n-' + mk.k).onclick = () => setMarkBtn(mk.k, $('n-' + mk.k).getAttribute('aria-pressed') !== 'true'); });
+function openNote(docId, n, keepPlace) {
+  noteDocId = docId;
+  editingNote = n || null;
+  const d = docs.find((x) => x.id === docId);
+  $('n-title').textContent = n ? 'メモを直す' : 'メモを追加';
+  $('n-doc').textContent = '📄 ' + (d ? d.name : '');
+  $('n-place').value = n ? n.place || '' : (keepPlace || '');
+  $('n-body').value = n ? n.body || '' : '';
+  MARKS.forEach((mk) => setMarkBtn(mk.k, n ? hasMark(n, mk.k) : false));
+  $('n-del').hidden = !n;
+  $('n-next').hidden = !!n;
+  $('n-meta').textContent = n ? '作成 ' + fmtDate(n.createdAt) + ' ／ 更新 ' + fmtDate(n.updatedAt) : '';
+  const dl = $('place-list'); dl.innerHTML = '';
+  [...new Set(notes.filter((x) => x.docId === docId).map((x) => x.place).filter(Boolean))].forEach((p) => dl.append(new Option(p)));
+  $('note').classList.add('open');
+  $('note').scrollTo(0, 0);
+}
+async function saveNote() {
+  const now = Date.now();
+  const n = editingNote ? { ...editingNote } : { id: newId('n'), docId: noteDocId, createdAt: now };
+  n.place = $('n-place').value.trim().slice(0, 60);
+  n.body = $('n-body').value;
+  n.marks = MARKS.filter((mk) => $('n-' + mk.k).getAttribute('aria-pressed') === 'true').map((mk) => mk.k);
+  n.updatedAt = now;
+  if (!n.place && !n.body.trim()) { alert('章・ページかメモを入れてください。'); return null; }
+  try {
+    await dbPut('notes', n);
+    const d = docs.find((x) => x.id === n.docId);
+    if (d) await dbPut('docs', { ...d, updatedAt: now });   // 文書の「更新」も新しくする
+  } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return null; }
+  await reload();
+  return n;
+}
+$('n-save').onclick = async () => { if (await saveNote()) $('note').classList.remove('open'); };
+$('n-next').onclick = async () => { const n = await saveNote(); if (n) openNote(n.docId, null, n.place); };
+$('n-cancel').onclick = () => $('note').classList.remove('open');
+$('n-del').onclick = async () => {
+  if (!editingNote || !confirm('このメモを削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel('notes', editingNote.id);
+  $('note').classList.remove('open');
+  reload();
+};
+
+// ===== 設定：バックアップ =====
+$('open-settings').onclick = () => { showUsage(); $('settings').classList.add('open'); $('settings').scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'dokusho-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'dokusho', version: APP_VERSION, exportedAt: d.toISOString(), docs, notes }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'dokusho' || !Array.isArray(data.docs) || !Array.isArray(data.notes)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm('文書' + data.docs.length + '件・メモ' + data.notes.length + '件を読み込みます。同じものは、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
+  for (const d of data.docs) { if (d && d.id) await dbPut('docs', d); }
+  for (const n of data.notes) { if (n && n.id && n.docId) await dbPut('notes', n); }
+  await reload();
+  alert('読み込みました。');
+};
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }
+  const { usage } = await navigator.storage.estimate();
+  $('usage').textContent = '使用量：約' + Math.max(0.1, (usage || 0) / 1024 / 1024).toFixed(1) + 'MB';
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // 入力中は読み込み直さない
+    if (!hadController || reloaded || $('note').classList.contains('open') || $('docedit').classList.contains('open')) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

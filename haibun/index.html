@@ -16,7 +16,7 @@
 <style>
   :root { --bg:#f3f8f5; --card:#fff; --text:#1a2a21; --sub:#566b5f; --accent:#2e7d4f; --accent-soft:#dff0e6; --line:#dbe6df; --danger:#c8372d; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#111915; --card:#1a241f; --text:#e8f2ec; --sub:#99ada1; --accent:#5ec48a; --accent-soft:#1b3a28; --line:#2a3a31; --danger:#ef6b61; }
+    :root { --bg:#111915; --card:#1a241f; --text:#e8f2ec; --sub:#99ada1; --accent:#3fa56c; --accent-soft:#1b3a28; --line:#2a3a31; --danger:#ef6b61; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
@@ -35,7 +35,6 @@
   .row2 > div { min-width:0; }
   .unit { display:flex; align-items:center; gap:6px; }
   .unit span { color:var(--sub); white-space:nowrap; }
-  #total { font-size:1.4rem; font-weight:700; }
 
   /* 項目 */
   .item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
@@ -219,7 +218,8 @@ function update() {
   $('sum').classList.toggle('over', r.left < 0);
   let msg = '';
   if (!r.total) msg = '持ち時間を入れてください。';
-  else if (r.left < 0) msg = '「分」の項目と予備の合計が、持ち時間を ' + fmt(-r.left) + ' 超えています。';
+  else if (r.left < 0) msg = '項目の合計が、持ち時間を ' + fmt(-r.left) + ' 超えています。';
+  else if (r.left < r.reserve) msg = '予備にとっておく時間が ' + fmt(r.reserve - r.left) + ' 足りません。';
   else if (r.reserve) msg = '余りには、予備の ' + fmt(r.reserve) + ' を含みます。';
   if (r.total && r.left >= 0 && plan.items.some((it) => it.mode === 'w' && num(it.value)) && r.total - r.reserve - r.fixed <= 0) msg = '比重で分ける残りの時間がありません。';
   $('msg').textContent = msg;

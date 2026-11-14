@@ -17,7 +17,7 @@
   :root { --bg:#f4f5fb; --card:#fff; --text:#1c2033; --sub:#5c6278; --accent:#3f4fa8; --accent-soft:#e4e7f7; --line:#dfe1ec; --danger:#c8372d;
           --k1:#3f4fa8; --k2:#2f9e6b; --k3:#d9480f; --k4:#7a8194; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#12141c; --card:#1c1f2b; --text:#e9ebf4; --sub:#9da2b6; --accent:#8d9cf0; --accent-soft:#252b4a; --line:#2c3040; --danger:#ef6b61;
+    :root { --bg:#12141c; --card:#1c1f2b; --text:#e9ebf4; --sub:#9da2b6; --accent:#6474d6; --accent-soft:#252b4a; --line:#2c3040; --danger:#ef6b61;
             --k1:#8d9cf0; --k2:#45c27f; --k3:#ff8a4c; --k4:#a3a9bb; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -185,8 +185,8 @@ function render() {
   }
 
   $('up-head').textContent = 'これからの予定（' + up.length + '件）';
+  $('up-head').hidden = !up.length; // 予定がないことは上の大きな枠に出している
   const ul = $('upcoming'); ul.innerHTML = '';
-  if (!up.length) ul.append(el('p', 'empty', 'ありません'));
   up.forEach((ev) => ul.append(row(ev)));
 
   $('past-head').textContent = '過ぎた予定（' + past.length + '件）';

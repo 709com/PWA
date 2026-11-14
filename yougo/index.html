@@ -15,15 +15,16 @@
 <meta name="theme-color" content="#3f51a8">
 <style>
   :root { --bg:#f4f5fb; --card:#fff; --text:#1c1f2e; --sub:#5b6077; --accent:#3f51a8; --accent-soft:#e3e7f8; --line:#dfe2ee; --star:#e0a100;
-          --c1:#3f51a8; --c2:#1e8a5a; --c3:#a8463f; --c4:#8a4fb8; }
+          --c1:#3f51a8; --c2:#1e8a5a; --c3:#a8463f; --c4:#8a4fb8; --on-accent:#fff; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#121420; --card:#1c1f2e; --text:#e9ebf5; --sub:#a0a5bd; --accent:#8c9cf0; --accent-soft:#252c4d; --line:#2c3047; --star:#f5c542;
-            --c1:#8c9cf0; --c2:#4fc48c; --c3:#ef8a80; --c4:#c39af0; }
+            --c1:#8c9cf0; --c2:#4fc48c; --c3:#ef8a80; --c4:#c39af0; --on-accent:#121420; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.6; }
   main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom)); }
   h1 { font-size:1.35rem; margin:4px 0 2px; }
+  .nb { display:inline-block; }
   .unofficial { font-size:.8rem; color:var(--sub); margin:0 0 10px; }
   button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
   input { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 12px; width:100%; font-size:1rem; }
@@ -33,7 +34,7 @@
   /* 分類のボタン */
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px; }
   .chips button { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; font-size:.92rem; font-weight:600; min-height:40px; }
-  .chips button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chips button.on { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
   .counts { font-size:.82rem; color:var(--sub); margin:6px 0 4px; }
 
   /* 一覧 */
@@ -61,7 +62,7 @@
 <main>
   <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
   <h1>📖 区政用語じてん</h1>
-  <p class="unofficial">非公式・個人の試作です。文京区の公式アプリではありません。</p>
+  <p class="unofficial"><span class="nb">非公式・個人の試作です。</span><span class="nb">文京区の公式アプリではありません。</span></p>
 
   <input id="q" type="search" placeholder="🔍 ことばで検索（例：よさん、請願）" autocomplete="off">
   <div class="chips" id="chips"></div>
@@ -69,7 +70,7 @@
   <div id="list"></div>
   <footer>版 <span id="ver"></span> ・ お気に入りはこのiPhoneの中だけに保存されます</footer>
 </main>
-<div class="disclaimer">一般的な説明です。正確な制度は区や法令でご確認ください。</div>
+<div class="disclaimer"><span class="nb">一般的な説明です。</span><span class="nb">正確な制度は区や法令でご確認ください。</span></div>
 
 <script>
 // ===== 基本の設定 =====

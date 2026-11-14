@@ -1,0 +1,471 @@
+<!doctype html>
+<!-- このファイルは「委員会資料の確認チェックリスト」の本体です。資料ごとに確認項目（予算額・財源・効果の測り方など）をチェックしてメモを残し、結果を文章で共有できます。項目は自由に編集できます。 -->
+<!-- 資料ごとの結果はiPhoneの中のデータベース（IndexedDB）、項目の一覧は localStorage だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>委員会資料の確認チェックリスト</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="資料チェック">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2b7a8c">
+<style>
+  :root { --bg:#f2f6f7; --card:#fff; --text:#17262b; --sub:#56686e; --accent:#2b7a8c; --accent-soft:#dcedf1; --line:#d9e3e6; --danger:#c8372d;
+          --ok:#1f7a4d; --ok-soft:#dff2e7; --ask:#b5520f; --ask-soft:#fdebd9; --na:#6b7680; --na-soft:#e9edf0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111719; --card:#1b2427; --text:#e6eef0; --sub:#98a9ae; --accent:#6cc0d2; --accent-soft:#1c3a42; --line:#2a383c; --danger:#ef6b61;
+            --ok:#6fcf98; --ok-soft:#1b3326; --ask:#f5a35c; --ask-soft:#3d2a17; --na:#a3adb5; --na-soft:#283034; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  @media (prefers-color-scheme: dark) { #update, .primary, #add { color:#111719 !important; } }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 10px; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:4px; }
+  .bar { display:flex; height:8px; border-radius:99px; overflow:hidden; background:var(--line); margin-top:8px; gap:2px; }
+  .bar span { display:block; height:100%; }
+  .bar .ok { background:var(--ok); } .bar .ask { background:var(--ask); } .bar .na { background:var(--na); }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  .topline { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:8px; }
+  .saved { font-size:.8rem; color:var(--sub); }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:3fr 2fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+
+  /* 確認項目 */
+  .item { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:12px; padding:10px 12px; margin-top:10px; }
+  .item.ok { border-left-color:var(--ok); } .item.ask { border-left-color:var(--ask); } .item.na { border-left-color:var(--na); }
+  .item .name { font-weight:700; font-size:1.05rem; word-break:break-word; }
+  .item .hint { font-size:.8rem; color:var(--sub); }
+  .item .old { font-size:.75rem; color:var(--sub); }
+  .seg { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:8px 0; }
+  .seg button { background:var(--bg); border:2px solid var(--line); border-radius:10px; padding:10px 4px; font-size:.92rem; font-weight:700; }
+  .seg button.ok[aria-pressed="true"] { background:var(--ok-soft); border-color:var(--ok); color:var(--ok); }
+  .seg button.ask[aria-pressed="true"] { background:var(--ask-soft); border-color:var(--ask); color:var(--ask); }
+  .seg button.na[aria-pressed="true"] { background:var(--na-soft); border-color:var(--na); color:var(--na); }
+  .item textarea { min-height:2.6em; font-size:.95rem; }
+  .summary { position:sticky; top:0; z-index:2; background:var(--bg); padding:6px 0; font-size:.88rem; color:var(--sub); }
+
+  /* 項目の編集 */
+  .prow { display:grid; grid-template-columns:1fr auto auto; gap:6px; margin-bottom:8px; align-items:start; }
+  .prow .pin { display:grid; gap:4px; }
+  .prow .pin input:last-child { font-size:.85rem; }
+  .mv { background:var(--card); border:1px solid var(--line); border-radius:10px; width:44px; height:44px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>✅ 資料チェック</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 項目・設定</button>
+  </header>
+  <input id="q" type="search" placeholder="🔍 資料名・委員会名・メモで検索">
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="資料を追加">＋</button>
+
+<!-- 資料ごとのチェック -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <div class="topline">
+      <button class="iconbtn" id="e-close">← 一覧へ</button>
+      <span class="saved" id="e-saved"></span>
+      <button class="iconbtn" id="e-share">📤 共有</button>
+    </div>
+    <div class="warn">区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-title">資料の名前</label>
+    <input id="e-title" maxlength="100" placeholder="例：〇〇事業の実施について（報告）">
+    <div class="row2">
+      <div><label class="f" for="e-com">委員会</label><input id="e-com" maxlength="40" list="com-list" placeholder="例：文教委員会"><datalist id="com-list"></datalist></div>
+      <div><label class="f" for="e-date">日付</label><input id="e-date" type="date"></div>
+    </div>
+    <div class="summary" id="e-sum"></div>
+    <div id="e-items"></div>
+    <label class="f" for="e-memo" style="margin-top:16px">全体のメモ・質問したいこと</label>
+    <textarea id="e-memo"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-done">一覧へ戻る</button>
+      <button class="plain" id="e-share2">📤 結果を共有</button>
+      <button class="plain danger" id="e-del">この資料を削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 項目と設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 確認項目の編集</h2>
+    <p class="note" style="margin-top:0">上の欄が項目名、下の欄が「確かめること」のメモです。項目名を空にして保存すると消えます。すでにチェックした資料の結果は消えません。</p>
+    <div id="p-edit" style="margin-top:10px"></div>
+    <div class="actions">
+      <button class="plain" id="p-add">＋ 項目を追加</button>
+      <button class="plain" id="p-reset">はじめの項目に戻す</button>
+    </div>
+    <div class="actions"><button class="primary" id="p-save">項目を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、チェックの結果もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_POINTS = 'checklist:points';   // 確認項目の一覧（利用者が編集できる）
+const DEFAULT_POINTS = [
+  { name: '予算額', hint: '総額と内訳は書かれているか' },
+  { name: '前年比', hint: '前の年度と比べて増えたか減ったか、その理由は' },
+  { name: '対象人数', hint: '対象は何人か、その数え方は' },
+  { name: '財源（国・都・区）', hint: '国・都・区がそれぞれいくら出すか' },
+  { name: '期間', hint: 'いつからいつまでか、終わらせ方は決まっているか' },
+  { name: '効果の測り方', hint: '何をもって成果とするか、目標の数字は' },
+  { name: '他区との比較', hint: 'ほかの区ではどうしているか' },
+  { name: '区民への周知方法', hint: 'どう知らせるか、情報が届きにくい人への工夫は' },
+  { name: 'リスク', hint: 'うまくいかないとき・問題が起きたときの対策は' },
+];
+const STATES = [
+  { k: 'ok', label: '✓ 確認した', word: '確認した', mark: '✓' },
+  { k: 'ask', label: '❓ 聞きたい', word: '聞きたい', mark: '❓' },
+  { k: 'na', label: '－ 対象外', word: '対象外', mark: '－' },
+];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('checklist', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function fmtDay(s) { if (!s) return ''; const [y, m, d] = s.split('-'); return y + '/' + Number(m) + '/' + Number(d); }
+function today() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+let points = load(KEY_POINTS, DEFAULT_POINTS);
+let items = [];
+
+// 資料に表示する項目：いまの項目一覧＋（一覧から消したが、この資料で使っていた項目）
+function namesFor(it) {
+  const now = points.map((p) => p.name);
+  const old = Object.keys(it.rows || {}).filter((n) => !now.includes(n) && (it.rows[n].s || (it.rows[n].memo || '').trim()));
+  return { now, old };
+}
+function tally(it) {
+  const { now, old } = namesFor(it);
+  const all = [...now, ...old];
+  const t = { total: all.length, ok: 0, ask: 0, na: 0, none: 0 };
+  all.forEach((n) => { const s = (it.rows[n] || {}).s; if (s && t[s] !== undefined) t[s]++; else t.none++; });
+  return t;
+}
+const tallyText = (t) => t.total + '項目中　確認 ' + t.ok + '・聞きたい ' + t.ask + '・対象外 ' + t.na + '・未 ' + t.none;
+
+// ===== 一覧 =====
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  const shown = items.filter((it) => !q || [it.title, it.committee, it.memo, ...Object.entries(it.rows || {}).map(([k, v]) => k + ' ' + (v.memo || ''))]
+    .join('\n').toLowerCase().includes(q));
+  shown.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.updatedAt - a.updatedAt);
+  $('counts').textContent = '資料 ' + items.length + '件' + (shown.length !== items.length ? '　表示中 ' + shown.length + '件' : '');
+  const list = $('list'); list.innerHTML = '';
+  if (!shown.length) { list.append(el('p', 'empty', items.length ? '条件に合う資料はありません' : 'まだ資料はありません。右下の「＋」から追加してください。')); return; }
+  for (const it of shown) {
+    const t = tally(it);
+    const c = el('div', 'card');
+    c.append(el('div', 't', it.title || '（名前なし）'));
+    c.append(el('div', 'm', [it.committee, fmtDay(it.date)].filter(Boolean).join(' ・ ')));
+    c.append(el('div', 'm', tallyText(t)));
+    const bar = el('div', 'bar');
+    ['ok', 'ask', 'na'].forEach((k) => { if (t[k]) { const s = el('span', k); s.style.flex = String(t[k]); bar.append(s); } });
+    if (t.none) { const s = el('span'); s.style.flex = String(t.none); bar.append(s); }
+    c.append(bar);
+    c.onclick = () => openEdit(it);
+    list.append(c);
+  }
+}
+$('q').addEventListener('input', render);
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+
+// ===== 資料ごとのチェック（自動で保存） =====
+let cur = null, saveTimer = 0, stored = false;
+function openEdit(it) {
+  stored = !!it;
+  cur = it ? JSON.parse(JSON.stringify(it)) : { id: 'c' + Date.now() + Math.random().toString(36).slice(2, 6), createdAt: Date.now(), updatedAt: Date.now(),
+                                                title: '', committee: '', date: today(), rows: {}, memo: '' };
+  cur.rows = cur.rows || {};
+  $('e-title').value = cur.title;
+  $('e-com').value = cur.committee || '';
+  $('e-date').value = cur.date || '';
+  $('e-memo').value = cur.memo || '';
+  $('e-saved').textContent = '';
+  const dl = $('com-list'); dl.innerHTML = '';
+  [...new Set(items.map((i) => i.committee).filter(Boolean))].forEach((c) => dl.append(new Option(c)));
+  buildItems();
+  $('e-meta').textContent = stored ? '作成 ' + fmtDate(cur.createdAt) + ' ／ 更新 ' + fmtDate(cur.updatedAt) : '';
+  $('edit').classList.add('open');
+  $('edit').scrollTo(0, 0);
+  if (!stored) setTimeout(() => $('e-title').focus(), 50);
+}
+function buildItems() {
+  const box = $('e-items'); box.innerHTML = '';
+  const { now, old } = namesFor(cur);
+  const hints = Object.fromEntries(points.map((p) => [p.name, p.hint]));
+  [...now, ...old].forEach((name) => {
+    const row = cur.rows[name] || { s: '', memo: '' };
+    const card = el('div', 'item ' + (row.s || ''));
+    card.append(el('div', 'name', name));
+    if (hints[name]) card.append(el('div', 'hint', hints[name]));
+    if (old.includes(name)) card.append(el('div', 'old', '（いまの項目一覧にはない項目です）'));
+    const seg = el('div', 'seg');
+    STATES.forEach((st) => {
+      const b = el('button', st.k, st.label);
+      b.setAttribute('aria-pressed', String(row.s === st.k));
+      b.onclick = () => {
+        const r = cur.rows[name] || (cur.rows[name] = { s: '', memo: '' });
+        r.s = r.s === st.k ? '' : st.k;    // もう一度押すと取り消し
+        card.className = 'item ' + (r.s || '');
+        seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x.classList.contains(r.s))));
+        changed();
+      };
+      seg.append(b);
+    });
+    card.append(seg);
+    const ta = el('textarea');
+    ta.placeholder = 'メモ（資料のページ、数字、気づいたこと）';
+    ta.value = row.memo || '';
+    ta.setAttribute('aria-label', name + 'のメモ');
+    ta.oninput = () => { (cur.rows[name] || (cur.rows[name] = { s: '', memo: '' })).memo = ta.value; changed(); };
+    card.append(ta);
+    box.append(card);
+  });
+  showSum();
+}
+function showSum() { $('e-sum').textContent = tallyText(tally(cur)); }
+function changed() {
+  showSum();
+  $('e-saved').textContent = '…';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 400);
+}
+['e-title', 'e-com', 'e-date', 'e-memo'].forEach((id) => $(id).addEventListener('input', changed));
+function isBlank(c) { return !c.title.trim() && !c.memo.trim() && !Object.values(c.rows).some((r) => r.s || (r.memo || '').trim()); }
+async function saveNow() {
+  clearTimeout(saveTimer);
+  if (!cur) return;
+  cur.title = $('e-title').value.trim().slice(0, 100);
+  cur.committee = $('e-com').value.trim().slice(0, 40);
+  cur.date = $('e-date').value;
+  cur.memo = $('e-memo').value;
+  if (!stored && isBlank(cur)) { $('e-saved').textContent = ''; return; }   // 何も書いていない新しい資料は保存しない
+  cur.updatedAt = Date.now();
+  try { await dbPut(cur); stored = true; $('e-saved').textContent = '保存しました'; }
+  catch (e) { $('e-saved').textContent = '保存できませんでした'; alert('保存できませんでした。iPhoneの空き容量を確認してください。'); }
+}
+async function closeEdit() {
+  await saveNow();
+  $('edit').classList.remove('open');
+  cur = null;
+  reload();
+}
+$('add').onclick = () => openEdit(null);
+$('e-close').onclick = closeEdit;
+$('e-done').onclick = closeEdit;
+$('e-del').onclick = async () => {
+  if (!cur || !confirm('「' + ($('e-title').value || '名前なし') + '」の結果を削除します。元に戻せません。よろしいですか？')) return;
+  clearTimeout(saveTimer);
+  if (stored) await dbDel(cur.id);
+  $('edit').classList.remove('open');
+  cur = null;
+  reload();
+};
+
+// 結果を文章にして共有
+function resultText(c) {
+  const t = tally(c);
+  const { now, old } = namesFor(c);
+  const lines = ['【資料の確認】' + (c.title || '名前なし')];
+  const meta = [c.committee, fmtDay(c.date)].filter(Boolean).join(' ');
+  if (meta) lines.push(meta);
+  lines.push(tallyText(t), '');
+  [...now, ...old].forEach((name) => {
+    const r = c.rows[name] || {};
+    const st = STATES.find((s) => s.k === r.s);
+    const head = (st ? st.mark : '□') + ' ' + name + '（' + (st ? st.word : '未確認') + '）';
+    lines.push(head + ((r.memo || '').trim() ? '：' + r.memo.trim() : ''));
+  });
+  if ((c.memo || '').trim()) lines.push('', '■ 全体のメモ', c.memo.trim());
+  return lines.join('\n');
+}
+async function share() {
+  await saveNow();
+  const text = resultText(cur);
+  if (navigator.share) { try { await navigator.share({ title: cur.title, text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+}
+$('e-share').onclick = share;
+$('e-share2').onclick = share;
+
+// ===== 項目の編集 =====
+function buildPointEdit() {
+  const box = $('p-edit'); box.innerHTML = '';
+  points.forEach((p) => addPointRow(p.name, p.hint));
+}
+function addPointRow(name, hint) {
+  const row = el('div', 'prow');
+  const pin = el('div', 'pin');
+  const n = el('input'); n.value = name || ''; n.maxLength = 30; n.placeholder = '項目名'; n.setAttribute('aria-label', '項目名');
+  const h = el('input'); h.value = hint || ''; h.maxLength = 60; h.placeholder = '確かめること（なくてもよい）'; h.setAttribute('aria-label', '確かめること');
+  pin.append(n, h);
+  const up = el('button', 'mv', '↑'); up.setAttribute('aria-label', '上へ');
+  const down = el('button', 'mv', '↓'); down.setAttribute('aria-label', '下へ');
+  up.onclick = () => { if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling); };
+  down.onclick = () => { if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row); };
+  row.append(pin, up, down);
+  $('p-edit').append(row);
+  return n;
+}
+$('p-add').onclick = () => addPointRow('', '').focus();
+$('p-reset').onclick = () => {
+  if (!confirm('項目を、はじめの9項目に戻します（まだ保存はされません）。よろしいですか？')) return;
+  $('p-edit').innerHTML = '';
+  DEFAULT_POINTS.forEach((p) => addPointRow(p.name, p.hint));
+};
+$('p-save').onclick = () => {
+  const seen = new Set();
+  const vals = [...$('p-edit').querySelectorAll('.prow')].map((r) => {
+    const [n, h] = r.querySelectorAll('input');
+    return { name: n.value.trim(), hint: h.value.trim() };
+  }).filter((p) => p.name && !seen.has(p.name) && seen.add(p.name));
+  if (!vals.length) { alert('項目を1つ以上入れてください。'); return; }
+  points = vals;
+  save(KEY_POINTS, points);
+  buildPointEdit();
+  render();
+  alert('項目を保存しました。');
+};
+$('open-settings').onclick = () => { buildPointEdit(); $('settings').classList.add('open'); $('settings').scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+
+// ===== バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'checklist-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'checklist', version: APP_VERSION, exportedAt: d.toISOString(), points, items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'checklist' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の資料を読み込みます。同じ資料は、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  if (Array.isArray(data.points) && data.points.length) {
+    const names = new Set(points.map((p) => p.name));
+    data.points.forEach((p) => { if (p && p.name && !names.has(p.name)) { points.push({ name: p.name, hint: p.hint || '' }); names.add(p.name); } });
+    save(KEY_POINTS, points); buildPointEdit();
+  }
+  await reload();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+// 別のアプリに切り替えるときは、書きかけを保存しておく
+document.addEventListener('visibilitychange', () => { if (document.hidden && cur) saveNow(); });
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

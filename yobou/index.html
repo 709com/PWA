@@ -25,7 +25,7 @@
   main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom)); }
   header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
   h1 { font-size:1.3rem; margin:0; }
-  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button { font:inherit; color:inherit; background:none; border:none; cursor:pointer; touch-action:manipulation; }
   input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
   input[type=date] { min-height:46px; -webkit-appearance:none; appearance:none; }
   textarea { min-height:5em; resize:vertical; }
@@ -52,6 +52,7 @@
   .card.done { opacity:.7; }
   .kid { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin-right:6px; color:#fff; background:var(--kc); font-weight:700; }
   .when { font-weight:700; }
+  .nw { white-space:nowrap; }
   .when.soon { color:var(--soon); }
   .when.late { color:var(--late); }
   .tog { flex:none; width:74px; min-height:56px; border-radius:12px; border:2px solid var(--line); background:var(--bg); font-size:.82rem; line-height:1.2; padding:6px 4px; }
@@ -213,8 +214,8 @@ function whenText(it) {
   if (it.done) return { text: '済み ' + fmtDay(it.done), cls: '' };
   if (!it.plan) return { text: '予定日 未定', cls: '' };
   const n = daysFromToday(it.plan);
-  let rest = n === 0 ? '今日' : n > 0 ? 'あと' + n + '日' : (-n) + '日過ぎています';
-  return { text: '予定 ' + fmtDay(it.plan) + '・' + rest, cls: n < 0 ? 'late' : n <= 14 ? 'soon' : '' };
+  const rest = n === 0 ? '今日' : n > 0 ? 'あと' + n + '日' : (-n) + '日過ぎています';
+  return { text: '予定 ' + fmtDay(it.plan), rest, cls: n < 0 ? 'late' : n <= 14 ? 'soon' : '' };
 }
 function card(it) {
   const c = el('div', 'card' + (it.done ? ' done' : ''));
@@ -223,7 +224,10 @@ function card(it) {
   body.append(el('div', 't', it.name || '（名前なし）'));
   const m = el('div', 'm');
   const k = el('span', 'kid', kidName(it.kid)); m.append(k);
-  const w = whenText(it); m.append(el('span', 'when ' + w.cls, w.text));
+  const w = whenText(it);
+  const wt = el('span', 'when ' + w.cls); wt.append(el('span', 'nw', w.text));
+  if (w.rest) wt.append(document.createTextNode(' '), el('span', 'nw', '・' + w.rest));
+  m.append(wt);
   body.append(m);
   if (it.done && it.plan) body.append(el('div', 'm', '（予定は ' + fmtDay(it.plan) + '）'));
   if (it.memo) body.append(el('div', 'memo', it.memo));

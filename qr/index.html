@@ -74,7 +74,7 @@
   </section>
 
   <section>
-    <h2>最近作ったもの（このiPhoneの中だけに保存）</h2>
+    <h2>最近作ったもの</h2>
     <div id="history"></div>
   </section>
 
@@ -358,7 +358,7 @@ function make(text, remember) {
   const c = drawCanvas(q);
   $('qrimg').src = c.toDataURL('image/png');
   $('qrtext').textContent = text;
-  $('info').textContent = '大きさ：' + q.size + '×' + q.size + 'マス（型番' + q.version + '）・汚れや欠けに強さ：標準（M）';
+  $('info').textContent = '大きさ ' + q.size + '×' + q.size + 'マス（型番' + q.version + '）・欠けへの強さ：標準';
   $('result').style.display = 'block';
   current = { text, canvas: c };
   if (remember) {
