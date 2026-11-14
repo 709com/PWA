@@ -1,0 +1,292 @@
+<!doctype html>
+<!-- このファイルは「区民1人あたり換算」の本体です。入力した金額を、文京区の人口・世帯数で割って、区民1人あたり・1世帯あたりの金額と共有用の文章を作ります。 -->
+<!-- 入力した金額と設定した人口・世帯数は、このiPhoneの中（localStorage）だけに保存し、外部へは送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>区民1人あたり換算</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="1人あたり">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#9c3a6e">
+<style>
+  :root { --bg:#f8f2f5; --card:#fff; --text:#2a1a22; --sub:#6b5762; --accent:#9c3a6e; --accent-soft:#f3e0ea; --line:#e8d9e1; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#171014; --card:#22181e; --text:#f3e9ee; --sub:#b49fab; --accent:#e58bb9; --accent-soft:#3d2230; --line:#382a32; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .box { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .box > label.f:first-child { margin-top:0; }
+  .amount { display:grid; grid-template-columns:1fr 6.5em; gap:8px; }
+  #amount { font-size:1.4rem; font-weight:700; text-align:right; padding:10px 12px; }
+  #unit { font-size:1.1rem; font-weight:700; }
+  #total { font-size:.88rem; color:var(--sub); margin-top:6px; min-height:1.4em; word-break:break-word; }
+
+  .result { background:var(--accent); color:#fff; border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .result .lab { font-size:.9rem; opacity:.9; }
+  .result .val { font-size:2rem; font-weight:800; line-height:1.2; word-break:break-all; }
+  .result .val small { font-size:1rem; font-weight:700; margin-left:2px; }
+  .result .sub { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.35); }
+  .result .sub .val { font-size:1.5rem; }
+  .result .empty { opacity:.9; font-size:.95rem; }
+
+  .basis { font-size:.85rem; color:var(--sub); }
+  .basis b { color:var(--text); white-space:nowrap; }
+  .basis a { color:var(--accent); word-break:break-all; }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
+
+  #preview { white-space:pre-wrap; word-break:break-word; font-size:.88rem; background:var(--bg); border-radius:10px; padding:8px 10px; margin:6px 0 0; font-family:inherit; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #s-err { color:var(--danger); font-size:.85rem; min-height:1.3em; margin-top:6px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🧮 区民1人あたり換算</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="box">
+    <label class="f" for="label">何の金額か（なくても可）</label>
+    <input id="label" maxlength="60" placeholder="例：〇〇施設の改修費">
+    <label class="f" for="amount">金額</label>
+    <div class="amount">
+      <input id="amount" inputmode="decimal" autocomplete="off" placeholder="0">
+      <select id="unit"><option value="1">円</option><option value="10000">万円</option><option value="100000000">億円</option></select>
+    </div>
+    <div id="total"></div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <div class="box basis" id="basis"></div>
+
+  <div class="box">
+    <label class="f">共有用の文章</label>
+    <pre id="preview"></pre>
+    <div class="actions">
+      <button class="primary" id="share">共有する</button>
+      <button class="plain" id="copy">コピー</button>
+      <button class="plain" id="clear">入力を消す</button>
+    </div>
+  </div>
+  <p class="note">金額を人口・世帯数で単純に割り算した目安です。予算額などの数字は、資料を確かめてご自身で入力してください。</p>
+  <footer>版 <span id="ver"></span> ・ 入力はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定：計算に使う人口・世帯数</h2>
+    <p class="note" style="margin-top:0">人口と世帯数は毎月変わります。文京区のホームページ「人口統計資料」で最新の数を確かめて、書き換えてください。</p>
+    <div class="row2">
+      <div><label class="f" for="s-people">人口（人）</label><input id="s-people" inputmode="numeric"></div>
+      <div><label class="f" for="s-house">世帯数（世帯）</label><input id="s-house" inputmode="numeric"></div>
+    </div>
+    <label class="f" for="s-asof">基準日（いつ現在の数か）</label>
+    <input id="s-asof" maxlength="40" placeholder="例：令和8年7月1日">
+    <label class="f" for="s-src">出典の名前</label>
+    <input id="s-src" maxlength="80">
+    <label class="f" for="s-url">出典のページ（URL）</label>
+    <input id="s-url" maxlength="300" inputmode="url">
+    <div id="s-err"></div>
+    <div class="actions">
+      <button class="primary" id="s-save">保存する</button>
+      <button class="plain" id="s-reset">最初の数に戻す</button>
+      <button class="plain" id="s-close">閉じる</button>
+    </div>
+    <p class="note" id="s-default"></p>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_BASE = 'hitoriatari:base';   // 利用者が書き換えた人口・世帯数
+const KEY_LAST = 'hitoriatari:last';   // 最後に入力した金額
+// 最初の数（出典：文京区人口統計資料、令和8年7月1日現在）
+const DEFAULT_BASE = {
+  people: 237527,
+  households: 133215,
+  asOf: '令和8年7月1日',
+  source: '文京区人口統計資料',
+  url: 'https://www.city.bunkyo.lg.jp/b011/p006255/index.html',
+};
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const fmtInt = (n) => Math.round(n).toLocaleString('ja-JP');
+// 全角の数字やカンマを直して、数として読む（読めなければ null）
+function parseNum(s) {
+  const t = String(s || '').replace(/[０-９．，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,\s円]/g, '');
+  if (!t) return null;
+  if (!/^\d+(\.\d+)?$/.test(t)) return NaN;
+  return Number(t);
+}
+// 1人あたりの金額の表し方：10円未満は小数2けたまで、それ以上は1円単位
+function fmtYen(v) {
+  return v.toLocaleString('ja-JP', { maximumFractionDigits: v < 10 ? 2 : 0 });
+}
+// 1234567890 → 12億3,456万7,890円
+function jaYen(n) {
+  n = Math.round(n);
+  if (n < 10000) return n.toLocaleString('ja-JP') + '円';
+  const cho = Math.floor(n / 1e12), oku = Math.floor((n % 1e12) / 1e8), man = Math.floor((n % 1e8) / 1e4), en = n % 1e4;
+  return (cho ? cho.toLocaleString('ja-JP') + '兆' : '') + (oku ? oku.toLocaleString('ja-JP') + '億' : '') + (man ? man.toLocaleString('ja-JP') + '万' : '') + (en ? en.toLocaleString('ja-JP') : '') + '円';
+}
+function isDefault(b) { return b.people === DEFAULT_BASE.people && b.households === DEFAULT_BASE.households && b.asOf === DEFAULT_BASE.asOf; }
+
+let base = { ...DEFAULT_BASE, ...load(KEY_BASE, {}) };
+let last = load(KEY_LAST, { label: '', amount: '', unit: '1' });
+
+// ===== 計算と表示 =====
+let text = '';
+function calc() {
+  const a = parseNum($('amount').value);
+  const unit = Number($('unit').value);
+  const label = $('label').value.trim();
+  save(KEY_LAST, { label, amount: $('amount').value, unit: $('unit').value });
+
+  const r = $('result'); r.innerHTML = '';
+  text = '';
+  if (a === null || Number.isNaN(a)) {
+    $('total').textContent = Number.isNaN(a) ? '数字だけを入れてください（例：12.5、3,000）。' : '';
+    r.append(el('div', 'empty', '金額を入れると、区民1人あたり・1世帯あたりの金額が出ます。'));
+    $('preview').textContent = '（金額を入れると、ここに文章ができます）';
+    return;
+  }
+  const total = a * unit;
+  const per = total / base.people, perH = total / base.households;
+  $('total').textContent = '総額 ' + jaYen(total) + (total >= 10000 ? '（' + fmtInt(total) + '円）' : '');
+  const block = (lab, v, cls) => {
+    const d = el('div', cls); d.append(el('div', 'lab', lab));
+    const val = el('div', 'val', '約' + fmtYen(v)); val.append(el('small', '', '円'));
+    d.append(val); return d;
+  };
+  r.append(block('文京区民1人あたり', per, ''), block('1世帯あたり', perH, 'sub'));
+
+  text = [
+    '【区民1人あたりに換算】',
+    (label ? label + '：' : '総額：') + jaYen(total),
+    '→ 文京区民1人あたり 約' + fmtYen(per) + '円',
+    '→ 1世帯あたり 約' + fmtYen(perH) + '円',
+    '※人口' + fmtInt(base.people) + '人・' + fmtInt(base.households) + '世帯で計算（' + base.source + (base.asOf ? '、' + base.asOf + '現在' : '') + '）',
+  ].concat(base.url ? [base.url] : []).join('\n');
+  $('preview').textContent = text;
+}
+function showBasis() {
+  const b = $('basis'); b.innerHTML = '';
+  const t = el('div');
+  t.append(document.createTextNode('計算に使う数：'), el('b', '', '人口 ' + fmtInt(base.people) + '人'), document.createTextNode(' ／ '), el('b', '', '世帯数 ' + fmtInt(base.households) + '世帯'));
+  b.append(t);
+  const s = el('div', '', '出典：' + base.source + (base.asOf ? '（' + base.asOf + '現在）' : ''));
+  if (!isDefault(base)) { s.append(document.createTextNode(' '), el('span', 'tag', '設定で書き換えた数')); }
+  b.append(s);
+  if (base.url) {
+    const a = el('a', '', base.url);
+    if (/^https?:\/\//.test(base.url)) { a.href = base.url; a.target = '_blank'; a.rel = 'noopener'; }
+    b.append(a);
+  }
+  b.append(el('div', 'note', '数を新しくするときは、右上の「設定」で書き換えてください。'));
+}
+['label', 'amount'].forEach((id) => $(id).addEventListener('input', calc));
+$('unit').addEventListener('change', calc);
+$('clear').onclick = () => { $('label').value = ''; $('amount').value = ''; calc(); $('amount').focus(); };
+$('share').onclick = async () => {
+  if (!text) { alert('先に金額を入れてください。'); return; }
+  if (navigator.share) { try { await navigator.share({ text }); } catch (e) {} return; }
+  copy();
+};
+async function copy() {
+  if (!text) { alert('先に金額を入れてください。'); return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+}
+$('copy').onclick = copy;
+
+// ===== 設定：人口・世帯数 =====
+function fillSettings(b) {
+  $('s-people').value = b.people; $('s-house').value = b.households;
+  $('s-asof').value = b.asOf; $('s-src').value = b.source; $('s-url').value = b.url;
+  $('s-err').textContent = '';
+}
+$('open-settings').onclick = () => {
+  fillSettings(base);
+  $('s-default').textContent = '最初の数：人口 ' + fmtInt(DEFAULT_BASE.people) + '人、世帯数 ' + fmtInt(DEFAULT_BASE.households) + '世帯（' + DEFAULT_BASE.source + '、' + DEFAULT_BASE.asOf + '現在）';
+  $('settings').classList.add('open'); $('settings').scrollTop = 0;
+};
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('s-reset').onclick = () => fillSettings(DEFAULT_BASE);
+$('s-save').onclick = () => {
+  const people = parseNum($('s-people').value), households = parseNum($('s-house').value);
+  const ok = (v) => v !== null && !Number.isNaN(v) && Number.isInteger(v) && v > 0;
+  if (!ok(people) || !ok(households)) { $('s-err').textContent = '人口と世帯数は、1以上の整数で入れてください。'; return; }
+  const asOf = $('s-asof').value.trim();
+  if (!asOf) { $('s-err').textContent = '基準日を入れてください（いつ現在の数か）。'; return; }
+  base = { people, households, asOf, source: $('s-src').value.trim() || '出典の名前なし', url: $('s-url').value.trim() };
+  if (isDefault(base) && base.source === DEFAULT_BASE.source && base.url === DEFAULT_BASE.url) { try { localStorage.removeItem(KEY_BASE); } catch (e) {} }
+  else save(KEY_BASE, base);
+  showBasis(); calc();
+  $('settings').classList.remove('open');
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('settings').classList.contains('open')) return; // 設定の入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+$('label').value = last.label || '';
+$('amount').value = last.amount || '';
+$('unit').value = ['1', '10000', '100000000'].includes(last.unit) ? last.unit : '1';
+showBasis();
+calc();
+</script>
+</body>
+</html>

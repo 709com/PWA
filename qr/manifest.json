@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、「QRコード作成」をホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です。",
+  "id": "./",
+  "name": "QRコード作成",
+  "short_name": "QR作成",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#3a4a5c",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

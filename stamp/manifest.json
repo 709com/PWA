@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です（文京区の駅スタンプラリー）。",
+  "id": "./",
+  "name": "文京区の駅スタンプラリー",
+  "short_name": "駅スタンプ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf5f4",
+  "theme_color": "#c23b3b",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

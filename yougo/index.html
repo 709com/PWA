@@ -1,0 +1,239 @@
+<!doctype html>
+<!-- このファイルは「区政用語じてん」の本体です。議会・区政の基本用語を、中学生にも分かるやさしい言葉で、五十音順・検索・分類・お気に入りで調べられます。 -->
+<!-- お気に入りと最後に選んだ分類だけをiPhoneの中（localStorage）に保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>区政用語じてん</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="区政じてん">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3f51a8">
+<style>
+  :root { --bg:#f4f5fb; --card:#fff; --text:#1c1f2e; --sub:#5b6077; --accent:#3f51a8; --accent-soft:#e3e7f8; --line:#dfe2ee; --star:#e0a100;
+          --c1:#3f51a8; --c2:#1e8a5a; --c3:#a8463f; --c4:#8a4fb8; --on-accent:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121420; --card:#1c1f2e; --text:#e9ebf5; --sub:#a0a5bd; --accent:#8c9cf0; --accent-soft:#252c4d; --line:#2c3047; --star:#f5c542;
+            --c1:#8c9cf0; --c2:#4fc48c; --c3:#ef8a80; --c4:#c39af0; --on-accent:#121420; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.6; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.35rem; margin:4px 0 2px; }
+  .nb { display:inline-block; }
+  .unofficial { font-size:.8rem; color:var(--sub); margin:0 0 10px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 12px; width:100%; font-size:1rem; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* 分類のボタン */
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px; }
+  .chips button { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; font-size:.92rem; font-weight:600; min-height:40px; }
+  .chips button.on { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 4px; }
+
+  /* 一覧 */
+  .row-head { position:sticky; top:0; z-index:1; background:var(--bg); font-weight:800; color:var(--accent); padding:10px 2px 4px; font-size:.95rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:8px; display:flex; gap:8px; align-items:flex-start; }
+  .card .body { flex:1; min-width:0; }
+  .term { font-size:1.15rem; font-weight:800; margin:0; word-break:break-word; }
+  .yomi { font-size:.78rem; color:var(--sub); margin-left:6px; font-weight:500; }
+  .tag { display:inline-block; font-size:.72rem; border-radius:99px; padding:0 8px; margin-top:2px; border:1px solid currentColor; font-weight:600; }
+  .tag.c1 { color:var(--c1); } .tag.c2 { color:var(--c2); } .tag.c3 { color:var(--c3); } .tag.c4 { color:var(--c4); }
+  .desc { margin:6px 0 0; font-size:.98rem; }
+  .fav { flex:0 0 auto; width:48px; height:48px; border-radius:12px; background:var(--bg); font-size:1.5rem; line-height:1; color:var(--sub); }
+  .fav.on { color:var(--star); }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  mark { background:#ffe58a; color:inherit; border-radius:3px; }
+  @media (prefers-color-scheme: dark) { mark { background:#6b5a14; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:14px; }
+
+  /* 画面下の注意書き（いつも表示） */
+  .disclaimer { position:fixed; left:0; right:0; bottom:0; z-index:5; background:var(--card); border-top:1px solid var(--line);
+                padding:8px 16px calc(8px + env(safe-area-inset-bottom)); text-align:center; font-size:.8rem; color:var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>📖 区政用語じてん</h1>
+  <p class="unofficial"><span class="nb">非公式・個人の試作です。</span><span class="nb">文京区の公式アプリではありません。</span></p>
+
+  <input id="q" type="search" placeholder="🔍 ことばで検索（例：よさん、請願）" autocomplete="off">
+  <div class="chips" id="chips"></div>
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ お気に入りはこのiPhoneの中だけに保存されます</footer>
+</main>
+<div class="disclaimer"><span class="nb">一般的な説明です。</span><span class="nb">正確な制度は区や法令でご確認ください。</span></div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_FAVS = 'yougo:favs';      // お気に入りにした用語
+const KEY_FILTER = 'yougo:filter';  // 最後に選んだ分類
+const $ = (id) => document.getElementById(id);
+
+// ===== 分類 =====
+const CATS = [
+  { id: 'gikai', label: '議会のしくみ', cls: 'c1' },
+  { id: 'okane', label: 'お金', cls: 'c2' },
+  { id: 'rule', label: 'ルール', cls: 'c3' },
+  { id: 'sanka', label: '参加のしかた', cls: 'c4' },
+];
+
+// ===== 用語（w：ことば、y：読み、c：分類、d：やさしい説明）=====
+// 説明は一般的・制度上の内容だけにする（文京区だけの数字や運用は書かない）
+const WORDS = [
+  { w: '本会議', y: 'ほんかいぎ', c: 'gikai', d: '議員全員が出席して開く会議です。議案などについての議会としての最終的な結論（議決）は、本会議で出します。' },
+  { w: '定例会', y: 'ていれいかい', c: 'gikai', d: '毎年、決まった時期に開かれる議会です。1年に何回開くかは、条例で決めます。' },
+  { w: '臨時会', y: 'りんじかい', c: 'gikai', d: '必要があるときに、あらかじめ決められた議題だけを話し合うために開かれる議会です。' },
+  { w: '委員会', y: 'いいんかい', c: 'gikai', d: '少ない人数の議員で、議案などをくわしく調べて話し合う場です。本会議で決める前に、委員会で審査することがよくあります。' },
+  { w: '常任委員会', y: 'じょうにんいいんかい', c: 'gikai', d: '福祉や教育など、分野ごとにいつも置かれている委員会です。その分野の議案や請願などを審査します。' },
+  { w: '特別委員会', y: 'とくべついいんかい', c: 'gikai', d: '特定のテーマを調べるためなど、必要に応じて置かれる委員会です。予算や決算をくわしく審査するために置かれることもあります。' },
+  { w: '議会運営委員会', y: 'ぎかいうんえいいいんかい', c: 'gikai', d: '議会の日程や会議の進め方などを話し合う委員会です。' },
+  { w: '一般質問', y: 'いっぱんしつもん', c: 'gikai', d: '議員が本会議で、区の仕事全般について区長などに考えや方針をたずねることです。何をテーマに質問するかは、議員が自分で選びます。' },
+  { w: '代表質問', y: 'だいひょうしつもん', c: 'gikai', d: '会派を代表して、区政の大きな方針などについて区長などに質問することです。行うかどうかや、そのやり方は議会ごとに決めています。' },
+  { w: '会派', y: 'かいは', c: 'gikai', d: '考え方の近い議員が集まってつくるグループです。質問の時間や委員会の顔ぶれなどを、会派ごとに割りふることがあります。' },
+  { w: '議長', y: 'ぎちょう', c: 'gikai', d: '議員の中から選挙で選ばれる、議会の代表です。会議を進め、議場の秩序を守る役目があります。' },
+  { w: '副議長', y: 'ふくぎちょう', c: 'gikai', d: '議員の中から選挙で選ばれます。議長に事故があるときや議長がいないときに、議長の代わりを務めます。' },
+  { w: '区長', y: 'くちょう', c: 'gikai', d: '区を代表し、区の仕事を進める責任者です。区民の選挙で選ばれ、任期は4年です。' },
+  { w: '執行機関', y: 'しっこうきかん', c: 'gikai', d: '法令や議会で決まったことにもとづいて、実際に仕事を進める側の機関です。区長のほか、教育委員会、選挙管理委員会、監査委員などがあります。' },
+  { w: '議決', y: 'ぎけつ', c: 'gikai', d: '議会が話し合ったうえで、議会としての意思を決めることです。ふつうは出席した議員の多数決で決まります。' },
+  { w: '採決', y: 'さいけつ', c: 'gikai', d: '議案などについて、賛成か反対かを確かめて結論を出すことです。起立などの方法で行います。' },
+  { w: '議案', y: 'ぎあん', c: 'rule', d: '議会で話し合って決めてもらうために出される案です。区長が出すものと、議員が出すものがあります（予算を出せるのは区長だけです）。' },
+  { w: '条例', y: 'じょうれい', c: 'rule', d: '区が法律の範囲内でつくる、区のルールです。議会の議決で決まります。' },
+  { w: '規則', y: 'きそく', c: 'rule', d: '区長が、法令や条例の範囲内で決めるルールです。議会の議決は必要ありません。' },
+  { w: '専決処分', y: 'せんけつしょぶん', c: 'rule', d: '議会を開くひまがないときなど法律で決められた場合に、本来は議会が決めることを区長が代わりに決めることです。あとで議会に報告し、内容によっては承認を求めます。' },
+  { w: '意見書', y: 'いけんしょ', c: 'rule', d: '区に関係する大切なことについて、議会が国などに意見を伝えるために出す文書です。議会の議決で出します。' },
+  { w: '予算', y: 'よさん', c: 'okane', d: '1年間（4月1日から翌年3月31日まで）に、区にどこからいくら入り、何にいくら使うかの見積もりです。区長が案をつくり、議会の議決で決まります。' },
+  { w: '補正予算', y: 'ほせいよさん', c: 'okane', d: '年度の途中で、予算を追加したり変えたりするためにつくる予算です。これも議会の議決が必要です。' },
+  { w: '決算', y: 'けっさん', c: 'okane', d: '1年間に実際に入ってきたお金と使ったお金をまとめたものです。監査委員の審査を受けたあと議会に出され、議会が認定するかどうかを決めます。' },
+  { w: '一般会計', y: 'いっぱんかいけい', c: 'okane', d: '福祉、教育、道路など、区の基本的な仕事のお金をまとめて管理する会計です。' },
+  { w: '特別会計', y: 'とくべつかいけい', c: 'okane', d: '国民健康保険や介護保険など、特定の事業のお金を、一般会計と分けて管理する会計です。' },
+  { w: '監査委員', y: 'かんさいいん', c: 'okane', d: '区のお金の使い方や仕事が、法令どおりに、むだなく行われているかを調べる役目の人です。区長が議会の同意を得て選びます。' },
+  { w: '行政評価', y: 'ぎょうせいひょうか', c: 'okane', d: '区の事業が目的どおりの成果を上げているか、むだがないかを点検して、次の改善に生かすしくみです。' },
+  { w: '請願', y: 'せいがん', c: 'sanka', d: '区や議会への要望を、文書にして議会に出すことです。議員の紹介が必要で、議会が採択（願いを受け入れる）か不採択かを決めます。' },
+  { w: '陳情', y: 'ちんじょう', c: 'sanka', d: '請願と同じように、要望を議会に出すことです。議員の紹介はいりません。どのようにあつかうかは、議会ごとに決めています。' },
+  { w: '傍聴', y: 'ぼうちょう', c: 'sanka', d: '議会の会議を見学することです。本会議は原則として公開されていて、議会の決まりにしたがって傍聴できます。' },
+  { w: 'パブリックコメント', y: 'ぱぶりっくこめんと', c: 'sanka', d: '区が計画や条例などの案を公表して、住民から意見を集め、参考にする手続きです。' },
+  { w: '住民監査請求', y: 'じゅうみんかんさせいきゅう', c: 'sanka', d: '区のお金の使い方などが法律に違反している、または不当だと考えるとき、住民が監査委員に調べるよう求められる制度です。1人でも請求できます。' },
+  { w: '直接請求', y: 'ちょくせつせいきゅう', c: 'sanka', d: '住民が決められた数の署名を集めて、条例をつくることや変えること、議会の解散、区長や議員の解職（リコール）などを求められる制度です。' },
+];
+
+// ===== 五十音の道具 =====
+const toHira = (s) => s.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+const ROWS = [['あ', 'ぁあぃいぅうゔぇえぉお'], ['か', 'かがきぎくぐけげこご'], ['さ', 'さざしじすずせぜそぞ'], ['た', 'ただちぢっつづてでとど'],
+  ['な', 'なにぬねの'], ['は', 'はばぱひびぴふぶぷへべぺほぼぽ'], ['ま', 'まみむめも'], ['や', 'ゃやゅゆょよ'], ['ら', 'らりるれろ'], ['わ', 'ゎわをん']];
+function rowOf(yomi) { const ch = yomi[0]; const r = ROWS.find(([, s]) => s.includes(ch)); return r ? r[0] + '行' : 'その他'; }
+// 濁点・半濁点を清音として並べる（例：「ぎ」は「き」と同じ位置）
+const SEION = { が:'か',ぎ:'き',ぐ:'く',げ:'け',ご:'こ',ざ:'さ',じ:'し',ず:'す',ぜ:'せ',ぞ:'そ',だ:'た',ぢ:'ち',づ:'つ',で:'て',ど:'と',
+  ば:'は',び:'ひ',ぶ:'ふ',べ:'へ',ぼ:'ほ',ぱ:'は',ぴ:'ひ',ぷ:'ふ',ぺ:'へ',ぽ:'ほ',ぁ:'あ',ぃ:'い',ぅ:'う',ぇ:'え',ぉ:'お',っ:'つ',ゃ:'や',ゅ:'ゆ',ょ:'よ' };
+const sortKey = (y) => [...y].map((ch) => SEION[ch] || ch).join('') + '\u0000' + y;
+WORDS.sort((a, b) => (sortKey(a.y) < sortKey(b.y) ? -1 : 1));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+// 検索した文字に色をつける（文字はテキストとして入れるので安全）
+function highlight(node, text, q) {
+  if (!q) { node.textContent = text; return; }
+  const low = toHira(text.toLowerCase());
+  let i = 0, at;
+  while ((at = low.indexOf(q, i)) !== -1) {
+    node.append(text.slice(i, at));
+    node.append(el('mark', '', text.slice(at, at + q.length)));
+    i = at + q.length;
+  }
+  node.append(text.slice(i));
+}
+
+let favs = new Set(load(KEY_FAVS, []));
+let filter = load(KEY_FILTER, 'all');
+if (filter !== 'all' && filter !== 'fav' && !CATS.some((c) => c.id === filter)) filter = 'all';
+
+// ===== 分類のボタン =====
+function buildChips() {
+  const box = $('chips');
+  box.innerHTML = '';
+  const list = [{ id: 'all', label: 'すべて' }, ...CATS, { id: 'fav', label: '★ お気に入り' }];
+  for (const c of list) {
+    const b = el('button', c.id === filter ? 'on' : '', c.label);
+    b.onclick = () => { filter = c.id; save(KEY_FILTER, filter); buildChips(); render(); };
+    box.append(b);
+  }
+}
+
+// ===== 一覧 =====
+function render() {
+  const q = toHira($('q').value.trim().toLowerCase());
+  const shown = WORDS.filter((x) =>
+    (filter === 'all' || (filter === 'fav' ? favs.has(x.w) : x.c === filter)) &&
+    (!q || toHira((x.w + '\n' + x.y + '\n' + x.d).toLowerCase()).includes(q)));
+  $('counts').textContent = '全' + WORDS.length + '語' + (shown.length !== WORDS.length ? '　表示中 ' + shown.length + '語' : '') + '　お気に入り ' + favs.size + '語';
+  const list = $('list');
+  list.innerHTML = '';
+  if (!shown.length) {
+    list.append(el('p', 'empty', filter === 'fav' && !q ? 'お気に入りはまだありません。用語の右の ☆ を押すと追加できます。' : '見つかりませんでした。ほかのことばで探してください。'));
+    return;
+  }
+  let lastRow = '';
+  for (const x of shown) {
+    const row = rowOf(x.y);
+    if (row !== lastRow) { list.append(el('div', 'row-head', row)); lastRow = row; }
+    const card = el('div', 'card');
+    const body = el('div', 'body');
+    const h = el('p', 'term');
+    highlight(h, x.w, q);
+    const y = el('span', 'yomi'); highlight(y, x.y, q); h.append(y);
+    const cat = CATS.find((c) => c.id === x.c);
+    const tag = el('span', 'tag ' + cat.cls, cat.label);
+    const d = el('p', 'desc'); highlight(d, x.d, q);
+    body.append(h, tag, d);
+    const on = favs.has(x.w);
+    const star = el('button', 'fav' + (on ? ' on' : ''), on ? '★' : '☆');
+    star.setAttribute('aria-label', on ? x.w + 'をお気に入りから外す' : x.w + 'をお気に入りに追加');
+    star.onclick = () => {
+      if (favs.has(x.w)) favs.delete(x.w); else favs.add(x.w);
+      save(KEY_FAVS, [...favs]);
+      render();
+    };
+    card.append(body, star);
+    list.append(card);
+  }
+}
+$('q').addEventListener('input', render);
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+buildChips();
+render();
+</script>
+</body>
+</html>
