@@ -44,7 +44,7 @@
   .card.out-r { transform:translateX(40px); opacity:0; }
   .grp { font-size:.78rem; color:var(--accent); font-weight:700; margin-right:52px; }
   .org { font-size:.95rem; color:var(--sub); margin-top:2px; margin-right:52px; word-break:break-word; }
-  .ttl { font-size:1.25rem; font-weight:800; line-height:1.45; margin:4px 0 8px; word-break:break-word; }
+  .ttl { font-size:1.25rem; font-weight:800; line-height:1.45; margin:4px 44px 8px 0; word-break:break-word; }
   .star { position:absolute; top:8px; right:8px; width:48px; height:48px; border-radius:50%; background:transparent; font-size:1.7rem; line-height:48px; color:var(--sub); }
   .star.on { color:var(--star); }
   .chk { display:inline-block; background:var(--warn-bg); color:var(--warn-text); border-radius:99px; padding:1px 10px; font-size:.8rem; font-weight:700; margin-bottom:6px; }
@@ -61,6 +61,7 @@
   .pager .in { max-width:640px; margin:0 auto; display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; }
   .pager button { background:var(--accent); color:#fff; border-radius:12px; padding:13px 10px; font-weight:700; font-size:1.05rem; }
   .pager button:disabled { opacity:.35; }
+  @media (prefers-color-scheme: dark) { .pager button, #update { color:#151312; } }
   .pager .pos { font-size:.95rem; color:var(--sub); min-width:70px; text-align:center; }
 
   /* 一覧（全面） */
