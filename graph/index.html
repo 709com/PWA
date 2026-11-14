@@ -1,0 +1,522 @@
+<!doctype html>
+<!-- このファイルは「統計グラフ作成」の本体です。項目名と数値を表に入れる（または貼り付ける）と、棒グラフ・折れ線グラフ・円グラフを描き、PNG画像として保存・共有できます。 -->
+<!-- 入力した数値はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。画像は共有ボタンを押したときだけ、あなたが選んだ先へ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>統計グラフ作成</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="グラフ作成">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#9c3d8f">
+<style>
+  :root { --bg:#f6f4f7; --card:#fff; --text:#1f1a22; --sub:#615966; --accent:#9c3d8f; --accent-soft:#f3e1f0; --line:#e1dbe4; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141216; --card:#1f1c22; --text:#eee9f0; --sub:#a59cab; --accent:#dc8fd0; --accent-soft:#3b2238; --line:#332e37; --danger:#ef6b61; }
+    #update, .primary, .seg button[aria-pressed="true"] { color:#141216 !important; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  h3 { font-size:1rem; margin:18px 0 6px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:7em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .seg { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .seg button { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 4px; font-weight:700; }
+  .seg button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
+
+  /* 数値の表 */
+  .trow { display:grid; grid-template-columns:1fr 8.5em 44px; gap:6px; margin-bottom:6px; align-items:center; }
+  .thead { font-size:.8rem; color:var(--sub); margin-bottom:2px; }
+  .trow input.bad { border-color:var(--danger); background:color-mix(in srgb, var(--danger) 8%, var(--card)); }
+  .del { background:var(--card); border:1px solid var(--line); border-radius:10px; height:44px; color:var(--sub); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.85rem; margin-top:8px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  #preview { width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:10px; background:#fff; margin-top:8px; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; display:flex; gap:8px; align-items:center; }
+  .card .info { flex:1; min-width:0; cursor:pointer; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:20px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📊 グラフ作成</h1>
+    <button class="iconbtn" id="open-saved">📁 保存したグラフ</button>
+  </header>
+
+  <div class="seg" id="types">
+    <button data-t="bar" aria-pressed="true">📊 棒グラフ</button>
+    <button data-t="line" aria-pressed="false">📈 折れ線</button>
+    <button data-t="pie" aria-pressed="false">🥧 円グラフ</button>
+  </div>
+
+  <h3>1. 数値を入れる</h3>
+  <div class="trow thead"><span>項目名（年度・地域など）</span><span>数値</span><span></span></div>
+  <div id="rows"></div>
+  <div class="actions">
+    <button class="plain" id="row-add">＋ 行を追加</button>
+    <button class="plain" id="paste-open">📋 表から貼り付け</button>
+    <button class="plain danger" id="clear">すべて消す</button>
+  </div>
+  <div id="paste-box" hidden>
+    <label class="f" for="paste">Excelやスプレッドシートの2列（項目名と数値）をコピーして、ここに貼り付けてください。1行に1項目です。</label>
+    <textarea id="paste" placeholder="例：&#10;令和4年度	1200&#10;令和5年度	1350"></textarea>
+    <div class="actions">
+      <button class="primary" id="paste-replace">表を置き換える</button>
+      <button class="plain" id="paste-append">下に足す</button>
+      <button class="plain" id="paste-cancel">やめる</button>
+    </div>
+  </div>
+
+  <h3>2. グラフの下に入れる文字</h3>
+  <div class="row2">
+    <div><label class="f" for="g-title">タイトル</label><input id="g-title" maxlength="80" placeholder="例：区立図書館の貸出冊数の推移"></div>
+    <div><label class="f" for="g-unit">単位</label><input id="g-unit" maxlength="20" placeholder="例：冊、人、円"></div>
+  </div>
+  <label class="f" for="g-src">出典（数字の出どころ）</label>
+  <input id="g-src" maxlength="160" placeholder="例：文京区「〇〇白書」令和7年版 p.12">
+  <div class="warn" id="src-warn" hidden>⚠ 出典が空です。グラフを見た人が数字を確かめられるよう、資料名やページを書いてください。</div>
+
+  <h3>3. できあがり</h3>
+  <div id="warns"></div>
+  <canvas id="preview" width="1200" height="900" aria-label="グラフの見本"></canvas>
+  <div class="actions">
+    <button class="primary" id="png">🖼 画像を保存・共有</button>
+    <button class="plain" id="keep">📁 アプリに保存</button>
+    <button class="plain" id="new">🆕 新しいグラフ</button>
+  </div>
+  <p class="note">画像は横1200ピクセルのPNGです。iPhoneでは共有の画面で「画像を保存」を選ぶと写真に入ります。</p>
+  <footer>版 <span id="ver"></span> ・ 数値はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 保存したグラフ -->
+<div class="sheet" id="saved">
+  <div class="inner">
+    <h2>📁 保存したグラフ</h2>
+    <p class="note" style="margin-top:0">開くと、いま作っているグラフと入れ替わります。</p>
+    <div id="saved-list" style="margin-top:10px"></div>
+    <div class="actions"><button class="plain" id="saved-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CUR = 'graph:current';   // いま作っているグラフ（自動で保存）
+const KEY_SAVED = 'graph:saved';   // 「アプリに保存」したグラフの一覧
+const FONT = '-apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif';
+// 見やすい配色（色覚の多様性に配慮した並び。円グラフはこの順に使う）
+const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+const INK = '#1f1f1f', INK2 = '#52514e', GRID = '#e3e2de', BG = '#ffffff';
+const W = 1200;
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const blank = () => ({ type: 'bar', title: '', unit: '', src: '', rows: [['', ''], ['', ''], ['', '']] });
+let g = Object.assign(blank(), load(KEY_CUR, {}));
+
+// 数値の読み取り：全角数字・カンマ・「−」に対応。読めなければ null
+function num(s) {
+  let t = String(s || '').trim().replace(/[０-９．，－−ー]/g, (c) => ({ '．': '.', '，': ',', '－': '-', '−': '-', 'ー': '-' }[c] || String.fromCharCode(c.charCodeAt(0) - 0xFEE0)));
+  t = t.replace(/,/g, '').replace(/\s/g, '');
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(t)) return null;
+  return parseFloat(t);
+}
+const fmt = (v) => v.toLocaleString('ja-JP', { maximumFractionDigits: 6 });
+
+// ===== 表の入力 =====
+function buildRows() {
+  const box = $('rows'); box.innerHTML = '';
+  g.rows.forEach((r, i) => {
+    const row = el('div', 'trow');
+    const a = el('input'); a.value = r[0]; a.maxLength = 40; a.placeholder = i === 0 ? '例：令和5年度' : ''; a.setAttribute('aria-label', (i + 1) + '行目の項目名');
+    const b = el('input'); b.value = r[1]; b.inputMode = 'decimal'; b.placeholder = i === 0 ? '例：1234' : ''; b.setAttribute('aria-label', (i + 1) + '行目の数値');
+    const mark = () => b.classList.toggle('bad', r[1].trim() !== '' && num(r[1]) === null);
+    a.oninput = () => { r[0] = a.value; changed(); };
+    b.oninput = () => { r[1] = b.value; mark(); changed(); };
+    mark();
+    const d = el('button', 'del', '✕'); d.setAttribute('aria-label', (i + 1) + '行目を消す');
+    d.onclick = () => { g.rows.splice(i, 1); if (!g.rows.length) g.rows.push(['', '']); buildRows(); changed(); };
+    row.append(a, b, d);
+    box.append(row);
+  });
+}
+$('row-add').onclick = () => { g.rows.push(['', '']); buildRows(); changed(); $('rows').lastChild.querySelector('input').focus(); };
+$('clear').onclick = () => {
+  if (!confirm('表の数値をすべて消します。よろしいですか？')) return;
+  g.rows = [['', ''], ['', ''], ['', '']]; buildRows(); changed();
+};
+
+// 貼り付け：1行に「項目名 数値」。区切りはタブ・カンマ・空白
+function parsePaste(text) {
+  const out = [];
+  text.replace(/\r/g, '').split('\n').forEach((line) => {
+    if (!line.trim()) return;
+    let cells = line.includes('\t') ? line.split('\t') : null;
+    if (!cells) {
+      const m = line.match(/^(.*?)[\s,，、:：]+([-−－+]?[0-9０-９][0-9０-９,，.．]*)\s*$/);
+      cells = m ? [m[1], m[2]] : [line, ''];
+    }
+    cells = cells.map((c) => c.trim());
+    const label = cells[0];
+    const val = cells.slice(1).find((c) => c !== '') || '';
+    out.push([label.slice(0, 40), val]);
+  });
+  return out;
+}
+$('paste-open').onclick = () => { $('paste-box').hidden = false; $('paste').focus(); };
+$('paste-cancel').onclick = () => { $('paste-box').hidden = true; };
+function doPaste(replace) {
+  const rows = parsePaste($('paste').value);
+  if (!rows.length) { alert('読み取れる行がありませんでした。'); return; }
+  const keep = g.rows.filter((r) => r[0].trim() || r[1].trim());
+  g.rows = replace ? rows : [...keep, ...rows];
+  $('paste').value = ''; $('paste-box').hidden = true;
+  buildRows(); changed();
+}
+$('paste-replace').onclick = () => doPaste(true);
+$('paste-append').onclick = () => doPaste(false);
+
+// ===== 種類・文字 =====
+$('types').querySelectorAll('button').forEach((b) => {
+  b.onclick = () => { g.type = b.dataset.t; showType(); changed(); };
+});
+function showType() { $('types').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.t === g.type))); }
+[['g-title', 'title'], ['g-unit', 'unit'], ['g-src', 'src']].forEach(([id, k]) => {
+  $(id).addEventListener('input', () => { g[k] = $(id).value; changed(); });
+});
+
+let drawQueued = false;
+function changed() {
+  save(KEY_CUR, g);
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; draw(); });
+}
+
+// ===== グラフを描く =====
+function data() {
+  return g.rows.map((r) => ({ label: r[0].trim(), v: num(r[1]) })).filter((d) => d.label !== '' || d.v !== null);
+}
+// 文字を幅に収まるよう折り返す（最大 maxLines 行。あふれたら「…」）
+function wrap(ctx, text, width, maxLines) {
+  const lines = []; let cur = '';
+  for (const ch of String(text)) {
+    if (ch === '\n') { lines.push(cur); cur = ''; continue; }
+    if (ctx.measureText(cur + ch).width > width && cur) { lines.push(cur); cur = ch; } else cur += ch;
+  }
+  if (cur || !lines.length) lines.push(cur);
+  if (maxLines && lines.length > maxLines) {
+    const cut = lines.slice(0, maxLines);
+    let last = cut[maxLines - 1];
+    while (last && ctx.measureText(last + '…').width > width) last = last.slice(0, -1);
+    cut[maxLines - 1] = last + '…';
+    return cut;
+  }
+  return lines;
+}
+// 目もりの間隔を、きりのよい数（1・2・5の10倍）にする
+function niceScale(lo, hi, count) {
+  if (lo === hi) { if (hi === 0) hi = 1; else if (hi > 0) lo = 0; else hi = 0; }
+  const raw = (hi - lo) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => raw <= s);
+  return { lo: Math.floor(lo / step + 1e-9) * step, hi: Math.ceil(hi / step - 1e-9) * step, step };
+}
+function tickLabel(v, step) {
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  return (Math.round(v * Math.pow(10, dec)) / Math.pow(10, dec)).toLocaleString('ja-JP', { maximumFractionDigits: dec });
+}
+const font = (px, bold) => (bold ? '700 ' : '400 ') + px + 'px ' + FONT;
+
+function captionLines(ctx) {
+  // グラフの下に入れる文字（タイトル・単位・出典）
+  const out = [];
+  ctx.font = font(40, true);
+  if (g.title.trim()) wrap(ctx, g.title.trim(), W - 100, 3).forEach((t) => out.push({ t, f: font(40, true), h: 54, c: INK }));
+  ctx.font = font(28);
+  if (g.unit.trim()) out.push({ t: '単位：' + g.unit.trim(), f: font(28), h: 42, c: INK2 });
+  if (g.src.trim()) wrap(ctx, '出典：' + g.src.trim(), W - 100, 3).forEach((t) => out.push({ t, f: font(28), h: 40, c: INK2 }));
+  return out;
+}
+
+function draw() {
+  const cv = $('preview');
+  const ctx = cv.getContext('2d');
+  const ds = data();
+  const warns = [];
+  const valid = ds.filter((d) => d.v !== null);
+  if (ds.some((d) => d.v === null)) warns.push('数値が読み取れない行があります（赤い枠）。その行はグラフに入りません。');
+  const CH = 760; // グラフ部分の高さ
+  const cap = captionLines(ctx);
+  const capH = cap.length ? cap.reduce((s, l) => s + l.h, 0) + 50 : 30;
+  cv.width = W; cv.height = CH + capH;
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.textBaseline = 'alphabetic';
+
+  if (!valid.length) {
+    ctx.fillStyle = INK2; ctx.font = font(36); ctx.textAlign = 'center';
+    ctx.fillText('表に項目名と数値を入れると、ここにグラフが出ます', W / 2, CH / 2);
+  } else if (g.type === 'pie') drawPie(ctx, valid, CH, warns);
+  else drawAxisChart(ctx, valid, CH, warns);
+
+  // 下の文字
+  let y = CH + 40;
+  ctx.textAlign = 'left';
+  if (cap.length) {
+    ctx.strokeStyle = GRID; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(50, CH + 4); ctx.lineTo(W - 50, CH + 4); ctx.stroke();
+  }
+  cap.forEach((l) => { y += l.h - 8; ctx.font = l.f; ctx.fillStyle = l.c; ctx.fillText(l.t, 50, y); y += 8; });
+
+  $('src-warn').hidden = !!g.src.trim();
+  const wb = $('warns'); wb.innerHTML = '';
+  warns.forEach((w) => wb.append(el('div', 'warn', '⚠ ' + w)));
+}
+
+// 棒グラフ・折れ線グラフ
+function drawAxisChart(ctx, ds, CH, warns) {
+  const n = ds.length;
+  const vals = ds.map((d) => d.v);
+  const sc = niceScale(Math.min(0, ...vals), Math.max(0, ...vals), 5);
+  // 目もりの文字の幅から、左の余白を決める
+  ctx.font = font(26);
+  const ticks = [];
+  for (let v = sc.lo; v <= sc.hi + sc.step / 2; v += sc.step) ticks.push(v);
+  const left = 40 + Math.max(...ticks.map((t) => ctx.measureText(tickLabel(t, sc.step)).width));
+  const right = W - 50, top = 70;
+  const slot = (right - left) / n;
+  // 項目名の文字の大きさ：入りきらなければ小さくする
+  let lf = 26, lines;
+  for (; lf >= 18; lf -= 2) {
+    ctx.font = font(lf);
+    lines = ds.map((d) => wrap(ctx, d.label || '', slot - 8, 2));
+    if (!lines.some((ls) => ls.some((t) => t.endsWith('…')))) break;
+  }
+  lf = Math.max(18, lf);
+  const bottom = CH - 30 - lf * 1.3 * 2;
+  const Y = (v) => bottom - (v - sc.lo) / (sc.hi - sc.lo) * (bottom - top);
+
+  // 目もりと横線
+  ctx.textAlign = 'right'; ctx.font = font(26);
+  ticks.forEach((t) => {
+    const y = Y(t);
+    ctx.strokeStyle = Math.abs(t) < 1e-12 ? '#8c8b86' : GRID; ctx.lineWidth = Math.abs(t) < 1e-12 ? 3 : 2;
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.fillStyle = INK2; ctx.fillText(tickLabel(t, sc.step), left - 14, y + 9);
+  });
+  if (g.unit.trim()) { ctx.textAlign = 'left'; ctx.fillStyle = INK2; ctx.font = font(24); ctx.fillText('（' + g.unit.trim() + '）', 20, top - 34); }
+
+  // 項目名
+  ctx.textAlign = 'center'; ctx.font = font(lf); ctx.fillStyle = INK;
+  lines.forEach((ls, i) => ls.forEach((t, j) => ctx.fillText(t, left + slot * (i + .5), bottom + 14 + lf * (j + 1) * 1.2)));
+
+  const showVals = n <= 15;
+  const vf = n <= 8 ? 26 : n <= 12 ? 22 : 18;
+  if (g.type === 'bar') {
+    const bw = Math.min(120, slot * 0.62);
+    ds.forEach((d, i) => {
+      const x = left + slot * (i + .5) - bw / 2;
+      const y0 = Y(0), y1 = Y(d.v);
+      const h = Math.abs(y1 - y0);
+      ctx.fillStyle = PALETTE[0];
+      roundBar(ctx, x, Math.min(y0, y1), bw, h, d.v >= 0);
+      if (showVals) {
+        ctx.fillStyle = INK; ctx.font = font(vf, true);
+        ctx.fillText(fmt(d.v), x + bw / 2, d.v >= 0 ? y1 - 10 : y1 + vf + 6);
+      }
+    });
+  } else {
+    ctx.strokeStyle = PALETTE[0]; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ds.forEach((d, i) => { const x = left + slot * (i + .5), y = Y(d.v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ds.forEach((d, i) => {
+      const x = left + slot * (i + .5), y = Y(d.v);
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE[0]; ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = BG; ctx.stroke();
+      if (showVals) { ctx.fillStyle = INK; ctx.font = font(vf, true); ctx.fillText(fmt(d.v), x, y - 22); }
+    });
+    if (n < 2) warns.push('折れ線グラフは、数値が2つ以上あると線になります。');
+  }
+  if (!showVals) warns.push('項目が多いので、グラフの上の数字は省きました（16項目以上）。');
+}
+// 角を少し丸めた棒（軸側は角を丸めない）
+function roundBar(ctx, x, y, w, h, up) {
+  const r = Math.min(8, w / 2, h);
+  ctx.beginPath();
+  if (up) { ctx.moveTo(x, y + h); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h); }
+  else { ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); }
+  ctx.closePath(); ctx.fill();
+}
+
+// 円グラフ（9項目以上は、9番目からを「その他」にまとめる）
+function drawPie(ctx, ds, CH, warns) {
+  let items = ds.filter((d) => d.v > 0);
+  if (items.length < ds.length) warns.push('円グラフには0やマイナスの数値は入れられないため、その行を省きました。');
+  if (!items.length) { ctx.fillStyle = INK2; ctx.font = font(32); ctx.textAlign = 'center'; ctx.fillText('円グラフにできる数値（0より大きい数）がありません', W / 2, CH / 2); return; }
+  if (items.length > 8) {
+    const rest = items.slice(7).reduce((s, d) => s + d.v, 0);
+    warns.push('円グラフは8つまでにしています。8番目以降の' + (items.length - 7) + '項目は「その他（まとめ）」にしました。');
+    items = [...items.slice(0, 7), { label: 'その他（まとめ）', v: rest }];
+  }
+  const total = items.reduce((s, d) => s + d.v, 0);
+  const cx = 330, cy = CH / 2 + 10, R = 280;
+  let a = -Math.PI / 2;
+  items.forEach((d, i) => {
+    const da = d.v / total * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + da); ctx.closePath();
+    ctx.fillStyle = PALETTE[i]; ctx.fill();
+    if (items.length > 1) { ctx.lineWidth = 4; ctx.strokeStyle = BG; ctx.stroke(); }
+    a += da;
+  });
+  // 凡例（色・項目名・数値・割合）
+  const lx = 680, rowH = Math.min(76, (CH - 120) / items.length);
+  let y = cy - rowH * items.length / 2 + rowH / 2;
+  ctx.textAlign = 'left';
+  items.forEach((d, i) => {
+    ctx.fillStyle = PALETTE[i];
+    ctx.fillRect(lx, y - 18, 30, 30);
+    ctx.fillStyle = INK; ctx.font = font(28, true);
+    const name = wrap(ctx, d.label || '（名前なし）', W - 50 - lx - 46, 1)[0];
+    ctx.fillText(name, lx + 46, y + 4);
+    ctx.fillStyle = INK2; ctx.font = font(24);
+    const pct = (d.v / total * 100).toFixed(1);
+    ctx.fillText(fmt(d.v) + (g.unit.trim() ? ' ' + g.unit.trim() : '') + '（' + pct + '%）', lx + 46, y + 34);
+    y += rowH;
+  });
+  ctx.fillStyle = INK2; ctx.font = font(22);
+  ctx.fillText('合計 ' + fmt(total) + (g.unit.trim() ? ' ' + g.unit.trim() : '') + '　※割合は四捨五入', lx, CH - 26);
+}
+
+// ===== 画像の保存・共有 =====
+$('png').onclick = async () => {
+  if (!data().some((d) => d.v !== null)) { alert('先に表へ数値を入れてください。'); return; }
+  if (!g.src.trim() && !confirm('出典が空のままです。数字の出どころがわからないグラフになりますが、このまま画像にしますか？')) { $('g-src').focus(); return; }
+  draw();
+  const cv = $('preview');
+  const blob = await new Promise((res) => cv.toBlob(res, 'image/png'));
+  if (!blob) { alert('画像を作れませんでした。'); return; }
+  const name = (g.title.trim() || 'グラフ').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) + '.png';
+  const file = new File([blob], name, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: g.title || 'グラフ' }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+
+// ===== アプリ内に保存したグラフ =====
+$('keep').onclick = () => {
+  if (!data().length) { alert('表に何も入っていません。'); return; }
+  const list = load(KEY_SAVED, []);
+  const name = g.title.trim() || 'タイトルなしのグラフ';
+  const same = list.findIndex((x) => x.name === name);
+  const entry = { id: 'g' + Date.now(), name, savedAt: Date.now(), g: JSON.parse(JSON.stringify(g)) };
+  if (same >= 0) {
+    if (!confirm('「' + name + '」はすでに保存されています。上書きしますか？（「キャンセル」で別に保存）')) list.unshift(entry);
+    else list[same] = entry;
+  } else list.unshift(entry);
+  save(KEY_SAVED, list);
+  alert('「' + name + '」を保存しました。右上の「保存したグラフ」から開けます。');
+};
+function buildSaved() {
+  const list = load(KEY_SAVED, []);
+  const box = $('saved-list'); box.innerHTML = '';
+  if (!list.length) { box.append(el('p', 'empty', 'まだ保存したグラフはありません。')); return; }
+  list.forEach((x) => {
+    const c = el('div', 'card');
+    const info = el('div', 'info');
+    const tname = { bar: '棒グラフ', line: '折れ線', pie: '円グラフ' }[x.g.type] || '';
+    info.append(el('div', 't', x.name), el('div', 'm', tname + ' ・ ' + x.g.rows.length + '項目 ・ ' + fmtDate(x.savedAt)));
+    info.onclick = () => {
+      g = Object.assign(blank(), JSON.parse(JSON.stringify(x.g)));
+      fillForm(); changed();
+      $('saved').classList.remove('open');
+      window.scrollTo(0, 0);
+    };
+    const del = el('button', 'iconbtn danger', '削除');
+    del.onclick = () => {
+      if (!confirm('「' + x.name + '」を削除します。よろしいですか？')) return;
+      save(KEY_SAVED, load(KEY_SAVED, []).filter((y) => y.id !== x.id));
+      buildSaved();
+    };
+    c.append(info, del);
+    box.append(c);
+  });
+}
+$('open-saved').onclick = () => { buildSaved(); $('saved').classList.add('open'); $('saved').scrollTo(0, 0); };
+$('saved-close').onclick = () => $('saved').classList.remove('open');
+$('new').onclick = () => {
+  if (!confirm('いまのグラフを消して、新しく作ります（「アプリに保存」したものは残ります）。よろしいですか？')) return;
+  g = blank(); fillForm(); changed(); window.scrollTo(0, 0);
+};
+
+function fillForm() {
+  $('g-title').value = g.title; $('g-unit').value = g.unit; $('g-src').value = g.src;
+  showType(); buildRows();
+}
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // 入力はその場で保存しているので、読み込み直しても消えない
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+fillForm();
+draw();
+</script>
+</body>
+</html>
