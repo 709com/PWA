@@ -91,6 +91,7 @@
   #result .inner { text-align:center; }
   #r-medal { font-size:6rem; margin-top:16px; animation:pop .6s ease-out; }
   #r-score { font-size:2rem; font-weight:900; margin:4px 0; }
+  #r-score .sm { font-size:1.2rem; color:var(--sub); }
   #r-stars { font-size:1.7rem; letter-spacing:.05em; margin:6px 0; overflow-wrap:anywhere; }
   #r-praise { font-size:1.3rem; font-weight:800; color:var(--sub); }
   .stack { display:flex; flex-direction:column; gap:10px; max-width:360px; margin:24px auto 0; }
@@ -476,7 +477,8 @@ function finishQuiz() {
   const last = quiz; quiz = null;
   $('quiz').classList.remove('open');
   $('r-medal').textContent = correct === total ? '🏆' : correct >= total * 0.7 ? '🌟' : '🌱';
-  $('r-score').textContent = total + 'もん ちゅう ' + correct + 'もん せいかい！';
+  $('r-score').innerHTML = '';
+  $('r-score').append(el('div', 'sm', total + 'もん ちゅう'), el('div', '', correct + 'もん せいかい！'));
   $('r-stars').textContent = last.results.map((r) => (r ? '⭐' : '・')).join('');
   const praise = correct === total ? 'ぜんぶ せいかい！ すごい！' : correct >= total * 0.7 ? 'よく できたね！' : 'がんばったね！ また やってみよう！';
   $('r-praise').textContent = kids[kid] + '、' + praise;
