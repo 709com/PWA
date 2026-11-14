@@ -37,6 +37,7 @@
   td { padding:7px 4px; border-bottom:1px solid var(--line); vertical-align:top; word-break:break-word; }
   tr:last-child td { border-bottom:none; }
   td.d { white-space:nowrap; font-weight:600; }
+  td span { white-space:nowrap; }   /* 駅名の途中で改行しない */
   td.num, th.num { text-align:right; white-space:nowrap; }
   .in { color:var(--in); font-weight:700; }
   .t { color:var(--sub); font-size:.78rem; }
@@ -97,6 +98,8 @@ const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
 function inBunkyo(e) {
   return BUNKYO.some(([n, la, lo]) => n === e.name && Math.abs(la - Number(e.lat)) < 0.01 && Math.abs(lo - Number(e.lon)) < 0.012);
 }
+// 表に出す駅名。区内の駅と同じ名前の区外の駅には「（区外）」を付けて区別する
+const stationName = (e) => e.name + (!inBunkyo(e) && BUNKYO.some(([n]) => n === e.name) ? '（区外）' : '');
 
 // ===== 読み込み（日付だけを付けて、公開データを受け取る） =====
 async function getDay(date) {
@@ -172,7 +175,7 @@ function render(data) {
     if (!es.length) td.append(el('span', 'none', '記録なし'));
     es.forEach((e, i) => {
       if (i) td.append(document.createTextNode(' → '));
-      td.append(el('span', inBunkyo(e) ? 'in' : '', e.name));
+      td.append(el('span', inBunkyo(e) ? 'in' : '', stationName(e)));
       td.append(el('span', 't', '（' + (e.from === e.to ? e.from : e.from + '〜' + e.to) + '）'));
     });
     tr.append(td);
@@ -190,7 +193,7 @@ function render(data) {
   const by = {};
   for (const e of all) {
     const k = e.name + (inBunkyo(e) ? '' : '|' + e.lat.toFixed(3) + ',' + e.lon.toFixed(3));
-    by[k] = by[k] || { name: e.name, inb: inBunkyo(e), days: new Set(), n: 0 };
+    by[k] = by[k] || { name: stationName(e), inb: inBunkyo(e), days: new Set(), n: 0 };
     by[k].days.add(e.date); by[k].n++;
   }
   const rank = Object.values(by).sort((a, b) => b.days.size - a.days.size || b.n - a.n || a.name.localeCompare(b.name)).slice(0, 10);
@@ -200,7 +203,7 @@ function render(data) {
     const h3 = el('tr'); h3.append(el('th', '', '順位'), el('th', '', '駅'), el('th', 'num', '行った日数'), el('th', 'num', '記録の件数')); t3.append(h3);
     rank.forEach((r, i) => {
       const tr = el('tr');
-      const name = el('td'); name.append(el('span', r.inb ? 'in' : '', r.name + '駅'));
+      const name = el('td'); name.append(el('span', r.inb ? 'in' : '', r.name.replace(/^([^（]+)/, '$1駅')));
       tr.append(el('td', '', String(i + 1)), name, el('td', 'num', r.days.size + '日'), el('td', 'num', r.n + '件'));
       t3.append(tr);
     });
