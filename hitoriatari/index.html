@@ -32,7 +32,7 @@
 
   .box { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:12px; }
   label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
-  label.f:first-child { margin-top:0; }
+  .box > label.f:first-child { margin-top:0; }
   .amount { display:grid; grid-template-columns:1fr 6.5em; gap:8px; }
   #amount { font-size:1.4rem; font-weight:700; text-align:right; padding:10px 12px; }
   #unit { font-size:1.1rem; font-weight:700; }
@@ -47,7 +47,7 @@
   .result .empty { opacity:.9; font-size:.95rem; }
 
   .basis { font-size:.85rem; color:var(--sub); }
-  .basis b { color:var(--text); }
+  .basis b { color:var(--text); white-space:nowrap; }
   .basis a { color:var(--accent); word-break:break-all; }
   .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
 

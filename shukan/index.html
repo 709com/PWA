@@ -47,6 +47,7 @@
 
   .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
   .sheet.open { display:block; }
+  #edit { z-index:11; }  /* 詳細の上に重ねて開く */
   .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
   .sheet h2 { font-size:1.15rem; margin:4px 0 12px; word-break:break-word; }
   label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
@@ -68,10 +69,10 @@
   .calhead { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .calhead b { font-size:1.05rem; }
   .calhead button { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 14px; font-size:1.1rem; }
-  .grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; text-align:center; }
+  .grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; text-align:center; }
   .grid .wd { font-size:.75rem; color:var(--sub); }
   .grid .wd:first-child { color:#d0453b; } .grid .wd:last-child { color:#2f6fd0; }
-  .day { aspect-ratio:1; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:.92rem; background:var(--bg); }
+  .day { height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:.92rem; background:var(--bg); }
   .day.on { background:var(--hc); color:#fff; font-weight:700; }
   .day.today { outline:2px solid var(--text); outline-offset:-2px; }
   .day.future { opacity:.35; }

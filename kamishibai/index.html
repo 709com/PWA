@@ -1,0 +1,627 @@
+<!doctype html>
+<!-- このファイルは「おはなし紙芝居（ひな形版）」の本体です。子どもが「だれが・どこで・なにが・どんなおはなし」をカードで選ぶと、アプリの中のひな形を組み合わせて5〜7場面のお話を作り、絵文字が動く紙芝居として読み上げます。AIは使いません。 -->
+<!-- 作ったお話はiPhoneの中のデータベース（IndexedDB）の「ほんだな」だけに保存し、外部へは一切送信しません。音は音声ファイルを使わず、その場で作っています。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おはなし紙芝居</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="おはなし">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#e0793a">
+<style>
+  :root { --bg:#fff6ec; --card:#fff; --text:#2b2118; --sub:#7a6656; --accent:#e0793a; --accent-soft:#fde6d3; --line:#f0dccb; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1a1410; --card:#271e18; --text:#f5ebe2; --sub:#bba796; --accent:#f39a5d; --accent-soft:#45291a; --line:#3a2c22; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { overscroll-behavior:none; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5;
+         -webkit-user-select:none; user-select:none; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 10px; font-size:.85rem; white-space:nowrap; flex-shrink:0; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  #make { width:100%; background:var(--accent); color:#fff; border-radius:24px; padding:22px 12px; font-size:1.6rem; font-weight:800; box-shadow:0 4px 0 rgba(0,0,0,.18); }
+  #make:active, .pick:active, .shelf-item:active { transform:translateY(2px); }
+  h2.shelf { font-size:1.25rem; margin:24px 0 10px; }
+  .shelf-item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:10px; margin-bottom:10px; }
+  .cover { width:72px; height:72px; border-radius:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1.9rem; letter-spacing:-.15em; }
+  .shelf-item .t { font-weight:800; font-size:1.1rem; line-height:1.35; word-break:break-all; }
+  .shelf-item .m { font-size:.8rem; color:var(--sub); }
+  .shelf-item .grow { flex:1; min-width:0; }
+  .shelf-item .del { background:transparent; font-size:1.2rem; padding:10px 6px; opacity:.6; flex-shrink:0; }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; font-size:1.05rem; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+
+  /* 全面の画面 */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+
+  /* お話づくり */
+  .mk-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .steps { display:flex; gap:6px; }
+  .steps i { width:14px; height:14px; border-radius:50%; background:var(--line); display:block; }
+  .steps i.on { background:var(--accent); }
+  #mk-chosen { min-height:2.4rem; font-size:2rem; text-align:center; margin-top:8px; letter-spacing:.1em; }
+  #mk-q { font-size:1.6rem; font-weight:800; text-align:center; margin:4px 0 14px; }
+  .picks { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+  .picks.two { grid-template-columns:repeat(2, 1fr); }
+  .picks.one { grid-template-columns:1fr; }
+  .pick { background:var(--card); border:3px solid var(--line); border-radius:20px; padding:12px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:110px; justify-content:center; }
+  .pick .e { font-size:2.8rem; line-height:1.15; }
+  .pick .n { font-size:1.05rem; font-weight:800; line-height:1.3; }
+  .pick .d { font-size:.85rem; color:var(--sub); }
+  .picks.one .pick { flex-direction:row; justify-content:flex-start; gap:14px; padding:12px 18px; min-height:88px; text-align:left; }
+  .picks.one .pick .n { font-size:1.35rem; }
+  .pick.sel { border-color:var(--accent); background:var(--accent-soft); transform:scale(1.04); }
+  .pick.dice { border-style:dashed; }
+
+  /* 紙芝居 */
+  #player { position:fixed; inset:0; z-index:20; background:#000; display:none; flex-direction:column; color:#fff; }
+  #player.open { display:flex; }
+  .pl-top { display:flex; align-items:center; gap:8px; padding:calc(6px + env(safe-area-inset-top)) 10px 6px; background:rgba(0,0,0,.85); }
+  .pl-top button { background:rgba(255,255,255,.16); color:#fff; border-radius:12px; padding:8px 12px; font-weight:700; flex-shrink:0; }
+  #pl-title { flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+  #pl-count { flex-shrink:0; font-variant-numeric:tabular-nums; opacity:.85; font-size:.9rem; }
+  #stage { position:relative; flex:1 1 auto; min-height:180px; overflow:hidden; transition:background .6s; }
+  #stage.enter .em { animation-name:none; }
+  .em { position:absolute; transform:translate(-50%, -50%); line-height:1; font-size:calc(var(--s) * min(1vw, .6vh)); filter:drop-shadow(0 4px 4px rgba(0,0,0,.18)); }
+  .em > span { display:inline-block; animation:var(--a) var(--d, 3s) ease-in-out infinite; animation-delay:var(--dl, 0s); }
+  .scene-in { animation:scenein .5s ease-out; }
+  @keyframes scenein { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
+  @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10%); } }
+  @keyframes sway { 0%,100% { transform:rotate(-7deg); } 50% { transform:rotate(7deg); } }
+  @keyframes bounce { 0%,100% { transform:translateY(0) scale(1); } 40% { transform:translateY(-18%) scale(1.05); } 60% { transform:translateY(0) scale(.97, 1.03); } }
+  @keyframes twinkle { 0%,100% { transform:scale(.8); opacity:.6; } 50% { transform:scale(1.15); opacity:1; } }
+  @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-6%); } 75% { transform:translateX(6%); } }
+  @keyframes wobble { 0%,100% { transform:rotate(-12deg); } 50% { transform:rotate(12deg) translateY(-6%); } }
+  @keyframes jump { 0%,100% { transform:translateY(0); } 30% { transform:translateY(-22%); } 50% { transform:translateY(0); } }
+  @keyframes walk { 0%,100% { transform:translateX(-6%) rotate(-3deg); } 50% { transform:translateX(6%) rotate(3deg); } }
+  @media (prefers-reduced-motion: reduce) { .em > span, .scene-in { animation:none !important; } }
+  #caption { background:var(--card); color:var(--text); font-size:1.3rem; font-weight:700; line-height:1.75; padding:14px 18px; max-height:34vh; overflow:auto;
+             overflow-wrap:anywhere; flex-shrink:0; min-height:6.6em; }
+  .dots { display:flex; justify-content:center; gap:6px; padding:8px 0 0; background:var(--card); flex-shrink:0; }
+  .dots i { width:10px; height:10px; border-radius:50%; background:var(--line); display:block; }
+  .dots i.on { background:var(--accent); }
+  .ctrl { display:flex; justify-content:center; gap:18px; padding:10px 12px calc(12px + env(safe-area-inset-bottom)); background:var(--card); flex-shrink:0; }
+  .ctrl button { width:78px; height:78px; border-radius:50%; background:var(--accent-soft); color:var(--text); font-size:2rem; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; }
+  .ctrl button small { font-size:.72rem; font-weight:700; margin-top:4px; }
+  .ctrl #c-play { background:var(--accent); color:#fff; }
+  #endcard { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(255,246,236,.92); color:#2b2118; padding:16px; }
+  #endcard.show { display:flex; }
+  #endcard .big { font-size:3rem; font-weight:900; animation:scenein .6s ease-out; }
+  #endcard button { width:min(320px, 90%); border-radius:18px; padding:14px; font-size:1.2rem; font-weight:800; background:#fff; color:#2b2118; border:2px solid #f0dccb; }
+  #endcard button.main { background:#e0793a; color:#fff; border-color:#e0793a; }
+
+  /* 設定 */
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:14px 0 4px; }
+  .check { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:6px; }
+  .check input { width:24px; height:24px; flex-shrink:0; }
+  select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📖 おはなし かみしばい</h1>
+    <button class="iconbtn" id="open-settings">⚙️ おうちの方へ</button>
+  </header>
+  <button id="make">✨ おはなしを つくる</button>
+  <h2 class="shelf">📚 ほんだな</h2>
+  <div id="shelf"></div>
+  <footer>版 <span id="ver"></span> ・ おはなしはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- お話づくり（カードを選ぶ） -->
+<div class="sheet" id="maker">
+  <div class="inner">
+    <div class="mk-top">
+      <button class="iconbtn" id="mk-back">← もどる</button>
+      <div class="steps" id="mk-steps"><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div id="mk-chosen"></div>
+    <div id="mk-q"></div>
+    <div class="picks" id="mk-picks"></div>
+  </div>
+</div>
+
+<!-- 紙芝居 -->
+<div id="player">
+  <div class="pl-top">
+    <button id="c-close">✖ とじる</button>
+    <div id="pl-title"></div>
+    <div id="pl-count"></div>
+  </div>
+  <div id="stage">
+    <div id="scene"></div>
+    <div id="endcard">
+      <div class="big">おしまい</div>
+      <button class="main" id="e-again">🔁 もういちど みる</button>
+      <button id="e-new">✨ あたらしく つくる</button>
+      <button id="e-shelf">📚 ほんだなへ</button>
+    </div>
+  </div>
+  <div class="dots" id="pl-dots"></div>
+  <div id="caption"></div>
+  <div class="ctrl">
+    <button id="c-prev" aria-label="まえの ばめん">⏮<small>まえ</small></button>
+    <button id="c-play" aria-label="とめる・すすむ">⏸<small>とめる</small></button>
+    <button id="c-next" aria-label="つぎの ばめん">⏭<small>つぎ</small></button>
+  </div>
+</div>
+
+<!-- 設定（おうちの方へ） -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定（おうちの方へ）</h2>
+    <label class="check"><input type="checkbox" id="s-voice"> 声で読み上げる</label>
+    <label class="f" for="s-rate">読む速さ</label>
+    <select id="s-rate"><option value="0.8">ゆっくり</option><option value="0.95">ふつう</option><option value="1.1">すこし はやい</option></select>
+    <label class="check" style="margin-top:12px"><input type="checkbox" id="s-auto"> 読み終わったら、自動で次の場面へ</label>
+    <label class="check"><input type="checkbox" id="s-sound"> 効果音を鳴らす</label>
+    <p class="note">お話は、アプリの中にある決まった文（ひな形）を組み合わせて作ります。インターネットやAIは使いません。こわい話・悲しすぎる話にはならないようにしています。</p>
+    <p class="note">ホーム画面のアイコンを削除すると、ほんだなのお話も消えます。音が出ないときは、iPhoneの音量と消音スイッチを確認してください。</p>
+    <div class="actions">
+      <button class="primary" id="s-save">保存して閉じる</button>
+      <button class="plain" id="s-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_SET = 'kamishibai:settings';
+const $ = (id) => document.getElementById(id);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// ===== お話の材料（カード） =====
+// full＝はじめて出てくるときの呼び方、s＝2回目からの呼び方。実在のキャラクターは使わない
+const WHO = [
+  { id: 'dog', e: '🐶', n: 'いぬ', full: 'こいぬの コロ', s: 'コロ' },
+  { id: 'cat', e: '🐱', n: 'ねこ', full: 'こねこの ミケ', s: 'ミケ' },
+  { id: 'dino', e: '🦕', n: 'きょうりゅう', full: 'きょうりゅうの ガオくん', s: 'ガオくん' },
+  { id: 'rabbit', e: '🐰', n: 'うさぎ', full: 'うさぎの ピョンちゃん', s: 'ピョンちゃん' },
+  { id: 'robot', e: '🤖', n: 'ロボット', full: 'ロボットの ピピ', s: 'ピピ' },
+  { id: 'girl', e: '👧', n: 'おんなのこ', full: 'おんなのこの はなちゃん', s: 'はなちゃん' },
+  { id: 'boy', e: '👦', n: 'おとこのこ', full: 'おとこのこの そらくん', s: 'そらくん' },
+  { id: 'panda', e: '🐼', n: 'パンダ', full: 'パンダの ポンちゃん', s: 'ポンちゃん' },
+  { id: 'penguin', e: '🐧', n: 'ペンギン', full: 'ペンギンの ペンタくん', s: 'ペンタくん' },
+];
+// bg＝背景の色、deco＝まわりの飾り、f＝その場所で出会うなかま
+const WHERE = [
+  { id: 'forest', e: '🌳', n: 'もり', bg: ['#d8f3d2', '#8fd19e'], deco: ['🌳', '🍄', '🌼'], f: { e: '🐿️', n: 'りすさん' } },
+  { id: 'sea', e: '🌊', n: 'うみ', bg: ['#c9efff', '#5bb8e8'], deco: ['🌊', '🐚', '🐠'], f: { e: '🐙', n: 'たこさん' } },
+  { id: 'space', e: '🚀', n: 'うちゅう', bg: ['#3a3f86', '#161a42'], deco: ['🪐', '🚀', '✨'], f: { e: '🌟', n: 'おほしさま' } },
+  { id: 'town', e: '🏙️', n: 'まち', bg: ['#fff0d6', '#ffc98a'], deco: ['🏠', '🚗', '🌷'], f: { e: '🐦', n: 'ことりさん' } },
+  { id: 'castle', e: '🏰', n: 'おしろ', bg: ['#f6e4ff', '#d3a8f0'], deco: ['🏰', '👑', '🌹'], f: { e: '👸', n: 'おひめさま' } },
+  { id: 'park', e: '🎡', n: 'ゆうえんち', bg: ['#ffe6ee', '#ffb3c9'], deco: ['🎡', '🎠', '🎈'], f: { e: '🐘', n: 'ぞうさん' } },
+];
+// tr＝こまったこと、fx＝かいけつ（同じ番号どうしが組になる）
+const ITEMS = [
+  { id: 'cake', e: '🎂', n: 'ケーキ', a: 'おいしそうな ケーキ',
+    tr: ['ケーキに のせる いちごが ありません。「これじゃ ちょっと さみしいね」', 'ケーキは ひとつ。でも、たべたい おともだちは たくさん います。'],
+    fx: ['{F}が あかい いちごを もってきて くれました。ちょこんと のせたら、すてきな ケーキの できあがり！', '「そうだ！ みんなで わけっこ しよう！」 ちいさく きりわけたら、みんな にっこり。'] },
+  { id: 'train', e: '🚂', n: 'でんしゃ', a: 'ちいさな でんしゃ',
+    tr: ['でんしゃの せんろが、とちゅうで とぎれて いました。「これじゃ すすめないね」', 'でんしゃが ぷしゅー。とまって、うごかなく なっちゃった。'],
+    fx: ['みんなで ながい ぼうを ならべて、あたらしい せんろを つくりました。がたん ごとん、でんしゃが はしりだしました！', 'みんなで「せーの！」と おしたら、ぽっぽー！ でんしゃは げんきに うごきだしました。'] },
+  { id: 'ball', e: '⚽', n: 'ボール', a: 'まんまるの ボール',
+    tr: ['ボールが ぽーんと とんで、たかい ところに ひっかかって しまいました。', 'ボールが ぷしゅーっと しぼんで しまいました。'],
+    fx: ['{F}が うんと せのびして、ボールを とって くれました。', 'みんなで ふーっと くうきを いれたら、また まんまるの ボールに もどりました。'] },
+  { id: 'onigiri', e: '🍙', n: 'おにぎり', a: 'ほかほかの おにぎり',
+    tr: ['おなかが ぐうぐう。でも、おにぎりは ひとつだけ。', 'おにぎりが ころころ ころがって いっちゃった！'],
+    fx: ['「はんぶんこ しよう！」 ふたりで わけて たべたら、とっても おいしかったよ。', 'みんなで おいかけて、ぴょーんと キャッチ！ つつみに はいって いたので、だいじょうぶ。'] },
+  { id: 'rainbow', e: '🌈', n: 'にじ', a: 'おおきな にじ',
+    tr: ['にじの いろが ひとつ たりません。「あれれ？ なにいろが ないのかな？」', 'くもが もくもく。にじが かくれて しまいました。'],
+    fx: ['{w}と {F}が いっしょに いろを えらんで、そっと ぬりました。ぴかぴかの にじに なったよ！', 'みんなで「にじさん、でておいで」と よぶと、にじが また きらりと かおを だしました。'] },
+  { id: 'balloon', e: '🎈', n: 'ふうせん', a: 'あかい ふうせん',
+    tr: ['ふわふわ…。ふうせんが、そらへ とんで いきそう！', 'ふうせんが しぼんで、ちいさく なっちゃった。'],
+    fx: ['{F}が ひもを ぱっと つかんで くれました。「よかったあ！」', 'みんなで ふーっと ふくらませたら、また まんまるの ふうせんに！'] },
+];
+const MOODS = [
+  { id: 'waku', e: '🎉', n: 'わくわく', d: 'どきどき ぼうけん' },
+  { id: 'hokko', e: '☺️', n: 'ほっこり', d: 'やさしい きもちに なる' },
+  { id: 'oyasumi', e: '🌙', n: 'おやすみ', d: 'ねる まえに ゆっくり' },
+];
+
+// ===== ひな形（雰囲気ごとに、場面ごとに数パターン） =====
+// {W}＝はじめての呼び方 {w}＝呼び方 {P}＝場所 {F}＝なかま {I}＝もの {Ia}＝ようすつきの もの
+const TPL = {
+  waku: {
+    start: ['あるひ、{W}は {P}へ ぼうけんに でかけました。「なにが あるかな？ わくわく するね！」',
+            'おひさまが ぴかぴかの あさ。{W}は {P}に やってきました。「きょうは なにか すごい ことが おこりそう！」',
+            '{W}は げんき いっぱい。「よーし、きょうは {P}を たんけんだ！」'],
+    event: ['すると、むこうから {F}が はしって きました。「みて みて！ {Ia}を みつけたよ！」',
+            '「あっ！」 {w}は {Ia}を みつけました。そこへ {F}も やってきて、「わあ、すごいね！」',
+            'がさごそ、がさごそ。のぞいて みると、{F}が {Ia}の そばで にこにこ して いました。'],
+    together: ['{w}と {F}は、{P}を どんどん すすみます。「つぎは なにが あるかな？」',
+               '「よーし、いこう！」 {w}と {F}は、げんきに かけだしました。'],
+    pre: ['ところが、たいへん！ ', 'あっ、たいへんだ！ '],
+    fixpre: ['「いい こと かんがえた！」 ', '「まかせて！」 '],
+    party: ['「やったー！」 みんなで ばんざい！ {P}じゅうに えがおが ひろがりました。',
+            '「ありがとう！」「どういたしまして！」 みんなで ぴょんぴょん とびはねて、おおはしゃぎ。'],
+    end: ['{w}の ぼうけんは だいせいこう！ あしたは どんな ことが おこるかな？ おしまい。',
+          'かえりみち、{w}は にこにこ。「また {P}に いこうね！」 おしまい。'],
+  },
+  hokko: {
+    start: ['{P}に、{W}が いました。{w}は、みんなと なかよく するのが だいすきです。',
+            'ぽかぽか あたたかい ひ。{W}は {P}を のんびり おさんぽ して いました。',
+            '{W}は、「きょうは {P}で だれかに あえたら いいな」と おもって いました。'],
+    event: ['そこへ {F}が やってきました。「こんにちは。いっしょに {Ia}を みない？」',
+            '{w}は {Ia}を みつけて にっこり。「{F}にも みせて あげよう」',
+            '「{w}、こんにちは」 {F}が {Ia}の ことを おしえに きて くれました。'],
+    together: ['ふたりは ならんで すわって、たくさん おはなしを しました。',
+               '{w}と {F}は、{P}で てを つないで おさんぽ。ぽかぽか いい きもち。'],
+    pre: ['でも、ちょっと こまった ことが ありました。', 'あれ？ '],
+    fixpre: ['「だいじょうぶ。いっしょに やろう」 ', '「てつだうよ」 '],
+    party: ['「ありがとう」「どういたしまして」 ふたりは もっと なかよしに なりました。',
+            'みんなの こころが ぽかぽか。{P}に やさしい ひかりが ひろがりました。'],
+    end: ['{P}は、きょうも ぽかぽか あたたかい ひでした。 おしまい。',
+          '{w}の こころは ぽっかぽか。「また あした ね」 おしまい。'],
+  },
+  oyasumi: {
+    start: ['ゆうがた、そらが オレンジいろに なりました。{W}は {P}で ゆっくり あそんで いました。',
+            'おつきさまが そっと かおを だしました。{W}は {P}で おそらを みあげて いました。',
+            'そろそろ ねる じかん。{W}は {P}で「きょうも たのしかったなあ」と にっこり しました。'],
+    event: ['すると、{F}が そっと やってきました。「こんばんは。{Ia}、いっしょに みようか」',
+            'しずかな {P}で、{w}は {Ia}を みつけました。となりで {F}が「すてきだね」と ほほえみました。'],
+    together: ['おほしさまが ちかちか。{w}と {F}は、ゆっくり ゆっくり あるきました。',
+               'そよそよ、やさしい かぜ。{w}と {F}は、ならんで そらを みあげました。'],
+    pre: ['あれれ？ ', 'おや？ '],
+    fixpre: ['「ゆっくりで いいよ」 ', '「だいじょうぶだよ」 '],
+    party: ['{w}は ふわあ と おおきな あくび。「なんだか ねむく なってきたね」',
+            '{F}が「きょうは ありがとう。また あそぼうね」と てを ふりました。'],
+    end: ['{w}は、ふかふかの おふとんに もぐりこみました。おやすみなさい。 おしまい。',
+          'おつきさまが「おやすみ」と ほほえみました。{w}も すやすや…。 おしまい。'],
+  },
+};
+
+// えらんだカードから、5〜7場面のお話を組み立てる
+function buildStory(sel) {
+  const who = WHO.find((x) => x.id === sel.who), where = WHERE.find((x) => x.id === sel.where), item = ITEMS.find((x) => x.id === sel.item);
+  const T = TPL[sel.mood];
+  const fill = (t) => t.replace(/\{W\}/g, who.full).replace(/\{w\}/g, who.s).replace(/\{P\}/g, where.n).replace(/\{F\}/g, where.f.n)
+    .replace(/\{Ia\}/g, item.a).replace(/\{I\}/g, item.n);
+  const k = Math.floor(Math.random() * item.tr.length);
+  const scenes = [{ st: 'start', text: fill(pick(T.start)) }, { st: 'event', text: fill(pick(T.event)) }];
+  if (Math.random() < 0.6) scenes.push({ st: 'together', text: fill(pick(T.together)) });
+  scenes.push({ st: 'trouble', text: fill(pick(T.pre) + item.tr[k]) });
+  scenes.push({ st: 'solve', text: fill(pick(T.fixpre) + item.fx[k]) });
+  if (Math.random() < 0.6) scenes.push({ st: 'party', text: fill(pick(T.party)) });
+  scenes.push({ st: 'end', text: fill(pick(T.end)) });
+  const now = Date.now();
+  return { id: 's' + now + Math.random().toString(36).slice(2, 6), createdAt: now, ...sel, title: who.s + 'と ' + item.n + 'の おはなし', scenes };
+}
+
+// ===== 端末内のデータベース（IndexedDB）：ほんだな =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('kamishibai', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('stories', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('stories', mode);
+    const r = fn(tx.objectStore('stories'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function fmtDate(ms) { const d = new Date(ms); return (d.getMonth() + 1) + 'がつ ' + d.getDate() + 'にち'; }
+const DEFAULT_SET = { voice: true, rate: 0.95, auto: true, sound: true };
+let settings = Object.assign({}, DEFAULT_SET, load(KEY_SET, {}));
+
+// ===== 音（効果音と読み上げ） =====
+// iPhoneは、画面をタップしたときでないと音の準備ができないので、タップのたびに準備を確かめる
+let audioCtx = null, speechReady = false, jaVoice = null;
+function pickVoice() { try { jaVoice = speechSynthesis.getVoices().find((v) => /^ja/i.test(v.lang)) || null; } catch (e) {} }
+if ('speechSynthesis' in window) { pickVoice(); try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} }
+function unlockSound() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  try {
+    if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+    if (audioCtx && audioCtx.state !== 'running') {
+      audioCtx.resume();
+      const b = audioCtx.createBuffer(1, 1, 22050), s = audioCtx.createBufferSource();
+      s.buffer = b; s.connect(audioCtx.destination); s.start(0);
+    }
+  } catch (e) {}
+  if (!speechReady && 'speechSynthesis' in window) {
+    speechReady = true;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'ja-JP'; speechSynthesis.speak(u); } catch (e) {}
+  }
+}
+['touchend', 'click'].forEach((t) => document.addEventListener(t, unlockSound, true));
+function tone(freq, at, dur, type, vol) {
+  if (!settings.sound || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime + at;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.25, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) {}
+}
+const sfx = {
+  pick() { tone(880, 0, .12, 'triangle'); tone(1320, .08, .15, 'triangle'); },
+  page() { tone(520, 0, .1, 'sine', .2); tone(780, .07, .14, 'sine', .2); },
+  end() { [784, 659, 523, 659, 784, 1047].forEach((f, i) => tone(f, i * .16, .35, 'triangle', .25)); },
+};
+// 読み上げ。読み終わり（またはだめだったとき）に true / false を返す
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!settings.voice || !('speechSynthesis' in window)) return resolve(false);
+    let done = false, tm = null;
+    const fin = (ok) => { if (done) return; done = true; clearTimeout(tm); resolve(ok); };
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/\p{Extended_Pictographic}/gu, ''));
+      u.lang = 'ja-JP'; if (jaVoice) u.voice = jaVoice; u.rate = Number(settings.rate) || 1; u.pitch = 1.05;
+      u.onend = () => fin(true); u.onerror = () => fin(false);
+      tm = setTimeout(() => fin(false), 4000 + text.length * 350); // 終わりの合図が来ない端末のための保険
+      speechSynthesis.speak(u);
+    } catch (e) { fin(false); }
+  });
+}
+function stopSpeak() { try { speechSynthesis.cancel(); } catch (e) {} }
+
+// ===== はじめの画面：ほんだな =====
+const byId = (list, id) => list.find((x) => x.id === id) || list[0];
+async function renderShelf() {
+  let items = [];
+  try { items = await dbAll(); } catch (e) { alert('ほんだなを開けませんでした。'); }
+  items.sort((a, b) => b.createdAt - a.createdAt);
+  const box = $('shelf'); box.innerHTML = '';
+  if (!items.length) { box.append(el('p', 'empty', 'まだ おはなしは ないよ。「おはなしを つくる」を おしてね。')); return; }
+  for (const st of items) {
+    const where = byId(WHERE, st.where), mood = byId(MOODS, st.mood);
+    const row = el('div', 'shelf-item');
+    const cover = el('div', 'cover', byId(WHO, st.who).e + byId(ITEMS, st.item).e);
+    cover.style.background = 'linear-gradient(' + where.bg[0] + ',' + where.bg[1] + ')';
+    const g = el('div', 'grow');
+    g.append(el('div', 't', st.title), el('div', 'm', mood.e + ' ' + mood.n + '・' + where.n + '・' + fmtDate(st.createdAt)));
+    const del = el('button', 'del', '🗑'); del.setAttribute('aria-label', 'けす');
+    del.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('「' + st.title + '」を ほんだなから けしますか？（おうちの方へ：元に戻せません）')) return;
+      await dbDel(st.id); renderShelf();
+    };
+    row.append(cover, g, del);
+    row.onclick = () => openPlayer(st);
+    box.append(row);
+  }
+}
+
+// ===== お話づくり（4つの しつもん） =====
+const STEPS = [
+  { key: 'who', q: 'だれが でてくる？', list: WHO, cols: '' },
+  { key: 'where', q: 'どこの おはなし？', list: WHERE, cols: 'two' },
+  { key: 'item', q: 'なにが でてくる？', list: ITEMS, cols: 'two' },
+  { key: 'mood', q: 'どんな おはなし？', list: MOODS, cols: 'one' },
+];
+let mk = null; // { step, sel:{who,where,item,mood}, busy }
+function openMaker() { mk = { step: 0, sel: {}, busy: false }; $('maker').classList.add('open'); renderStep(); }
+function renderStep() {
+  const s = STEPS[mk.step];
+  [...$('mk-steps').children].forEach((d, i) => d.classList.toggle('on', i <= mk.step));
+  $('mk-chosen').textContent = STEPS.slice(0, mk.step).map((x) => byId(x.list, mk.sel[x.key]).e).join(' ');
+  $('mk-q').textContent = s.q;
+  const box = $('mk-picks'); box.className = 'picks ' + s.cols; box.innerHTML = '';
+  const cards = [...s.list, { id: '__dice', e: '🎲', n: 'おまかせ', d: s.cols === 'one' ? 'どれかに するよ' : '' }];
+  for (const c of cards) {
+    const b = el('button', 'pick' + (c.id === '__dice' ? ' dice' : ''));
+    const txt = el('span'); txt.append(el('span', 'n', c.n));
+    if (c.d) { txt.append(el('br'), el('span', 'd', c.d)); }
+    b.append(el('span', 'e', c.e), txt);
+    if (s.cols !== 'one') txt.style.textAlign = 'center';
+    b.onclick = () => choose(c, b);
+    box.append(b);
+  }
+  window.scrollTo(0, 0); $('maker').scrollTop = 0;
+  speak(s.q);
+}
+async function choose(c, btn) {
+  if (mk.busy) return;
+  mk.busy = true;
+  const s = STEPS[mk.step];
+  const real = c.id === '__dice' ? pick(s.list) : c;
+  mk.sel[s.key] = real.id;
+  btn.classList.add('sel');
+  if (c.id === '__dice') { btn.querySelector('.e').textContent = real.e; btn.querySelector('.n').textContent = real.n; }
+  sfx.pick();
+  speak(real.n);
+  await new Promise((r) => setTimeout(r, 800));
+  mk.busy = false;
+  if (mk.step < STEPS.length - 1) { mk.step++; renderStep(); return; }
+  // 4つ そろったら、お話を作って ほんだなに しまい、紙芝居を はじめる
+  const story = buildStory(mk.sel);
+  try { await dbPut(story); } catch (e) { alert('ほんだなに保存できませんでした。iPhoneの空き容量を確認してください。'); }
+  $('maker').classList.remove('open'); mk = null;
+  renderShelf();
+  openPlayer(story);
+}
+$('make').onclick = openMaker;
+$('mk-back').onclick = () => {
+  if (!mk || mk.busy) return;
+  if (mk.step > 0) { mk.step--; renderStep(); } else { stopSpeak(); $('maker').classList.remove('open'); mk = null; }
+};
+
+// ===== 紙芝居 =====
+// 場面ごとの絵：[絵文字, 横(%), 縦(%), 大きさ, 動き]
+function sceneLayout(story, sc) {
+  const who = byId(WHO, story.who).e, where = byId(WHERE, story.where), item = byId(ITEMS, story.item).e, fr = where.f.e;
+  const m = story.mood, night = m === 'oyasumi';
+  const fx = { waku: ['✨', '🎉', '🎊', '🌟'], hokko: ['🌸', '💖', '✨', '💖'], oyasumi: ['✨', '⭐', '💫', '💤'] }[m];
+  const list = [[where.deco[0], 12, 84, 16, 'sway'], [where.deco[1], 88, 16, 12, 'float'], [where.deco[2], 87, 86, 12, 'sway']];
+  if (night) list.push(['🌙', 13, 14, 13, 'float'], ['⭐', 58, 9, 6, 'twinkle'], ['⭐', 36, 18, 5, 'twinkle']);
+  const L = {
+    start: [[who, 50, 56, 30, 'float'], [fx[0], 73, 30, 10, 'twinkle']],
+    event: [[who, 27, 62, 24, 'float'], [fr, 74, 62, 20, 'bounce'], [item, 50, 30, 18, 'bounce'], [fx[0], 67, 17, 8, 'twinkle']],
+    together: [[who, 34, 60, 24, 'walk'], [fr, 67, 60, 20, 'walk'], [night ? '⭐' : '🎵', 50, 24, 10, 'float']],
+    trouble: [[who, 28, 62, 24, 'shake'], [item, 70, 50, 20, 'wobble'], ['💦', 40, 34, 9, 'float'], ['❓', 80, 24, 12, 'bounce']],
+    solve: [[who, 26, 62, 22, 'float'], [fr, 74, 62, 20, 'float'], [item, 50, 40, 20, 'bounce'], ['💡', 50, 15, 12, 'twinkle']],
+    party: [[who, 30, 60, 24, night ? 'float' : 'jump'], [fr, 70, 60, 22, night ? 'float' : 'jump'], [item, 50, 27, 16, 'float'], [fx[1], 15, 30, 10, 'twinkle'], [fx[2], 85, 34, 10, 'twinkle']],
+    end: [[who, 50, 58, 30, 'float'], [fx[3], 72, 30, 12, 'float']],
+  };
+  return list.concat(L[sc.st] || L.start);
+}
+function stageBg(story) {
+  if (story.mood === 'oyasumi') return 'linear-gradient(#2c3570, #141a3c)';
+  const w = byId(WHERE, story.where); return 'linear-gradient(' + w.bg[0] + ',' + w.bg[1] + ')';
+}
+let P = null; // 再生中の紙芝居 { story, idx, playing, tok, timer, ended }
+function openPlayer(story) {
+  P = { story, idx: 0, playing: true, tok: 0, timer: null, ended: false };
+  $('pl-title').textContent = story.title;
+  $('stage').style.background = stageBg(story);
+  const dots = $('pl-dots'); dots.innerHTML = '';
+  story.scenes.forEach(() => dots.append(el('i')));
+  $('player').classList.add('open');
+  requestWakeLock();
+  go(0);
+}
+function renderScene() {
+  const sc = P.story.scenes[P.idx];
+  const box = $('scene'); box.innerHTML = '';
+  box.className = ''; void box.offsetWidth; box.className = 'scene-in';
+  sceneLayout(P.story, sc).forEach(([e, x, y, s, a], i) => {
+    const w = el('span', 'em'); const inner = el('span', '', e);
+    w.style.left = x + '%'; w.style.top = y + '%'; w.style.setProperty('--s', s);
+    inner.style.setProperty('--a', a); inner.style.setProperty('--d', (2.4 + (i % 3) * 0.5) + 's'); inner.style.setProperty('--dl', (i * 0.2) + 's');
+    w.append(inner); box.append(w);
+  });
+  $('caption').textContent = sc.text;
+  $('caption').scrollTop = 0;
+  $('pl-count').textContent = (P.idx + 1) + ' / ' + P.story.scenes.length;
+  [...$('pl-dots').children].forEach((d, i) => d.classList.toggle('on', i <= P.idx));
+}
+function stopNarration() { if (!P) return; P.tok++; clearTimeout(P.timer); stopSpeak(); }
+async function narrate() {
+  const tok = ++P.tok; clearTimeout(P.timer);
+  const sc = P.story.scenes[P.idx];
+  const t0 = Date.now();
+  const ok = await speak(sc.text);
+  if (!P || tok !== P.tok) return;
+  // 読み上げができないときは、子どもが目で読めるくらいの時間をおく
+  const wait = ok ? 1300 : Math.max(800, sc.text.length * 170 + 1500 - (Date.now() - t0));
+  P.timer = setTimeout(() => {
+    if (!P || tok !== P.tok || !P.playing || !settings.auto) return;
+    next();
+  }, wait);
+}
+function go(i) {
+  stopNarration();
+  P.idx = Math.max(0, Math.min(i, P.story.scenes.length - 1));
+  P.ended = false; $('endcard').classList.remove('show');
+  renderScene(); sfx.page();
+  updatePlayBtn();
+  if (P.playing) narrate();
+}
+function next() { if (P.idx < P.story.scenes.length - 1) go(P.idx + 1); else showEnd(); }
+function showEnd() {
+  stopNarration();
+  P.ended = true; P.playing = false;
+  $('endcard').classList.add('show');
+  [...$('pl-dots').children].forEach((d) => d.classList.add('on'));
+  updatePlayBtn(); sfx.end();
+}
+function updatePlayBtn() { $('c-play').innerHTML = P.playing ? '⏸<small>とめる</small>' : '▶<small>すすむ</small>'; }
+function pausePlay() { if (!P) return; P.playing = false; stopNarration(); updatePlayBtn(); }
+$('c-play').onclick = () => {
+  if (!P) return;
+  if (P.ended) { P.playing = true; go(0); return; }
+  if (P.playing) pausePlay(); else { P.playing = true; updatePlayBtn(); narrate(); }
+};
+$('c-next').onclick = () => { if (P && !P.ended) next(); };
+$('c-prev').onclick = () => { if (!P) return; if (P.ended) go(P.story.scenes.length - 1); else go(P.idx - 1); };
+function closePlayer() { stopNarration(); P = null; releaseWakeLock(); $('player').classList.remove('open'); $('scene').innerHTML = ''; }
+$('c-close').onclick = closePlayer;
+$('e-again').onclick = () => { P.playing = true; go(0); };
+$('e-shelf').onclick = () => { closePlayer(); renderShelf(); };
+$('e-new').onclick = () => { closePlayer(); openMaker(); };
+document.addEventListener('visibilitychange', () => {
+  // ほかのアプリに切り替えたら一時停止。戻ってきたら画面を消さない設定をかけ直す
+  if (document.hidden) { if (P && P.playing) pausePlay(); }
+  else if (P) requestWakeLock();
+});
+
+// ===== 紙芝居の間は画面を消さない =====
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return; // 使えない端末では何もしない
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { wakeLock = null; }
+}
+function releaseWakeLock() { if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; } }
+
+// ===== 設定 =====
+$('open-settings').onclick = () => {
+  $('s-voice').checked = settings.voice; $('s-auto').checked = settings.auto; $('s-sound').checked = settings.sound;
+  $('s-rate').value = String(settings.rate);
+  if (!$('s-rate').value) $('s-rate').value = '0.95';
+  $('settings').classList.add('open'); window.scrollTo(0, 0);
+};
+$('s-save').onclick = () => {
+  settings = { voice: $('s-voice').checked, auto: $('s-auto').checked, sound: $('s-sound').checked, rate: Number($('s-rate').value) };
+  save(KEY_SET, settings);
+  $('settings').classList.remove('open');
+};
+$('s-close').onclick = () => $('settings').classList.remove('open');
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || P || mk) return; // 紙芝居中・お話づくり中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+renderShelf();
+</script>
+</body>
+</html>
