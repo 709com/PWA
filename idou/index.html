@@ -1,0 +1,238 @@
+<!doctype html>
+<!-- このファイルは「移動のふり返り」の本体です。ホームページで公開している「現在地（最寄駅）」の記録を、ボタンを押したときに過去7日分読み込み、日ごとの駅・よく行った駅・区内にいた割合を表にします。 -->
+<!-- こちらから送るのは日付だけです。読み込んだ結果はiPhoneの中（localStorage）に保存し、電波がなくても見られます。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>移動のふり返り</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="移動ログ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#4b5fb0">
+<style>
+  :root { --bg:#f3f5fb; --card:#fff; --text:#1c2133; --sub:#5b6178; --accent:#4b5fb0; --accent-soft:#e3e7f6; --line:#dde1ee; --danger:#c8372d; --in:#2f8f5b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12141c; --card:#1c1f2b; --text:#e9ebf3; --sub:#9da2b8; --accent:#8b9ce6; --accent-soft:#252b45; --line:#2b3042; --danger:#ef6b61; --in:#5cc08a; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  h1 { font-size:1.3rem; margin:4px 0 10px; }
+  h2 { font-size:1rem; margin:0 0 8px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .info { background:var(--accent-soft); border-radius:12px; padding:10px 12px; font-size:.84rem; margin-bottom:10px; }
+  #load { width:100%; background:var(--accent); color:#fff; border-radius:14px; padding:15px; font-size:1.1rem; font-weight:700; }
+  #load:disabled { opacity:.5; }
+  .status { font-size:.85rem; color:var(--sub); margin:8px 0 0; }
+  .status.err { color:var(--danger); }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th { text-align:left; font-size:.78rem; color:var(--sub); font-weight:600; padding:4px; border-bottom:1px solid var(--line); }
+  td { padding:7px 4px; border-bottom:1px solid var(--line); vertical-align:top; word-break:break-word; }
+  tr:last-child td { border-bottom:none; }
+  td.d { white-space:nowrap; font-weight:600; }
+  td.num, th.num { text-align:right; white-space:nowrap; }
+  .in { color:var(--in); font-weight:700; }
+  .t { color:var(--sub); font-size:.78rem; }
+  .none { color:var(--sub); }
+  .big { font-size:1.8rem; font-weight:700; color:var(--in); }
+  .bar { height:10px; background:var(--accent-soft); border-radius:99px; overflow:hidden; margin:6px 0; }
+  .bar div { height:100%; background:var(--in); }
+  .note { font-size:.78rem; color:var(--sub); margin:8px 0 0; }
+  .empty { color:var(--sub); text-align:center; padding:10px 0; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <h1>🚃 移動のふり返り</h1>
+
+  <section>
+    <div class="info">
+      ホームページで公開している「現在地（最寄駅）」の記録を読み込みます。<br>
+      <b>こちらから送るのは日付だけ</b>で、名前や位置などの個人情報は送りません。読み込んだ結果はこのiPhoneの中に保存し、電波がなくても見られます。
+    </div>
+    <button id="load">過去7日分を読み込む</button>
+    <p class="status" id="status"></p>
+  </section>
+
+  <div id="out"></div>
+  <footer>版 <span id="ver"></span> ・ 読み込み先：takahamanaoki.com（公開データ）</footer>
+</main>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const API = 'https://takahamanaoki.com/wp-json/genzaichi/v1/data';   // 公開データ（GETで日付だけを渡す）
+const KEY_DATA = 'idou:data';   // 読み込んだ結果 { fetchedAt, from, to, days:{ '2026-11-13':[{name,lat,lon,from,to}] } }
+const DAYS = 7;
+// 文京区内の駅（出典：リポジトリ内 wordpress/genzaichi/bunkyo.json。国土数値情報 鉄道データ2024年版を加工）。並びは [駅名, 緯度, 経度]
+const BUNKYO = [['水道橋', 35.70285, 139.75442], ['湯島', 35.70679, 139.76998], ['本郷三丁目', 35.70716, 139.76042], ['後楽園', 35.70787, 139.75142],
+  ['春日', 35.70925, 139.75264], ['江戸川橋', 35.70929, 139.73413], ['茗荷谷', 35.7172, 139.7369], ['根津', 35.71733, 139.76575],
+  ['東大前', 35.71811, 139.75783], ['護国寺', 35.71918, 139.72745], ['白山', 35.72155, 139.7523], ['本駒込', 35.72441, 139.7538],
+  ['千駄木', 35.72599, 139.76337], ['千石', 35.72796, 139.74474]];
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+const ymd = (d) => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+const parse = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const label = (s) => { const d = parse(s); return (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）'; };
+function fmtDate(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
+
+// 区内の駅か：駅名が同じで、位置も1km以内（同じ名前の駅が他の地域にもあるため）
+function inBunkyo(e) {
+  return BUNKYO.some(([n, la, lo]) => n === e.name && Math.abs(la - Number(e.lat)) < 0.01 && Math.abs(lo - Number(e.lon)) < 0.012);
+}
+
+// ===== 読み込み（日付だけを付けて、公開データを受け取る） =====
+async function getDay(date) {
+  const res = await fetch(API + '?date=' + encodeURIComponent(date), { method: 'GET', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if (!j || !Array.isArray(j.entries) || !Array.isArray(j.dates)) throw new Error('format');
+  return j;
+}
+function clean(entries) {
+  return entries.filter((e) => e && typeof e.name === 'string')
+    .map((e) => ({ name: String(e.name).slice(0, 40), lat: Number(e.lat), lon: Number(e.lon), from: String(e.from || ''), to: String(e.to || '') }));
+}
+$('load').onclick = async () => {
+  const st = $('status');
+  $('load').disabled = true; st.className = 'status'; st.textContent = '読み込み中…';
+  try {
+    const today = new Date();
+    const want = [];
+    for (let i = DAYS - 1; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); want.push(ymd(d)); }
+    const days = {};
+    // まず今日の分を読み、記録のある日の一覧（dates）を受け取る
+    const first = await getDay(want[DAYS - 1]);
+    const have = new Set(first.dates);
+    // ※ 記録のない日を指定すると、サイトは最新の日の記録を返すので、日付が一致したものだけを使う
+    for (const d of want) {
+      if (!have.has(d)) { days[d] = []; continue; }
+      const j = d === first.date ? first : await getDay(d);
+      days[d] = j.date === d ? clean(j.entries) : [];
+    }
+    const data = { fetchedAt: Date.now(), from: want[0], to: want[DAYS - 1], days };
+    save(KEY_DATA, data);
+    render(data);
+    st.textContent = '読み込みました（' + fmtDate(data.fetchedAt) + '）。この結果はiPhoneの中に保存しました。';
+  } catch (e) {
+    st.className = 'status err';
+    st.textContent = '読み込めませんでした。電波がないか、サイト側がこのアプリからの読み込みを受け付けていない可能性があります。' +
+      (load(KEY_DATA, null) ? '下の表は前回保存した結果です。' : '');
+  } finally {
+    $('load').disabled = false;
+  }
+};
+
+// ===== 表にする =====
+function render(data) {
+  const out = $('out'); out.innerHTML = '';
+  if (!data || !data.days) { out.append(el('p', 'empty', 'まだ読み込んでいません。上のボタンを押してください。')); return; }
+  const dates = Object.keys(data.days).sort();
+  const all = dates.flatMap((d) => data.days[d].map((e) => ({ ...e, date: d })));
+
+  // 1) 区内にいた割合
+  const s1 = el('section');
+  s1.append(el('h2', '', '区内（文京区の14駅）にいた割合'));
+  const inCount = all.filter(inBunkyo).length;
+  if (all.length) {
+    s1.append(el('div', 'big', pct(inCount, all.length) + '%'));
+    const bar = el('div', 'bar'); const fill = el('div'); fill.style.width = pct(inCount, all.length) + '%'; bar.append(fill); s1.append(bar);
+    s1.append(el('div', 't', label(data.from) + '〜' + label(data.to) + '：記録 ' + all.length + '件のうち、区内の駅 ' + inCount + '件'));
+  } else s1.append(el('p', 'none', 'この7日間の記録はありません。'));
+  s1.append(el('p', 'note', '割合は、記録（同じ駅が続いたものは1件にまとめたもの）の件数で数えています。いた時間の長さは考えていません。区内の駅は、ホームページの地図と同じ14駅です。'));
+  out.append(s1);
+
+  // 2) 日ごとに回った駅
+  const s2 = el('section');
+  s2.append(el('h2', '', '日ごとに回った駅'));
+  const t2 = el('table');
+  const h2 = el('tr'); h2.append(el('th', '', '日付'), el('th', '', '回った駅（時刻順）'), el('th', 'num', '区内')); t2.append(h2);
+  for (const d of dates.slice().reverse()) {
+    const es = data.days[d];
+    const tr = el('tr');
+    tr.append(el('td', 'd', label(d)));
+    const td = el('td');
+    if (!es.length) td.append(el('span', 'none', '記録なし'));
+    es.forEach((e, i) => {
+      if (i) td.append(document.createTextNode(' → '));
+      td.append(el('span', inBunkyo(e) ? 'in' : '', e.name));
+      td.append(el('span', 't', '（' + (e.from === e.to ? e.from : e.from + '〜' + e.to) + '）'));
+    });
+    tr.append(td);
+    const n = es.filter(inBunkyo).length;
+    tr.append(el('td', 'num', es.length ? pct(n, es.length) + '%' : '―'));
+    t2.append(tr);
+  }
+  s2.append(t2);
+  s2.append(el('p', 'note', '緑色の駅名は区内の駅です。時刻は30分単位にそろえたものです。'));
+  out.append(s2);
+
+  // 3) よく行った駅の上位
+  const s3 = el('section');
+  s3.append(el('h2', '', 'よく行った駅（上位10）'));
+  const by = {};
+  for (const e of all) {
+    const k = e.name + (inBunkyo(e) ? '' : '|' + e.lat.toFixed(3) + ',' + e.lon.toFixed(3));
+    by[k] = by[k] || { name: e.name, inb: inBunkyo(e), days: new Set(), n: 0 };
+    by[k].days.add(e.date); by[k].n++;
+  }
+  const rank = Object.values(by).sort((a, b) => b.days.size - a.days.size || b.n - a.n || a.name.localeCompare(b.name)).slice(0, 10);
+  if (!rank.length) s3.append(el('p', 'none', '記録はありません。'));
+  else {
+    const t3 = el('table');
+    const h3 = el('tr'); h3.append(el('th', '', '順位'), el('th', '', '駅'), el('th', 'num', '行った日数'), el('th', 'num', '記録の件数')); t3.append(h3);
+    rank.forEach((r, i) => {
+      const tr = el('tr');
+      const name = el('td'); name.append(el('span', r.inb ? 'in' : '', r.name + '駅'));
+      tr.append(el('td', '', String(i + 1)), name, el('td', 'num', r.days.size + '日'), el('td', 'num', r.n + '件'));
+      t3.append(tr);
+    });
+    s3.append(t3);
+    s3.append(el('p', 'note', '「行った日数」の多い順、同じなら「記録の件数」の多い順です。'));
+  }
+  out.append(s3);
+  out.append(el('p', 'note', '保存してある結果：' + fmtDate(data.fetchedAt) + ' に読み込んだもの'));
+}
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render(load(KEY_DATA, null));
+</script>
+</body>
+</html>
