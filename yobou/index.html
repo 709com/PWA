@@ -374,7 +374,7 @@ $('import').onchange = async (e) => {
   if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
   for (const it of data.items) { if (it && it.id) await dbPut(it); }
   if (Array.isArray(data.kids)) {
-    data.kids.forEach((k) => { if (k && k.id && !kids.some((x) => x.id === k.id)) kids.push({ id: k.id, name: String(k.name || '子ども') }); });
+    data.kids.forEach((k) => { if (!k || !k.id) return; const name = String(k.name || '子ども').slice(0, 12); const cur = kids.find((x) => x.id === k.id); if (cur) cur.name = name; else kids.push({ id: String(k.id), name }); }); // 呼び名もファイルの内容にそろえる
     save(KEY_KIDS, kids); buildKidEdit();
   }
   await reload();

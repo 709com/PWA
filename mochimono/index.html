@@ -368,7 +368,7 @@ $('import').onchange = async (e) => {
     if (i >= 0) items[i] = clean; else items.push(clean);
   }
   if (Array.isArray(data.kids)) {
-    data.kids.forEach((k) => { if (k && k.id && !kids.some((x) => x.id === k.id)) kids.push({ id: k.id, name: String(k.name || '子ども') }); });
+    data.kids.forEach((k) => { if (!k || !k.id) return; const name = String(k.name || '子ども').slice(0, 12); const cur = kids.find((x) => x.id === k.id); if (cur) cur.name = name; else kids.push({ id: String(k.id), name }); }); // 呼び名もファイルの内容にそろえる
     save(KEY_KIDS, kids); buildKidEdit();
   }
   save(KEY_ITEMS, items);

@@ -22,7 +22,7 @@
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
-  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
   header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
   h1 { font-size:1.3rem; margin:0; }
   button { font:inherit; color:inherit; background:none; border:none; cursor:pointer; touch-action:manipulation; }
@@ -64,7 +64,7 @@
 
   .chores { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .chore { position:relative; background:var(--card); border:2px solid var(--line); border-radius:16px; padding:14px 8px; min-height:92px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; }
-  .chore b { font-size:1rem; word-break:break-word; }
+  .chore b { font-size:1rem; word-break:keep-all; overflow-wrap:anywhere; }
   .chore span { background:var(--accent-soft); color:var(--accent); border-radius:99px; padding:0 10px; font-weight:800; }
   .chore:active { transform:scale(.95); border-color:var(--accent); }
   .pop { position:fixed; pointer-events:none; font-size:1.6rem; font-weight:800; color:var(--star); text-shadow:0 1px 0 #fff, 0 2px 6px rgba(0,0,0,.25); animation:pop 1s ease-out forwards; z-index:30; }
@@ -87,8 +87,8 @@
   .log .x { flex:none; background:none; color:var(--sub); font-size:1.1rem; width:34px; height:34px; }
   .empty { color:var(--sub); text-align:center; padding:20px 0; }
 
-  #toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#2b1a20; color:#fff; border-radius:14px; padding:10px 12px 10px 16px;
-           display:none; align-items:center; gap:12px; z-index:40; box-shadow:0 4px 14px rgba(0,0,0,.3); max-width:calc(100% - 32px); }
+  #toast { position:fixed; left:16px; right:16px; bottom:calc(20px + env(safe-area-inset-bottom)); max-width:560px; margin:0 auto; background:#2b1a20; color:#fff; border-radius:14px; padding:10px 12px 10px 16px;
+           display:none; align-items:center; justify-content:space-between; gap:12px; z-index:40; box-shadow:0 4px 14px rgba(0,0,0,.3); }
   #toast.show { display:flex; }
   #toast span { min-width:0; }
   #toast button { flex:none; background:#fff; color:#2b1a20; border-radius:99px; padding:6px 12px; font-weight:700; }
@@ -353,9 +353,9 @@ function toast(msg, undoId) {
   toastTimer = setTimeout(() => $('toast').classList.remove('show'), 4000);
 }
 async function earn(c, ev) {
+  const r = ev.currentTarget.getBoundingClientRect(); // 押したボタンの位置（星を飛ばす場所）
   const e = entry('earn', c);
   try { await dbPut(e); } catch (err) { alert('保存できませんでした。'); return; }
-  const r = ev.currentTarget.getBoundingClientRect();
   const p = el('div', 'pop', '+' + c.pt + ' ⭐');
   p.style.left = (r.left + r.width / 2) + 'px'; p.style.top = (r.top + 10) + 'px';
   document.body.append(p); setTimeout(() => p.remove(), 1100);
@@ -428,7 +428,7 @@ $('def-save').onclick = () => {
   buildSettings(); render();
   alert('保存しました。');
 };
-$('open-settings').onclick = () => { buildSettings(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('open-settings').onclick = () => { $('toast').classList.remove('show'); buildSettings(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
 $('s-close').onclick = () => { $('settings').classList.remove('open'); render(); };
 
 // ===== 設定：バックアップ =====
@@ -452,10 +452,18 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'otetsudai' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の履歴を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  if (!confirm(data.items.length + '件の履歴を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。子どもの呼び名・お手伝い・ごほうびの一覧は、ファイルの内容になります。よろしいですか？')) return;
   for (const it of data.items) { if (it && it.id && it.kid && (it.kind === 'earn' || it.kind === 'spend') && Number.isFinite(it.pt)) await dbPut(it); }
-  const merge = (cur, add) => { (Array.isArray(add) ? add : []).forEach((x) => { if (x && x.id && !cur.some((c) => c.id === x.id)) cur.push(x); }); return cur; };
-  kids = merge(kids, data.kids); chores = merge(chores, data.chores); rewards = merge(rewards, data.rewards);
+  // 呼び名とマークは、同じ子どもはファイルの内容にそろえ、新しい子どもは足す
+  (Array.isArray(data.kids) ? data.kids : []).forEach((k) => {
+    if (!k || !k.id) return;
+    const v = { id: String(k.id), name: String(k.name || '子ども').slice(0, 12), ava: AVATARS.includes(k.ava) ? k.ava : AVATARS[0] };
+    const i = kids.findIndex((x) => x.id === v.id); if (i >= 0) kids[i] = v; else kids.push(v);
+  });
+  // お手伝い・ごほうびの一覧は、ファイルの内容に置きかえる
+  const clean = (list) => list.filter((x) => x && x.id && x.name).map((x) => ({ id: String(x.id), name: String(x.name).slice(0, 24), pt: Math.min(999, Math.max(1, parseInt(x.pt, 10) || 1)), for: x.for ? String(x.for) : '' }));
+  if (Array.isArray(data.chores)) chores = clean(data.chores);
+  if (Array.isArray(data.rewards)) rewards = clean(data.rewards);
   save(KEY_KIDS, kids); save(KEY_CHORES, chores); save(KEY_REWARDS, rewards);
   buildSettings();
   await reload();
