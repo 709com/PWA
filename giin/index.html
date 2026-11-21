@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- このファイルは「議員のタイマーと区の情報入口」の画面です。見た目は style.css、動きは app.js、リンクと電話番号は data.js に分けてあります。 -->
+<!-- 入力した内容は端末の中（localStorage）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 外部への通信を止める設定（コンテンツセキュリティポリシー）。このフォルダの中のファイルしか読み込めません。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="format-detection" content="telephone=no">
+<title>議員のタイマーと区の情報入口</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="議員タイマー">
+<meta name="theme-color" content="#2f3640">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <nav class="tabs" aria-label="画面の切り替え">
+    <button type="button" data-tab="timer" class="on">タイマー</button>
+    <button type="button" data-tab="joho">区の情報</button>
+    <button type="button" data-tab="denwa">電話番号</button>
+    <button type="button" data-tab="about">このアプリ</button>
+  </nav>
+</header>
+
+<div id="update" class="banner" hidden>
+  <span>新しい版があります。</span><button type="button" id="update-btn">更新する</button>
+</div>
+
+<main>
+<!-- ===== 画面1：タイマー ===== -->
+<section id="tab-timer" class="tab">
+  <div class="seg" role="group" aria-label="タイマーの種類">
+    <button type="button" data-kind="yk" class="on">予算・決算審査</button>
+    <button type="button" data-kind="hk">本会議（30分）</button>
+  </div>
+
+  <div class="timer-grid">
+    <div class="clock" id="clock">
+      <div class="phase" id="phase"></div>
+      <div class="lbl" id="remain-lbl">残り</div>
+      <div class="remain" id="remain" aria-live="off">00:00</div>
+      <div class="sub">
+        <span>使った時間 <b id="used">00:00</b></span>
+        <span>持ち時間 <b id="total">00:00</b></span>
+      </div>
+      <div class="status" id="status">止まっています</div>
+      <div class="btns">
+        <button type="button" id="btn-main" class="big primary">開始</button>
+        <button type="button" id="btn-reset" class="big">やり直し</button>
+      </div>
+      <div class="mode">
+        <span class="mode-lbl">数え方</span>
+        <div class="seg small" role="group" aria-label="数え方">
+          <button type="button" data-mode="flow">流しっぱなし</button>
+          <button type="button" data-mode="stop">答弁中は止める</button>
+        </div>
+      </div>
+      <p class="hint" id="mode-hint"></p>
+      <p class="hint" id="wake"></p>
+      <p class="notice" id="gap" hidden></p>
+    </div>
+
+    <div class="side" id="yk-side">
+      <details class="card" id="set-box">
+        <summary>持ち時間・残り時間を直す</summary>
+        <div class="row">
+          <label>持ち時間 <input id="in-total" type="number" inputmode="numeric" min="1" max="999" step="1"> 分</label>
+          <button type="button" id="btn-total">決める</button>
+        </div>
+        <div class="row">
+          <label>残り <input id="in-rem-m" type="number" inputmode="numeric" min="0" max="999" step="1"> 分</label>
+          <label><input id="in-rem-s" type="number" inputmode="numeric" min="0" max="59" step="1"> 秒</label>
+          <button type="button" id="btn-adjust">事務局の時計に合わせる</button>
+        </div>
+        <p class="hint">合わせた分は「合わせ直し」として記録に残ります。</p>
+      </details>
+
+      <div class="card">
+        <h2>款ごとの配分</h2>
+        <p class="hint">款をタップすると、いま質疑している款が切り替わります。</p>
+        <table class="kan" id="kan-table">
+          <thead><tr><th>款</th><th>予定</th><th>使った</th><th>差</th><th></th></tr></thead>
+          <tbody></tbody>
+          <tfoot></tfoot>
+        </table>
+        <div class="row">
+          <input id="in-kan" type="text" maxlength="20" placeholder="款の名前（例：総務費）" aria-label="款の名前">
+          <label><input id="in-plan" type="number" inputmode="numeric" min="0" max="999" step="1" aria-label="予定の分数"> 分</label>
+          <button type="button" id="btn-kan">足す</button>
+        </div>
+      </div>
+
+      <details class="card" id="log-box">
+        <summary>記録（いつ・どの款で・何分）</summary>
+        <div id="log"></div>
+        <div class="row">
+          <button type="button" id="btn-text">文字で表示する</button>
+          <button type="button" id="btn-copy" hidden>コピーする</button>
+        </div>
+        <textarea id="log-text" readonly hidden rows="10" aria-label="記録の文字"></textarea>
+        <p class="hint" id="copy-msg"></p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 画面2：区の情報入口 ===== -->
+<section id="tab-joho" class="tab" hidden>
+  <h1>区の情報入口</h1>
+  <p class="lead">文京区と文京区議会の公式サイトへの入口です。議員も区民も、同じ公開情報を見ることができます。リンク先を開くときは通信が必要です。</p>
+  <div id="links"></div>
+  <p class="hint" id="links-date"></p>
+</section>
+
+<!-- ===== 画面3：電話番号早見 ===== -->
+<section id="tab-denwa" class="tab" hidden>
+  <h1>電話番号早見</h1>
+  <p class="lead">区の公式サイトに公開されている各課の電話番号です。</p>
+  <input id="q" type="search" placeholder="課の名前や仕事で探す（例：保育、道路）" aria-label="課の名前で探す" autocomplete="off">
+  <p class="hint" id="q-count"></p>
+  <div id="denwa"></div>
+  <p class="hint" id="denwa-src"></p>
+</section>
+
+<!-- ===== このアプリについて ===== -->
+<section id="tab-about" class="tab" hidden>
+  <h1>このアプリについて</h1>
+  <div class="card">
+    <p><b>たかはまなおき個人が作成したものです。文京区議会の公式のものではありません。</b></p>
+    <p>本会議と予算・決算審査で持ち時間を管理するタイマーと、区の公開情報への入口をまとめたものです。</p>
+  </div>
+  <div class="card">
+    <h2>情報の扱い</h2>
+    <ul>
+      <li><b>このアプリは入力内容をどこにも送信しません。</b>入力した内容は、この端末の中だけに保存されます。</li>
+      <li>音と振動は出しません。</li>
+      <li>写真・PDF・音声などのファイルは取り込めません。撮影・録音・録画の機能もありません。</li>
+      <li>アクセス解析や外部の部品は使っていません。</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>通信なしで使えるか</h2>
+    <p id="offline" class="offline wait">確認しています…</p>
+    <button type="button" id="btn-offline" hidden>もう一度保存を試す</button>
+    <p class="hint">ホーム画面のアイコンとSafariは保存場所が別です。それぞれ、通信のある所で一度開いて「使えます」と出るのを確かめてください。</p>
+  </div>
+  <div class="card">
+    <h2>全データを消す</h2>
+    <p>タイマーの残り時間、款の配分、記録をすべて消します。端末を返すときに使います。元には戻せません。</p>
+    <button type="button" id="btn-wipe" class="danger">全データを消す</button>
+    <p class="hint" id="wipe-msg"></p>
+  </div>
+  <p class="hint">版 <span id="ver"></span></p>
+</section>
+</main>
+
+<footer class="foot">
+  <span id="foot-offline" class="dot wait">通信なしの準備：確認中</span>
+  <span>このアプリは入力内容をどこにも送信しません</span>
+  <span>個人作成・非公式　版 <span id="ver2"></span></span>
+</footer>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

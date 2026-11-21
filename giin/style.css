@@ -1,0 +1,117 @@
+/* このファイルは見た目（色・大きさ・並べ方）を決めています。会派や党派の色を使わない、灰色を基調にした中立の配色です。 */
+:root { --bg:#f3f4f6; --card:#fff; --text:#1f2329; --sub:#5a616b; --line:#d5d9df; --btn:#e7e9ed; --primary:#2f3640; --primary-t:#fff; --danger:#a3271f; --ok:#1f6b3a; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#15171a; --card:#20242a; --text:#eceef1; --sub:#a3aab5; --line:#363c45; --btn:#2c3138; --primary:#dfe3e8; --primary-t:#15171a; --danger:#f08a82; --ok:#7fd19b; }
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { -webkit-text-size-adjust:100%; }
+body { margin:0; background:var(--bg); color:var(--text); line-height:1.55;
+       font-family:-apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; font-size:16px; }
+button, input, textarea { font:inherit; color:inherit; }
+button { background:var(--btn); border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-height:44px; cursor:pointer; touch-action:manipulation; }
+button:active { opacity:.7; }
+input[type=number], input[type=text], input[type=search] { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; min-height:44px; font-size:16px; }
+input[type=number] { width:5.2em; text-align:right; }
+[hidden] { display:none !important; }
+
+/* 上のタブ */
+.top { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line);
+       padding:calc(6px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left)); }
+.tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; max-width:1200px; margin:0 auto; }
+.tabs button { padding:8px 2px; font-size:.95rem; white-space:nowrap; }
+.tabs button.on, .seg button.on { background:var(--primary); color:var(--primary-t); border-color:var(--primary); font-weight:700; }
+.tabs button.on::before, .seg button.on::before { content:"● "; font-size:.7em; vertical-align:middle; }
+
+main { max-width:1200px; margin:0 auto; padding:10px calc(10px + env(safe-area-inset-right)) 20px calc(10px + env(safe-area-inset-left)); }
+h1 { font-size:1.3rem; margin:6px 0; }
+h2 { font-size:1.05rem; margin:0 0 6px; }
+.lead { color:var(--sub); margin:0 0 12px; }
+.hint { color:var(--sub); font-size:.85rem; margin:6px 0 0; }
+.notice { border:2px dashed var(--text); border-radius:10px; padding:8px 10px; font-size:.9rem; margin:8px 0 0; text-align:left; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px; }
+.card ul { margin:0; padding-left:1.2em; }
+.card p { margin:0 0 8px; }
+.row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
+.row input[type=text] { flex:1 1 9em; min-width:0; }
+summary { cursor:pointer; font-weight:700; min-height:32px; }
+.banner { display:flex; gap:10px; align-items:center; justify-content:center; background:var(--primary); color:var(--primary-t); padding:8px; }
+.banner button { color:var(--text); }
+
+/* 切り替えボタン */
+.seg { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
+.seg.small { margin:0; flex:1; }
+.seg.small button { padding:6px 4px; min-height:40px; font-size:.9rem; }
+
+/* タイマー */
+.timer-grid { display:grid; gap:10px; grid-template-columns:1fr; align-items:start; }
+@media (min-width:900px) { .timer-grid.two { grid-template-columns:minmax(0, 1.15fr) minmax(0, 1fr); } }
+.clock { background:var(--card); border:3px solid var(--line); border-radius:16px; padding:12px; text-align:center; }
+.phase { min-height:2.2em; font-size:1.25rem; font-weight:800; letter-spacing:.05em; border-radius:10px; padding:4px 8px; }
+.lbl { color:var(--sub); font-size:1rem; margin-top:2px; }
+.remain { font-size:clamp(4.2rem, 23vw, 11.5rem); font-weight:700; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-.02em; margin:2px 0 6px; }
+@media (min-width:900px) { .two .remain { font-size:clamp(5rem, 13.5vw, 10.5rem); } }
+.sub { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; color:var(--sub); font-size:1.05rem; }
+.sub b { color:var(--text); font-size:1.35rem; font-variant-numeric:tabular-nums; }
+.status { font-weight:700; margin:8px 0; font-size:1.05rem; }
+.btns { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
+.big { min-height:64px; white-space:nowrap; padding:10px 6px; font-size:clamp(1rem, 4.6vw, 1.25rem); font-weight:700; border-radius:14px; }
+.primary { background:var(--primary); color:var(--primary-t); border-color:var(--primary); }
+.danger { color:var(--danger); border-color:var(--danger); font-weight:700; }
+.mode { display:flex; align-items:center; gap:8px; margin-top:10px; }
+.mode-lbl { color:var(--sub); font-size:.9rem; white-space:nowrap; }
+
+/* 残り時間の知らせ（色だけに頼らず、枠の形と文字でも分かるようにする） */
+.clock.p5 { border-color:#8a6a00; border-style:dashed; background:#fff4c2; color:#2e2400; }
+.clock.p5 .phase { background:#8a6a00; color:#fff; }
+.clock.p1 { border-color:#a34300; border-style:double; border-width:8px; background:#ffd9b3; color:#3a1a00; }
+.clock.p1 .phase { background:#a34300; color:#fff; }
+.clock.over { border-color:#5c0f0a; border-width:8px; background:#b3261e; color:#fff; }
+.clock.over .phase { background:#fff; color:#8a1a14; }
+.clock.p5 .lbl, .clock.p5 .sub, .clock.p5 .hint, .clock.p5 .mode-lbl, .clock.p5 .sub b,
+.clock.p1 .lbl, .clock.p1 .sub, .clock.p1 .hint, .clock.p1 .mode-lbl, .clock.p1 .sub b,
+.clock.over .lbl, .clock.over .sub, .clock.over .hint, .clock.over .mode-lbl, .clock.over .sub b { color:inherit; }
+.clock.p5 button, .clock.p1 button, .clock.over button { color:#1f2329; background:#f1f2f4; border-color:#1f2329; }
+.clock.p5 button.on, .clock.p1 button.on, .clock.over button.on, .clock.p5 .primary, .clock.p1 .primary, .clock.over .primary { background:#1f2329; color:#fff; }
+.clock.over .notice { border-color:#fff; }
+
+/* 款の表 */
+table.kan { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.kan th, .kan td { padding:8px 4px; border-bottom:1px solid var(--line); text-align:right; font-size:.95rem; }
+.kan th:first-child, .kan td:first-child { text-align:left; }
+.kan tbody tr { cursor:pointer; }
+.kan tr.cur td { background:var(--btn); font-weight:700; }
+.kan tr.cur td:first-child::before { content:"▶ "; }
+.kan .del { min-height:36px; padding:2px 10px; }
+.kan tfoot td { font-weight:700; border-bottom:none; }
+.plus { font-weight:700; }
+#log { max-height:16em; overflow:auto; font-size:.9rem; margin-top:6px; font-variant-numeric:tabular-nums; }
+#log div { border-bottom:1px solid var(--line); padding:4px 0; }
+#log .day { font-weight:700; border-bottom:2px solid var(--line); margin-top:6px; }
+textarea { width:100%; margin-top:8px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; font-size:.9rem; }
+
+/* リンク集・電話番号 */
+.grp { font-size:.95rem; color:var(--sub); margin:14px 0 6px; font-weight:700; }
+#links { display:grid; gap:8px; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+#links .grp { grid-column:1 / -1; margin-bottom:0; }
+a.link { display:block; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; color:inherit; text-decoration:none; }
+a.link b { font-size:1.1rem; text-decoration:underline; }
+a.link b::after { content:" ↗"; }
+a.link small { display:block; color:var(--sub); font-size:.9rem; margin-top:2px; }
+#q { width:100%; }
+#denwa { display:grid; gap:8px; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+#denwa .grp { grid-column:1 / -1; margin-bottom:0; }
+.ka { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; }
+.ka b { font-size:1.05rem; }
+.ka a { display:inline-block; font-size:1.25rem; font-weight:700; color:inherit; font-variant-numeric:tabular-nums; padding:4px 0; margin-right:6px; }
+.ka .memo { color:var(--sub); font-size:.85rem; margin-right:10px; }
+.ka small { display:block; color:var(--sub); font-size:.82rem; }
+
+/* 下の帯 */
+.foot { display:flex; flex-wrap:wrap; gap:4px 14px; justify-content:center; color:var(--sub); font-size:.78rem; border-top:1px solid var(--line);
+        padding:8px 10px calc(8px + env(safe-area-inset-bottom)); }
+.offline { font-weight:700; }
+.offline.ok, .dot.ok { color:var(--ok); }
+.offline.ng, .dot.ng { color:var(--danger); }
+.dot.ok::before, .offline.ok::before { content:"✓ "; }
+.dot.ng::before, .offline.ng::before { content:"✕ "; }
+.dot.wait::before, .offline.wait::before { content:"… "; }
