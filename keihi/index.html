@@ -163,7 +163,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_CATS = 'keihi:cats';     // 区分の一覧（利用者が作る）
 const KEY_MONTH = 'keihi:month';   // 最後に見ていた月
 const DEFAULT_CATS = ['区分A', '区分B', '未分類'];
@@ -202,9 +202,10 @@ function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 function fillSelect(sel, values) { sel.innerHTML = ''; values.forEach((v) => sel.add(new Option(v, v))); }
 // 全角の数字やカンマ・「円」が混じっていても金額として読む
+// 小数点・マイナス・「万」などが入っているときは読まない（1.5→15円のような読み違いを防ぐ）
 function parseAmount(s) {
-  const t = String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[^0-9]/g, '');
-  return t ? Math.min(Number(t), 999999999) : NaN;
+  const t = String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[,，、\s　円¥￥]/g, '');
+  return /^[0-9]+$/.test(t) ? Math.min(Number(t), 999999999) : NaN;
 }
 function share(file, name) {
   if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(() => {});
@@ -336,9 +337,11 @@ $('e-file').onchange = async (e) => {
 };
 $('e-photo-del').onclick = () => { photo = null; showPhoto(); };
 $('e-amount').addEventListener('blur', () => { const n = parseAmount($('e-amount').value); if (!isNaN(n)) $('e-amount').value = String(n); });
+let saving = false;   // 「保存」の連打で同じ記録が2件できないようにする
 $('e-save').onclick = async () => {
+  if (saving) return;
   const amount = parseAmount($('e-amount').value);
-  if (isNaN(amount)) { alert('金額を数字で入れてください。'); return; }
+  if (isNaN(amount)) { alert('金額を数字で入れてください（円単位・小数点やマイナスはなし）。'); return; }
   if (!$('e-date').value) { alert('日付を入れてください。'); return; }
   const now = Date.now();
   const it = editing ? { ...editing } : { id: 'k' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
@@ -349,7 +352,9 @@ $('e-save').onclick = async () => {
   it.memo = $('e-memo').value.slice(0, 500);
   it.photo = photo;
   it.updatedAt = now;
-  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  saving = true;
+  try { await dbPut(it); } catch (e) { saving = false; alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  saving = false;
   closeSheet('edit');
   if (it.date.slice(0, 7) !== month) { month = it.date.slice(0, 7); save(KEY_MONTH, month); }
   reload();
@@ -437,14 +442,19 @@ $('import').onchange = async (e) => {
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'keihi' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
   if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  let skipped = 0;
   for (const it of data.items) {
-    if (!it || !it.id) continue;
-    const photo = typeof it.photo === 'string' && it.photo.startsWith('data:image/') ? dataURLToBlob(it.photo) : null;
-    await dbPut({ ...it, photo });
+    // 日付・金額が正しくない記録は入れない（一覧が表示できなくなるのを防ぐ）
+    if (!it || !it.id || typeof it.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(it.date) || typeof it.amount !== 'number' || !(it.amount >= 0)) { skipped++; continue; }
+    let photo = null;
+    try { photo = typeof it.photo === 'string' && it.photo.startsWith('data:image/') ? dataURLToBlob(it.photo) : null; } catch (e) { photo = null; }
+    const now = Date.now();
+    await dbPut({ ...it, photo, payee: String(it.payee || ''), category: String(it.category || '未分類'), memo: String(it.memo || ''),
+      createdAt: Number(it.createdAt) || now, updatedAt: Number(it.updatedAt) || now });
   }
   if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
   await reload();
-  alert('読み込みました。');
+  alert('読み込みました。' + (skipped ? '（内容が正しくない記録' + skipped + '件は読み込みませんでした）' : ''));
 };
 async function showUsage() {
   if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }

@@ -188,7 +188,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_KIDS = 'kozukai:kids';   // 子どもの呼び名
 const KEY_VIEW = 'kozukai:view';   // 最後に選んだ子ども
 const KID_COLORS = ['#e0533d', '#2f7fd0', '#2f9e6b', '#c9861a', '#8a5cd0', '#c2417f', '#4a8a9a', '#7a7a2a'];
@@ -345,6 +345,9 @@ $('e-save').onclick = async () => {
   it.kid = $('e-kid').value;
   it.type = etype;
   it.date = $('e-date').value;
+  // 「-500」「1.5」などは別の金額に読み替えず、入れ直してもらう（入金・出金はボタンで分けるため、金額は正の整数だけ）
+  const rawAmt = $('e-amt').value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，円\s]/g, '');
+  if (rawAmt && !/^\d+$/.test(rawAmt)) { alert('金額は、マイナスや小数点を使わずに円の数字だけで入れてください（出金は「出金」ボタンから入れます）。'); return; }
   it.amount = parseYen($('e-amt').value);
   it.memo = $('e-memo').value.trim().slice(0, 40);
   it.updatedAt = now;

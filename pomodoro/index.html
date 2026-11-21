@@ -108,7 +108,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_SETTINGS = 'pomodoro:settings';
 const KEY_STATE = 'pomodoro:state';
 const $ = (id) => document.getElementById(id);
@@ -120,11 +120,13 @@ function load(key, fallback) {
 }
 function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
 
-function dayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function dayKey(t) { const d = t === undefined ? new Date() : new Date(t); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 
 let settings = load(KEY_SETTINGS, { work: 25, short: 5, long: 15, sound: true });
 // 状態：今の段階、その長さ、経過済みの時間、動き出した時刻、今日の完了数
 let state = load(KEY_STATE, { phase: 'work', durationMs: 25 * 60000, accMs: 0, startedAt: null, day: dayKey(), done: 0 });
+// 保存内容が壊れていたら最初の状態に戻す
+if (!NAMES[state.phase] || !(state.durationMs > 0) || !(state.accMs >= 0) || !(state.done >= 0)) state = { phase: 'work', durationMs: settings.work * 60000, accMs: 0, startedAt: null, day: dayKey(), done: 0 };
 
 const running = () => state.startedAt !== null;
 const elapsed = () => state.accMs + (running() ? Date.now() - state.startedAt : 0);
@@ -155,7 +157,9 @@ function nextPhase() {
 function finishPhase(closedWhile) {
   const endedAt = state.startedAt + (state.durationMs - state.accMs);
   const finished = state.phase;
-  if (finished === 'work') state.done++;
+  // 日付が変わっていたら先に完了数を0に戻し、終わった時刻が今日のときだけ数える（前日の分を今日に数えない・今日の分を消さない）
+  checkDay();
+  if (finished === 'work' && dayKey(endedAt) === state.day) state.done++;
   const next = nextPhase();
   setPhase(next);
   updateBadge();

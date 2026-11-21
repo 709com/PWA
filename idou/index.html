@@ -71,7 +71,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const API = 'https://takahamanaoki.com/wp-json/genzaichi/v1/data';   // 公開データ（GETで日付だけを渡す）
 const KEY_DATA = 'idou:data';   // 読み込んだ結果 { fetchedAt, from, to, days:{ '2026-11-13':[{name,lat,lon,from,to}] } }
 const DAYS = 7;
@@ -192,7 +192,8 @@ function render(data) {
   s3.append(el('h2', '', 'よく行った駅（上位10）'));
   const by = {};
   for (const e of all) {
-    const k = e.name + (inBunkyo(e) ? '' : '|' + e.lat.toFixed(3) + ',' + e.lon.toFixed(3));
+    // 保存し直すと位置のない記録は null になるため、Number() で数にしてから使う
+    const k = e.name + (inBunkyo(e) ? '' : '|' + Number(e.lat).toFixed(3) + ',' + Number(e.lon).toFixed(3));
     by[k] = by[k] || { name: stationName(e), inb: inBunkyo(e), days: new Set(), n: 0 };
     by[k].days.add(e.date); by[k].n++;
   }

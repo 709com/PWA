@@ -151,7 +151,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_POINTS = 'checklist:points';   // 確認項目の一覧（利用者が編集できる）
 const DEFAULT_POINTS = [
   { name: '予算額', hint: '総額と内訳は書かれているか' },
@@ -215,7 +215,7 @@ function tally(it) {
   const { now, old } = namesFor(it);
   const all = [...now, ...old];
   const t = { total: all.length, ok: 0, ask: 0, na: 0, none: 0 };
-  all.forEach((n) => { const s = (it.rows[n] || {}).s; if (s && t[s] !== undefined) t[s]++; else t.none++; });
+  all.forEach((n) => { const s = ((it.rows || {})[n] || {}).s; if (s && t[s] !== undefined) t[s]++; else t.none++; });
   return t;
 }
 const tallyText = (t) => t.total + '項目中　確認 ' + t.ok + '・聞きたい ' + t.ask + '・対象外 ' + t.na + '・未 ' + t.none;
@@ -431,7 +431,7 @@ $('import').onchange = async (e) => {
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'checklist' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
   if (!confirm(data.items.length + '件の資料を読み込みます。同じ資料は、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  for (const it of data.items) { if (it && it.id) { if (!it.rows || typeof it.rows !== 'object') it.rows = {}; await dbPut(it); } }
   if (Array.isArray(data.points) && data.points.length) {
     const names = new Set(points.map((p) => p.name));
     data.points.forEach((p) => { if (p && p.name && !names.has(p.name)) { points.push({ name: p.name, hint: p.hint || '' }); names.add(p.name); } });

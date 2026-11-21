@@ -130,7 +130,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_DRAFT = 'onseimemo:draft';   // 保存前の書きかけ（アプリを閉じても消えないように）
 const KEY_FILTER = 'onseimemo:filter'; // 最後に選んだタグの絞り込み
 const $ = (id) => document.getElementById(id);
@@ -180,12 +180,15 @@ function onDraft() {
 }
 $('text').addEventListener('input', onDraft);
 $('tags').addEventListener('input', onDraft);
+let saving = false;   // 「保存」の連打で同じメモが2件できないようにする
 $('save').onclick = async () => {
   const text = $('text').value.trim();
-  if (!text) return;
+  if (!text || saving) return;
+  saving = true;
   const now = Date.now();
   const m = { id: 'm' + now + Math.random().toString(36).slice(2, 6), text, tags: parseTags($('tags').value), createdAt: now, updatedAt: now };
-  try { await dbPut(m); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  try { await dbPut(m); } catch (e) { saving = false; alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  saving = false;
   $('text').value = '';   // タグは続けて使えるよう残す
   onDraft();
   $('saved').style.display = 'block';
@@ -319,7 +322,12 @@ $('import').onchange = async (e) => {
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'onseimemo' || !Array.isArray(data.memos)) { alert('このアプリのバックアップファイルではありません。'); return; }
   if (!confirm(data.memos.length + '件のメモを読み込みます。同じメモは、ファイルの内容で上書きします（ほかのメモは消えません）。よろしいですか？')) return;
-  for (const m of data.memos) { if (m && m.id && typeof m.text === 'string') await dbPut({ ...m, tags: Array.isArray(m.tags) ? m.tags : [] }); }
+  for (const m of data.memos) {
+    if (!m || !m.id || typeof m.text !== 'string') continue;
+    // 日時がない・壊れているメモは、読み込んだ時刻にする（一覧に NaN と出ないように）
+    const now = Date.now(), c = Number(m.createdAt) || now;
+    await dbPut({ ...m, tags: Array.isArray(m.tags) ? m.tags.map(String) : [], createdAt: c, updatedAt: Number(m.updatedAt) || c });
+  }
   await reload();
   alert('読み込みました。');
 };
