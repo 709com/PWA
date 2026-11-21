@@ -137,7 +137,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_SETTINGS = 'timer:settings';
 const KEY_STATE = 'timer:state';
 const $ = (id) => document.getElementById(id);
@@ -174,8 +174,10 @@ function render() {
   const rem = state.durationMs - el;
   $('elapsed').textContent = fmt(el);
   // 残り時間は切り上げ表示（「00:00」になった瞬間が時間切れ）
-  $('remain').textContent = rem > 0 ? fmt(rem + 999) : '+' + fmt(-rem);
-  $('remain-lbl').textContent = rem > 0 ? '残り' : '超過';
+  // 時間をまだ選んでいないとき（持ち時間0）は「残り 00:00」と出す（「超過」と誤表示しない）
+  const over = state.durationMs > 0 && rem <= 0;
+  $('remain').textContent = over ? '+' + fmt(-rem) : fmt(Math.max(0, rem) + (rem > 0 ? 999 : 0));
+  $('remain-lbl').textContent = over ? '超過' : '残り';
 
   let phase = '';
   if (active() || state.durationMs > 0) {
