@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 現在地（最寄駅）表示
  * Description: iPhoneのショートカットから送られた現在地をもとに最寄駅を計算し、地図と文字で表示します。正確な位置は保存せず、駅名と時刻だけを過去7日分保存します。表示したいページに [genzaichi] と書いてください。
- * Version: 1.4.0
+ * Version: 1.5.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // WordPressの外から直接開かれたときは何もしない
 }
 
-define('GZ_VERSION', '1.4.0');
+define('GZ_VERSION', '1.5.0');
 define('GZ_KEEP_DAYS', 7);       // 履歴を残す日数
 define('GZ_MIN_INTERVAL', 20);   // 連続送信を受け付けない秒数
 
@@ -34,6 +34,7 @@ function gz_defaults() {
         'schedule'    => '',        // F4 予定の表示（1行に「2026-11-20 10:00-17:00 表示する文」）
         'show_stats'  => 0,         // F2・F3 7日間の集計（区内の割合、よく行く駅）を出すか
         'show_posts'  => 0,         // F5 その日のブログ記事へのリンクを出すか
+        'freeze_dates' => '2027-04-25', // 投票日（1行に1日）。その日は0時から終わりまで、記録も表示の変化も一切しない
     );
 }
 function gz_settings() {
@@ -88,8 +89,26 @@ function gz_history() {
 }
 
 // ===== 時刻（WordPressの設定のタイムゾーンで扱う） =====
-function gz_now() {
+// ===== 投票日の停止（高浜さんの指示・厳守） =====
+// 投票日は、日付が変わった0時からその日の終わりまで、記録・表示の変化・設定の変更を一切しない。
+// 管理画面のどの設定でも解除できない。表示は前日23時59分59秒の時点のまま止める。
+function gz_real_now() {
     return new DateTimeImmutable('now', wp_timezone());
+}
+function gz_freeze_list() {
+    $s = array_merge(array('freeze_dates' => '2027-04-25'), (array) get_option('gz_settings', array()));
+    preg_match_all('/\d{4}-\d{2}-\d{2}/', (string) $s['freeze_dates'], $m);
+    return $m[0];
+}
+function gz_is_freeze() {
+    return in_array(gz_real_now()->format('Y-m-d'), gz_freeze_list(), true);
+}
+function gz_now() {
+    $now = gz_real_now();
+    if (gz_is_freeze()) {
+        return $now->setTime(0, 0, 0)->modify('-1 second'); // 表示を前日の終わりの時点で止める
+    }
+    return $now;
 }
 // 表示用の時刻は「00分」か「30分」の二段階にそろえる
 // ・毎時ちょうどの前後5分以内（例：14:55〜15:05）に届いたもの → 15:00（自動実行を想定）
@@ -300,6 +319,10 @@ add_action('rest_api_init', function () {
 });
 
 function gz_rest_update(WP_REST_Request $req) {
+    if (gz_is_freeze()) {
+        // 投票日は、合言葉の確認もせず、何も記録しない
+        return array('ok' => false, 'message' => '投票日のため記録しませんでした。ホームページの表示も変えません。');
+    }
     $s = gz_settings();
     if ($s['key_hash'] === '') {
         return new WP_Error('gz_no_key', '合言葉が管理画面で設定されていません。', array('status' => 403));
@@ -417,6 +440,10 @@ add_action('admin_post_gz_save', function () {
         wp_die('権限がありません。');
     }
     check_admin_referer('gz_save');
+    if (gz_is_freeze()) { // 投票日は設定を変えない
+        wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => 'frozen'), admin_url('options-general.php')));
+        exit;
+    }
     $s = gz_settings();
     $newKey = isset($_POST['gz_key']) ? trim(wp_unslash($_POST['gz_key'])) : '';
     $error = '';
@@ -439,6 +466,8 @@ add_action('admin_post_gz_save', function () {
     $s['schedule']    = sanitize_textarea_field(wp_unslash($_POST['gz_schedule'] ?? ''));
     $s['show_stats']  = empty($_POST['gz_show_stats']) ? 0 : 1;
     $s['show_posts']  = empty($_POST['gz_show_posts']) ? 0 : 1;
+    preg_match_all('/\d{4}-\d{2}-\d{2}/', (string) wp_unslash($_POST['gz_freeze_dates'] ?? ''), $fd);
+    $s['freeze_dates'] = implode("\n", array_unique($fd[0]));
     update_option('gz_settings', $s, false);
     wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => $error ?: 'saved'), admin_url('options-general.php')));
     exit;
@@ -449,6 +478,10 @@ add_action('admin_post_gz_clear', function () {
         wp_die('権限がありません。');
     }
     check_admin_referer('gz_clear');
+    if (gz_is_freeze()) { // 投票日は履歴も消さない（表示が変わるため）
+        wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => 'frozen'), admin_url('options-general.php')));
+        exit;
+    }
     update_option('gz_points', array(), false);
     wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => 'cleared'), admin_url('options-general.php')));
     exit;
@@ -466,6 +499,7 @@ function gz_admin_page() {
         'saved'   => array('success', '保存しました。'),
         'cleared' => array('success', '履歴をすべて消しました。'),
         'short'   => array('error', '合言葉は12文字以上にしてください（合言葉以外の設定は保存しました）。'),
+        'frozen'  => array('error', '今日は投票日のため、設定の変更や履歴の消去はできません。明日以降に行ってください。'),
     );
     ?>
     <div class="wrap">
@@ -474,6 +508,9 @@ function gz_admin_page() {
             <div class="notice notice-<?php echo esc_attr($messages[$msg][0]); ?>"><p><?php echo esc_html($messages[$msg][1]); ?></p></div>
         <?php endif; ?>
 
+        <?php if (gz_is_freeze()) : ?>
+            <div class="notice notice-warning"><p><strong>今日は投票日です。</strong>0時から今日の終わりまで、位置の記録・ホームページの表示の変化・設定の変更を一切止めています（解除はできません）。</p></div>
+        <?php endif; ?>
         <h2>いまの状態</h2>
         <p>ホームページの表示：<strong><?php echo esc_html(gz_status_text()); ?></strong></p>
         <p>最後の記録：<?php echo $last ? esc_html($last['d'] . ' ' . gz_time_label($last['t2']) . ' ' . $last['n'] . '駅') : 'まだありません'; ?></p>
@@ -508,6 +545,9 @@ function gz_admin_page() {
                     <td><label><input type="checkbox" name="gz_show_stats" value="1" <?php checked($s['show_stats'], 1); ?>> 「区内の駅にいた割合」と「よく行った駅」を地図の下に出す</label></td></tr>
                 <tr><th scope="row">ブログとの連動</th>
                     <td><label><input type="checkbox" name="gz_show_posts" value="1" <?php checked($s['show_posts'], 1); ?>> 表示している日に公開したブログ記事へのリンクを、地図の下に出す</label></td></tr>
+                <tr><th scope="row"><label for="gz_freeze_dates">投票日（すべて停止）</label></th>
+                    <td><textarea id="gz_freeze_dates" name="gz_freeze_dates" rows="3" class="regular-text" placeholder="2027-04-25"><?php echo esc_textarea($s['freeze_dates']); ?></textarea>
+                        <p class="description">1行に1日（例：2027-04-25）。その日は日付が変わった0時から終わりまで、位置の記録・表示の変化・設定の変更を一切しません。当日は解除できません。日付は選挙管理委員会の公表で確かめてください。</p></td></tr>
             </table>
             <?php submit_button('保存する'); ?>
         </form>
