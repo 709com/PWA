@@ -1,0 +1,394 @@
+<!doctype html>
+<!-- このファイルは「一般質問ネタ帳」の本体です。質問のネタを分野・状態・定例会つきでiPhoneの中に貯め、絞り込み・検索・共有・バックアップができます。 -->
+<!-- ネタはiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。共有ボタンを押したときだけ、あなたが選んだ先へ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>一般質問ネタ帳</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="質問ネタ帳">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#285a8c">
+<style>
+  :root { --bg:#f4f7fa; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#285a8c; --accent-soft:#e2ecf6; --line:#dde3ea; --danger:#c8372d;
+          --s1:#f0a828; --s2:#2f8fd8; --s3:#8a5cd0; --s4:#2f9e6b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12171d; --card:#1c232c; --text:#e9eef4; --sub:#9aa6b4; --accent:#6ea3dc; --accent-soft:#1f3248; --line:#2b3440; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:7em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  /* 絞り込み */
+  .filters { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px; }
+  .filters select { padding:7px 6px; font-size:.88rem; }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 10px; }
+
+  /* カード */
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card[data-s="ひらめき"] { border-left-color:var(--s1); }
+  .card[data-s="調査中"]  { border-left-color:var(--s2); }
+  .card[data-s="原稿化"]  { border-left-color:var(--s3); }
+  .card[data-s="質問済み"] { border-left-color:var(--s4); opacity:.75; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:4px; }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  /* 編集・設定の画面（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .catrow { display:flex; gap:6px; margin-bottom:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📝 一般質問ネタ帳</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <input id="q" type="search" placeholder="🔍 文字で検索（題名・本文・根拠）">
+  <div class="filters" style="margin-top:6px">
+    <select id="f-cat"></select>
+    <select id="f-st"></select>
+    <select id="f-ses"></select>
+  </div>
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="ネタを追加">＋</button>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">ネタを追加</h2>
+    <div class="warn">区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-title">題名</label>
+    <input id="e-title" maxlength="80" placeholder="例：放課後の居場所の確保について">
+    <label class="f" for="e-body">本文（ねらい・論点・聞きたいこと）</label>
+    <textarea id="e-body" placeholder="キーボードのマイクで話して入力もできます"></textarea>
+    <div class="row2">
+      <div><label class="f" for="e-cat">分野</label><select id="e-cat"></select></div>
+      <div><label class="f" for="e-st">状態</label><select id="e-st"></select></div>
+    </div>
+    <label class="f" for="e-ses">使う予定の定例会</label>
+    <input id="e-ses" list="ses-list" placeholder="例：2027年2月定例会">
+    <datalist id="ses-list"></datalist>
+    <label class="f" for="e-src">根拠・参考（資料名、URL、他自治体の事例など）</label>
+    <textarea id="e-src" style="min-height:4.5em"></textarea>
+    <label class="f" for="e-ask">区への確認事項</label>
+    <textarea id="e-ask" style="min-height:4.5em"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain" id="e-share" hidden>原稿の下書きを共有</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">分野（名前を空にして保存すると消えます。すでにその分野のネタはそのまま残ります）</label>
+    <div id="cat-edit"></div>
+    <button class="plain" id="cat-add">＋ 分野を追加</button>
+    <div class="actions"><button class="primary" id="cat-save">分野を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、ネタもすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note" id="usage"></p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CATS = 'neta:cats';          // 分野の一覧
+const KEY_FILTER = 'neta:filter';      // 最後に選んだ絞り込み
+const STATES = ['ひらめき', '調査中', '原稿化', '質問済み'];
+const DEFAULT_CATS = ['子育て', '教育', '防災', '福祉', '健康', '財政', 'まちづくり', '環境', '情報政策', '議会改革', '地域・町会', 'その他'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('neta', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function fillSelect(sel, values, firstLabel) {
+  sel.innerHTML = '';
+  if (firstLabel) sel.add(new Option(firstLabel, ''));
+  values.forEach((v) => sel.add(new Option(v, v)));
+}
+
+let cats = load(KEY_CATS, DEFAULT_CATS);
+let items = [];
+let filter = load(KEY_FILTER, { cat: '', st: '', ses: '' });
+
+// ===== 一覧の表示 =====
+function sessions() {
+  return [...new Set(items.map((i) => i.session).filter(Boolean))].sort().reverse();
+}
+function buildFilters() {
+  const allCats = [...new Set([...cats, ...items.map((i) => i.category).filter(Boolean)])];
+  fillSelect($('f-cat'), allCats, '全分野');
+  fillSelect($('f-st'), STATES, '全状態');
+  fillSelect($('f-ses'), sessions(), '全定例会');
+  $('f-cat').value = allCats.includes(filter.cat) ? filter.cat : '';
+  $('f-st').value = STATES.includes(filter.st) ? filter.st : '';
+  $('f-ses').value = sessions().includes(filter.ses) ? filter.ses : '';
+  const dl = $('ses-list'); dl.innerHTML = '';
+  sessions().forEach((s) => dl.append(new Option(s)));
+}
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  filter = { cat: $('f-cat').value, st: $('f-st').value, ses: $('f-ses').value };
+  save(KEY_FILTER, filter);
+  const shown = items.filter((i) =>
+    (!filter.cat || i.category === filter.cat) &&
+    (!filter.st || i.status === filter.st) &&
+    (!filter.ses || i.session === filter.ses) &&
+    (!q || [i.title, i.body, i.source, i.ask].join('\n').toLowerCase().includes(q)));
+  // 状態の順（ひらめき→質問済み）、同じ状態の中は新しく直した順
+  shown.sort((a, b) => STATES.indexOf(a.status) - STATES.indexOf(b.status) || b.updatedAt - a.updatedAt);
+
+  const byState = STATES.map((s) => s + ' ' + items.filter((i) => i.status === s).length).join(' ／ ');
+  $('counts').textContent = '全' + items.length + '件（' + byState + '）' + (shown.length !== items.length ? '　表示中 ' + shown.length + '件' : '');
+
+  const list = $('list');
+  list.innerHTML = '';
+  if (!shown.length) {
+    list.append(el('p', 'empty', items.length ? '条件に合うネタはありません' : 'まだネタはありません。右下の「＋」から追加してください。'));
+    return;
+  }
+  for (const it of shown) {
+    const c = el('div', 'card');
+    c.dataset.s = it.status;
+    c.append(el('div', 't', it.title || '（題名なし）'));
+    const m = el('div', 'm');
+    m.append(el('span', 'tag', it.status), el('span', 'tag', it.category || '分野なし'));
+    if (it.session) m.append(el('span', 'tag', it.session));
+    m.append(document.createTextNode(' 更新 ' + fmtDate(it.updatedAt)));
+    c.append(m);
+    c.onclick = () => openEdit(it);
+    list.append(c);
+  }
+}
+['q', 'f-cat', 'f-st', 'f-ses'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', render));
+
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  buildFilters();
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+function openEdit(it) {
+  editing = it || null;
+  const allCats = [...new Set([...cats, ...(it && it.category ? [it.category] : [])])];
+  fillSelect($('e-cat'), allCats);
+  fillSelect($('e-st'), STATES);
+  $('edit-title').textContent = it ? 'ネタを編集' : 'ネタを追加';
+  $('e-title').value = it ? it.title : '';
+  $('e-body').value = it ? it.body : '';
+  $('e-cat').value = it ? it.category : (filter.cat || allCats[0]);
+  $('e-st').value = it ? it.status : STATES[0];
+  $('e-ses').value = it ? it.session : (filter.ses || '');
+  $('e-src').value = it ? it.source : '';
+  $('e-ask').value = it ? it.ask : '';
+  $('e-share').hidden = !it;
+  $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtDate(it.createdAt) + ' ／ 更新 ' + fmtDate(it.updatedAt) : '';
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = async () => {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'n' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.title = $('e-title').value.trim().slice(0, 80);
+  it.body = $('e-body').value;
+  it.category = $('e-cat').value;
+  it.status = $('e-st').value;
+  it.session = $('e-ses').value.trim().slice(0, 40);
+  it.source = $('e-src').value;
+  it.ask = $('e-ask').value;
+  it.updatedAt = now;
+  if (!it.title && !it.body.trim()) { alert('題名か本文を入れてください。'); return; }
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  closeSheet('edit');
+  reload();
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('「' + (editing.title || '題名なし') + '」を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// 原稿の下書きとして共有（Evernoteやメモ帳に貼れる形）
+function draftText(it) {
+  return [
+    '【' + (it.title || '題名なし') + '】',
+    '分野：' + (it.category || '') + '　状態：' + it.status + (it.session ? '　予定：' + it.session : ''),
+    '', '■ 本文', it.body || '',
+    '', '■ 根拠・参考', it.source || '',
+    '', '■ 区への確認事項', it.ask || '',
+  ].join('\n');
+}
+$('e-share').onclick = async () => {
+  if (!editing) return;
+  const text = draftText(editing);
+  if (navigator.share) { try { await navigator.share({ title: editing.title, text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// ===== 設定：分野 =====
+function buildCatEdit() {
+  const box = $('cat-edit'); box.innerHTML = '';
+  cats.forEach((c) => addCatRow(c));
+}
+function addCatRow(value) {
+  const row = el('div', 'catrow');
+  const inp = el('input'); inp.value = value; inp.maxLength = 20;
+  row.append(inp);
+  $('cat-edit').append(row);
+  return inp;
+}
+$('cat-add').onclick = () => addCatRow('').focus();
+$('cat-save').onclick = () => {
+  const vals = [...$('cat-edit').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+  cats = vals.length ? [...new Set(vals)] : DEFAULT_CATS.slice();
+  save(KEY_CATS, cats);
+  buildCatEdit();
+  buildFilters(); render();
+  alert('分野を保存しました。');
+};
+$('open-settings').onclick = () => { buildCatEdit(); showUsage(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => closeSheet('settings');
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'neta-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'neta', version: APP_VERSION, exportedAt: d.toISOString(), cats, items }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'neta' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件のネタを読み込みます。同じネタは、ファイルの内容で上書きします（ほかのネタは消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
+  await reload();
+  alert('読み込みました。');
+};
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }
+  const { usage } = await navigator.storage.estimate();
+  $('usage').textContent = '使用量：約' + Math.max(0.1, (usage || 0) / 1024 / 1024).toFixed(1) + 'MB';
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

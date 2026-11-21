@@ -30,6 +30,9 @@
     var statusEl = wrap.querySelector('.gz-status');
     var select = wrap.querySelector('.gz-date');
     var list = wrap.querySelector('.gz-list');
+    var todayEl = wrap.querySelector('.gz-today');
+    var postsEl = wrap.querySelector('.gz-posts');
+    var statsEl = wrap.querySelector('.gz-stats');
 
     var map = L.map(wrap.querySelector('.gz-map'), { scrollWheelZoom: false, zoomSnap: 0.25 })
       .setView([35.718, 139.745], 13.5);
@@ -64,6 +67,41 @@
 
     function draw(data) {
       statusEl.textContent = data.status;
+
+      // F1 今日のひとこと
+      if (todayEl) {
+        todayEl.textContent = data.note || '';
+        todayEl.style.display = data.note ? '' : 'none';
+      }
+      // F5 その日のブログ記事
+      if (postsEl) {
+        postsEl.innerHTML = '';
+        if (data.posts && data.posts.length) {
+          postsEl.appendChild(el('p', 'この日のブログ'));
+          var ul = el('ul');
+          data.posts.forEach(function (p) {
+            var li = el('li');
+            var a = el('a', p.title);
+            a.href = p.url;
+            li.appendChild(a);
+            ul.appendChild(li);
+          });
+          postsEl.appendChild(ul);
+        }
+        postsEl.style.display = postsEl.childNodes.length ? '' : 'none';
+      }
+      // F2・F3 7日間の集計
+      if (statsEl) {
+        statsEl.innerHTML = '';
+        if (data.stats && data.stats.total) {
+          statsEl.appendChild(el('p', '過去7日間の記録（' + data.stats.total + '件）のうち、文京区内の駅にいたのは約' + data.stats.inside_rate + '%です。'));
+          var ol = el('ol');
+          data.stats.top.forEach(function (t) { ol.appendChild(el('li', t.name + '駅（' + t.count + '回）')); });
+          statsEl.appendChild(el('p', 'よく行った駅'));
+          statsEl.appendChild(ol);
+        }
+        statsEl.style.display = statsEl.childNodes.length ? '' : 'none';
+      }
 
       // 日付の選択肢
       select.innerHTML = '';

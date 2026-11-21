@@ -22,6 +22,8 @@
   .app small { display:block; color:var(--sub); }
   .tag { display:inline-block; font-size:.75rem; color:var(--accent); border:1px solid var(--accent);
          border-radius:99px; padding:0 8px; margin-right:4px; }
+  .sec { font-size:1.05rem; margin:22px 0 8px; }
+  .app { padding:12px 16px; margin-bottom:8px; }
   .note { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; font-size:.9rem; color:var(--sub); }
   .note b { color:var(--text); }
 </style>
@@ -29,43 +31,51 @@
 <body>
 <main>
   <h1>PWA実験室</h1>
-  <p class="lead">iPhoneのホーム画面に追加して試すWebアプリの一覧です。</p>
+  <p class="lead">iPhoneのホーム画面に追加して試すWebアプリの一覧です（36本）。入力したデータはどれもiPhoneの中だけに保存されます。</p>
 
-  <a class="app" href="./water/">
-    <b>💧 水分・服薬カウンター</b>
-    <small>水を飲んだ回数と、薬を飲んだかをタップで記録します。</small>
-    <span class="tag">全画面起動</span><span class="tag">オフライン</span><span class="tag">端末内保存</span>
-  </a>
+  <h2 class="sec">🏛️ 議員活動</h2>
+  <a class="app" href="./neta/"><b>📝 一般質問ネタ帳</b><small>質問のネタを分野・状態・定例会つきで貯める</small></a>
+  <a class="app" href="./timer/"><b>⏱️ 文京区議会議員専用タイマー</b><small>持ち時間の経過と残りを上下に表示</small></a>
+  <a class="app" href="./haibun/"><b>🥧 発言時間の配分計算</b><small>持ち時間を質問項目ごとに割り振る</small></a>
+  <a class="app" href="./nittei/"><b>📅 議会日程カウントダウン</b><small>次の会議・締切まで「あと○日」</small></a>
+  <a class="app" href="./sanpi/"><b>✅ 議案の賛否メモ</b><small>議案ごとの賛否と理由を定例会別に記録</small></a>
+  <a class="app" href="./karte/"><b>💬 区民の声カルテ</b><small>受けた相談を分野・町名・対応状況で記録</small></a>
+  <a class="app" href="./genba/"><b>📷 現場・視察メモ（写真つき）</b><small>写真とメモで現場・視察を記録</small></a>
+  <a class="app" href="./koenomemo/"><b>📍 地域の声・現場メモ</b><small>気づきを位置つきで記録（地図は表示しない）</small></a>
+  <a class="app" href="./meishi/"><b>🤝 名刺交換メモ</b><small>会った場所と話題、次にすることを記録</small></a>
+  <a class="app" href="./hitoriatari/"><b>💴 区民1人あたり換算</b><small>金額を区民1人あたり・1世帯あたりに換算</small></a>
+  <a class="app" href="./prompter/"><b>📜 原稿プロンプター</b><small>原稿を大きな文字で自動スクロール</small></a>
+  <a class="app" href="./checklist/"><b>🔎 委員会資料の確認チェックリスト</b><small>予算額・前年比などの確認漏れを防ぐ</small></a>
+  <a class="app" href="./dokusho/"><b>📚 条例・計画の読書メモ</b><small>章・ページごとのメモと「質問に使えそう」の印</small></a>
+  <a class="app" href="./graph/"><b>📊 統計グラフ作成</b><small>数値からグラフ画像をつくって共有</small></a>
+  <a class="app" href="./cards/"><b>🗂️ 他自治体の取り組みカード</b><small>調査した83件の事例をカードで見る</small></a>
 
-  <a class="app" href="./timer/">
-    <b>⏱️ 文京区議会議員専用タイマー</b>
-    <small>持ち時間を決めて、経過時間と残り時間を上下に表示。残り時間に応じて色が変わります。</small>
-    <span class="tag">画面の消灯防止</span><span class="tag">音</span><span class="tag">オフライン</span>
-  </a>
+  <h2 class="sec">🏙️ 区民向け（非公式）</h2>
+  <a class="app" href="./monosashi/"><b>📏 文京区民専用ものさし</b><small>広さ・高さ・人数を文京区の名所で例える</small></a>
+  <a class="app" href="./quiz/"><b>❓ 文京区クイズ</b><small>出典つきの数字だけでつくった3択クイズ</small></a>
+  <a class="app" href="./yougo/"><b>📖 区政用語じてん</b><small>議会・区政の言葉をやさしく解説</small></a>
+  <a class="app" href="./stamp/"><b>🚉 文京区の駅スタンプラリー</b><small>区内14駅でスタンプを集める</small></a>
 
-  <a class="app" href="./koe/">
-    <b>🎙️ 子どもの声の記録帳</b>
-    <small>子どもの声を録音し、日付つきでiPhoneの中に保存・再生します。</small>
-    <span class="tag">マイク</span><span class="tag">端末内データベース</span><span class="tag">共有</span>
-  </a>
+  <h2 class="sec">👨‍👩‍👧‍👦 家族・子ども</h2>
+  <a class="app" href="./koe/"><b>🎙️ 子どもの声の記録帳</b><small>子どもの声を録音して日付つきで保存</small></a>
+  <a class="app" href="./yobou/"><b>💉 予防接種スケジュール帳</b><small>子どもごとの接種予定と済みを記録</small></a>
+  <a class="app" href="./mochimono/"><b>🎒 持ち物チェック</b><small>曜日ごとの持ち物をチェック</small></a>
+  <a class="app" href="./shincho/"><b>📏 身長の記録</b><small>身長・体重を記録してグラフで見る</small></a>
+  <a class="app" href="./kozukai/"><b>👛 おこづかい帳</b><small>子どもごとの入出金と残高</small></a>
+  <a class="app" href="./otetsudai/"><b>⭐ お手伝いポイント帳</b><small>お手伝いでポイント、ごほうびと交換</small></a>
+  <a class="app" href="./hamigaki/"><b>🪥 はみがき・おかたづけタイマー</b><small>声で応援するこども用タイマー</small></a>
+  <a class="app" href="./kamishibai/"><b>📕 おはなし紙芝居</b><small>カードを選ぶと紙芝居ができる（AIなし）</small></a>
+  <a class="app" href="./kuku/"><b>🔢 九九・けいさんれんしゅう</b><small>たし算・ひき算・九九の10問ドリル</small></a>
 
-  <a class="app" href="./pomodoro/">
-    <b>🍅 ポモドーロタイマー</b>
-    <small>作業25分・休憩5分を計り、終わったら通知。今日の完了数をアイコンに表示します。</small>
-    <span class="tag">通知</span><span class="tag">アイコンの数字</span><span class="tag">音</span>
-  </a>
-
-  <a class="app" href="./push/">
-    <b>🔔 プッシュ通知の実験</b>
-    <small>アプリを閉じていても届く通知の準備が、iPhoneでどこまでできるかを確かめます（サーバーはまだ未接続）。</small>
-    <span class="tag">通知の許可</span><span class="tag">プッシュ通知の宛先</span>
-  </a>
-
-  <a class="app" href="./monosashi/">
-    <b>📏 文京区民専用ものさし</b>
-    <small>広さ・高さ・体積・人数を、東京ドームや小石川植物園、文京区民の人数などで例えます（非公式）。</small>
-    <span class="tag">オフライン</span><span class="tag">共有</span>
-  </a>
+  <h2 class="sec">🏠 生活・自分用</h2>
+  <a class="app" href="./water/"><b>💧 水分・服薬カウンター</b><small>水を飲んだ回数と服薬をタップで記録</small></a>
+  <a class="app" href="./pomodoro/"><b>🍅 ポモドーロタイマー</b><small>作業と休憩を計り、終わったら通知</small></a>
+  <a class="app" href="./shukan/"><b>📆 習慣トラッカー</b><small>毎日の習慣の達成をカレンダーで見る</small></a>
+  <a class="app" href="./keihi/"><b>🧾 経費の仕分けメモ</b><small>領収書の写真と金額を記録しCSVに書き出す</small></a>
+  <a class="app" href="./onseimemo/"><b>🗣️ 声でメモ</b><small>キーボードの音声入力ですぐメモ</small></a>
+  <a class="app" href="./qr/"><b>🔳 QRコード作成</b><small>URLや文章からQRコード画像をつくる</small></a>
+  <a class="app" href="./idou/"><b>🧭 移動のふり返り</b><small>現在地表示の記録から1週間をふり返る</small></a>
+  <a class="app" href="./push/"><b>🔔 プッシュ通知の実験</b><small>通知の準備がどこまでできるかを試す</small></a>
 
   <div class="note">
     <b>ホーム画面への追加方法（Safari推奨）</b><br>

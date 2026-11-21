@@ -1,0 +1,432 @@
+<!doctype html>
+<!-- このファイルは「はみがき・おかたづけタイマー」の本体です。子どもが時間を選んでスタートすると、減っていく円と数字で残り時間を見せ、途中で「あと30びょう！」などと読み上げ、終わったら効果音とほめ言葉で知らせます。 -->
+<!-- タイマーの種類などの設定はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。音は音声ファイルを使わず、その場で作っています。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>はみがき・おかたづけタイマー</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="はみがき">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2a9d8f">
+<style>
+  :root { --bg:#eef8f6; --card:#fff; --text:#1d2b2a; --sub:#55706c; --accent:#2a9d8f; --accent-soft:#d6efeb; --line:#d3e4e1; --danger:#c8372d;
+          --track:#e4ecea; --c1:#ffe2a8; --c2:#cfe8ff; --c3:#ffd6e0; --c4:#d9f2c9; --c5:#e6dcff; --c6:#ffe0c7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111a19; --card:#1b2726; --text:#e8f1ef; --sub:#9db3af; --accent:#5cc7b8; --accent-soft:#1d3a36; --line:#2a3a38; --danger:#ef6b61;
+            --track:#26322f; --c1:#4a3d1c; --c2:#1e3550; --c3:#4a2330; --c4:#26401e; --c5:#352c55; --c6:#4a3220; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { overscroll-behavior:none; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5;
+         -webkit-user-select:none; user-select:none; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 6px; }
+  h1 { font-size:1.25rem; margin:0; line-height:1.3; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; -webkit-user-select:text; user-select:text; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 10px; font-size:.85rem; white-space:nowrap; flex-shrink:0; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .lead { font-size:1.35rem; font-weight:700; text-align:center; margin:14px 0 12px; }
+  .kinds { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .kind { border-radius:22px; padding:16px 8px 14px; text-align:center; box-shadow:0 3px 0 rgba(0,0,0,.12); min-height:160px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  .kind:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.12); }
+  .kind .e { font-size:3.4rem; line-height:1.1; }
+  .kind .n { font-size:1.3rem; font-weight:800; word-break:break-all; line-height:1.25; }
+  .kind .t { font-size:1.05rem; color:var(--sub); font-weight:700; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:22px; }
+
+  /* 全面の画面（タイマー・設定） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+
+  /* タイマー画面 */
+  #run .inner { min-height:100%; display:flex; flex-direction:column; align-items:center; text-align:center; }
+  #r-title { font-size:1.6rem; font-weight:800; margin:8px 0 10px; word-break:break-all; }
+  #pie { --p:1; --pc:#2a9d8f; width:min(76vw, 52vh, 330px); aspect-ratio:1/1; border-radius:50%; position:relative;
+         background:conic-gradient(var(--pc) calc(var(--p) * 360deg), var(--track) 0deg); box-shadow:0 4px 14px rgba(0,0,0,.12); transition:background .2s; }
+  #pie .hole { position:absolute; inset:15%; border-radius:50%; background:var(--card); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #r-emoji { font-size:min(13vw, 9vh, 56px); line-height:1.1; }
+  #r-num { font-size:min(15vw, 10vh, 64px); font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; letter-spacing:.02em; }
+  #r-left { font-size:1.6rem; font-weight:800; margin:14px 0 4px; min-height:2.2em; }
+  #r-bubble { position:fixed; left:50%; top:calc(14% + env(safe-area-inset-top)); transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none; z-index:12;
+              background:#fff7c2; color:#5a4300; font-size:2rem; font-weight:800; border-radius:24px; padding:14px 24px; white-space:nowrap; box-shadow:0 6px 20px rgba(0,0,0,.2); transition:all .25s; }
+  #r-bubble.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  .runbtns { display:flex; gap:12px; width:100%; max-width:420px; margin-top:auto; padding-top:16px; }
+  .big { flex:1; border-radius:20px; padding:18px 10px; font-size:1.25rem; font-weight:800; box-shadow:0 3px 0 rgba(0,0,0,.15); }
+  .big:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.15); }
+  .b-main { background:var(--accent); color:#fff; }
+  .b-sub { background:var(--card); border:2px solid var(--line); }
+  #done { display:none; flex-direction:column; align-items:center; width:100%; }
+  #done .medal { font-size:7rem; line-height:1.1; margin-top:20px; animation:pop .6s ease-out; }
+  #done .praise { font-size:1.8rem; font-weight:800; margin:10px 0 4px; }
+  #done .sub { font-size:1.2rem; color:var(--sub); font-weight:700; }
+  @keyframes pop { 0% { transform:scale(.3) rotate(-20deg); } 70% { transform:scale(1.15) rotate(6deg); } 100% { transform:scale(1); } }
+  .confetti { position:fixed; top:-60px; font-size:2rem; pointer-events:none; z-index:11; animation:fall linear forwards; }
+  @keyframes fall { to { transform:translateY(calc(100vh + 120px)) rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .confetti { display:none; } #done .medal { animation:none; } }
+
+  /* 設定 */
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:14px 0 4px; }
+  .krow { display:grid; grid-template-columns:64px 1fr 108px 44px; gap:6px; margin-bottom:6px; align-items:center; }
+  .krow select { padding:9px 4px; }
+  .krow .del { background:var(--card); border:1px solid var(--line); border-radius:10px; height:42px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } #r-bubble { background:#4a3d10; color:#fff3c0; } }
+  .check { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:6px; }
+  .check input { width:24px; height:24px; flex-shrink:0; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🪥 はみがき・<br>おかたづけタイマー</h1>
+    <button class="iconbtn" id="open-settings">⚙️ おうちの方へ</button>
+  </header>
+  <p class="lead">どれに する？ えらんでね</p>
+  <div class="kinds" id="kinds"></div>
+  <footer>版 <span id="ver"></span> ・ 設定はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- タイマー画面 -->
+<div class="sheet" id="run">
+  <div class="inner">
+    <div id="r-title"></div>
+    <div id="timerbox" style="display:flex;flex-direction:column;align-items:center;width:100%">
+      <div id="pie"><div class="hole"><div id="r-emoji"></div><div id="r-num">0:00</div></div></div>
+      <div id="r-left"></div>
+    </div>
+    <div id="done">
+      <div class="medal" id="d-medal">🎉</div>
+      <div class="praise" id="d-praise"></div>
+      <div class="sub" id="d-sub"></div>
+    </div>
+    <div class="runbtns" id="btns-run">
+      <button class="big b-sub" id="r-pause">⏸ まって</button>
+      <button class="big b-sub" id="r-stop">✖ やめる</button>
+    </div>
+    <div class="runbtns" id="btns-done" style="display:none">
+      <button class="big b-main" id="d-again">🔁 もういちど</button>
+      <button class="big b-sub" id="d-back">🏠 もどる</button>
+    </div>
+  </div>
+</div>
+<div id="r-bubble"></div>
+
+<!-- 設定（おうちの方向け） -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定（おうちの方へ）</h2>
+    <label class="f">タイマーの種類（絵・名前・時間）。名前を空にして保存すると消えます。</label>
+    <div class="warn">名前には、お子さんの本名など個人を特定できる情報は書かないでください。</div>
+    <div id="k-edit"></div>
+    <div class="actions">
+      <button class="plain" id="k-add">＋ 種類を追加</button>
+      <button class="plain" id="k-reset">はじめの3つに戻す</button>
+    </div>
+
+    <label class="f" style="margin-top:22px">音</label>
+    <label class="check"><input type="checkbox" id="s-sound"> 効果音を鳴らす</label>
+    <label class="check"><input type="checkbox" id="s-voice"> 声で知らせる（「あと30びょう！」など）</label>
+    <div class="actions"><button class="plain" id="s-test">🔊 音を試す</button></div>
+    <p class="note">音が出ないときは、iPhoneの音量と、横のスイッチ（消音モード）を確認してください。アプリを開いたあと、最初に画面をタップしてから音が出るようになります。</p>
+
+    <div class="actions" style="margin-top:22px">
+      <button class="primary" id="s-save">保存して閉じる</button>
+      <button class="plain" id="s-close">保存せずに閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KINDS = 'hamigaki:kinds';   // タイマーの種類
+const KEY_SET = 'hamigaki:settings';  // 音の設定
+const DEFAULT_KINDS = [
+  { id: 'k1', e: '🪥', name: 'はみがき', sec: 180 },
+  { id: 'k2', e: '🧸', name: 'おかたづけ', sec: 300 },
+  { id: 'k3', e: '👕', name: 'おきがえ', sec: 180 },
+];
+const EMOJIS = ['🪥', '🧸', '👕', '🧼', '🛁', '🍽️', '📚', '🎒', '👟', '🚽', '🌙', '⏰', '✏️', '🎹', '🧩', '🐶'];
+const TIMES = [30, 60, 90, 120, 180, 240, 300, 360, 420, 480, 540, 600, 900, 1200, 1800];
+const COLORS = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
+const PRAISE = ['よく がんばったね！', 'すごい！ さいごまで できたね！', 'やったね！ かっこいい！', 'ばっちり！ えらいね！', 'はなまる！ すばらしい！'];
+const MEDALS = ['🎉', '🏆', '🌟', '💮', '🥇'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// 「3ぷん」「1ぷん30びょう」のように、ひらがなで時間を書く
+function funWord(m) { return m + ([0, 1, 3, 4, 6, 8].includes(m % 10) ? 'ぷん' : 'ふん'); }
+function jpTime(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return (m ? funWord(m) : '') + (s ? s + 'びょう' : '') || '0びょう';
+}
+// 読み上げ用（漢字のほうが正しい読み方で読まれる）
+function speakTime(sec) { const m = Math.floor(sec / 60), s = sec % 60; return (m ? m + '分' : '') + (s ? s + '秒' : ''); }
+
+let kinds = load(KEY_KINDS, DEFAULT_KINDS);
+if (!Array.isArray(kinds) || !kinds.length) kinds = DEFAULT_KINDS.slice();
+let settings = Object.assign({ sound: true, voice: true }, load(KEY_SET, {}));
+
+// ===== 音（効果音と読み上げ） =====
+// iPhoneは、画面をタップしたときでないと音の準備ができないので、タップのたびに準備を確かめる
+let audioCtx = null, speechReady = false, jaVoice = null;
+function pickVoice() { try { jaVoice = speechSynthesis.getVoices().find((v) => /^ja/i.test(v.lang)) || null; } catch (e) {} }
+if ('speechSynthesis' in window) { pickVoice(); try { speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {} }
+function unlockSound() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  try {
+    if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+    if (audioCtx && audioCtx.state !== 'running') {
+      audioCtx.resume();
+      const b = audioCtx.createBuffer(1, 1, 22050), s = audioCtx.createBufferSource();
+      s.buffer = b; s.connect(audioCtx.destination); s.start(0);
+    }
+  } catch (e) {}
+  if (!speechReady && 'speechSynthesis' in window) {
+    speechReady = true;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'ja-JP'; speechSynthesis.speak(u); } catch (e) {}
+  }
+}
+['touchend', 'click'].forEach((t) => document.addEventListener(t, unlockSound, true));
+function tone(freq, at, dur, type, vol) {
+  if (!settings.sound || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime + at;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.3, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) {}
+}
+const sfx = {
+  start() { tone(660, 0, .15, 'triangle'); tone(990, .15, .25, 'triangle'); },
+  tick() { tone(1200, 0, .08, 'square', .12); },
+  fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .14, .3, 'triangle', .35)); tone(1047, .6, .7, 'triangle', .35); tone(1319, .6, .7, 'sine', .2); },
+};
+function buzz(p) { try { if (settings.sound && navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+function speak(text) {
+  if (!settings.voice || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text.replace(/\p{Extended_Pictographic}/gu, ''));
+    u.lang = 'ja-JP'; if (jaVoice) u.voice = jaVoice; u.rate = 1; u.pitch = 1.1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+// ===== はじめの画面 =====
+function renderKinds() {
+  const box = $('kinds'); box.innerHTML = '';
+  kinds.forEach((k, i) => {
+    const b = el('button', 'kind');
+    b.style.background = 'var(' + COLORS[i % COLORS.length] + ')';
+    b.append(el('span', 'e', k.e), el('span', 'n', k.name), el('span', 't', jpTime(k.sec)));
+    b.onclick = () => startTimer(k);
+    box.append(b);
+  });
+}
+
+// ===== タイマー =====
+// run: 動いているタイマーの状態。endAt＝終わる時刻、pausedLeft＝止めているときの残り（ミリ秒）
+let run = null, loop = null;
+function startTimer(k) {
+  unlockSound();
+  run = { kind: k, total: k.sec * 1000, endAt: Date.now() + k.sec * 1000, pausedLeft: null, fired: {} };
+  $('r-title').textContent = k.e + ' ' + k.name;
+  $('r-emoji').textContent = k.e;
+  $('timerbox').style.display = 'flex'; $('done').style.display = 'none';
+  $('btns-run').style.display = 'flex'; $('btns-done').style.display = 'none';
+  $('r-pause').textContent = '⏸ まって';
+  $('run').classList.add('open');
+  sfx.start(); buzz(80);
+  speak(k.name + '、スタート！ ' + speakTime(k.sec) + '、がんばろう！');
+  requestWakeLock();
+  clearInterval(loop); loop = setInterval(tick, 200);
+  tick();
+}
+function leftMs() { return run.pausedLeft !== null ? run.pausedLeft : Math.max(0, run.endAt - Date.now()); }
+// 途中のお知らせ：残り時間がこの秒数を通り過ぎたら1回だけ知らせる
+function marks(totalSec) {
+  const list = [];
+  for (let m = Math.floor((totalSec - 1) / 60); m >= 1; m--) list.push({ at: m * 60, text: 'あと ' + funWord(m) + '！', say: 'あと' + m + '分！' });
+  if (totalSec > 40) list.push({ at: 30, text: 'あと 30びょう！', say: 'あと30秒！' });
+  if (totalSec > 15) list.push({ at: 10, text: 'あと 10びょう！', say: 'あと10秒！ もうすこし！' });
+  return list;
+}
+function showBubble(text) {
+  const b = $('r-bubble'); b.textContent = text; b.classList.add('show');
+  clearTimeout(showBubble.t); showBubble.t = setTimeout(() => b.classList.remove('show'), 2200);
+}
+function tick() {
+  if (!run) return;
+  const ms = leftMs();
+  const sec = Math.ceil(ms / 1000);
+  const p = run.total ? ms / run.total : 0;
+  const pie = $('pie');
+  pie.style.setProperty('--p', p.toFixed(4));
+  pie.style.setProperty('--pc', p > 0.5 ? '#2a9d8f' : p > 0.2 ? '#f2b134' : '#f07b5a');
+  $('r-num').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  $('r-left').textContent = run.pausedLeft !== null ? 'とまって いるよ' : 'あと ' + jpTime(sec);
+  if (run.pausedLeft !== null) return;
+  // 境目を通り過ぎたら1回だけ知らせる（アプリを閉じている間に過ぎた分は、あとから鳴らさない）
+  for (const mk of marks(run.kind.sec)) {
+    if (!run.fired[mk.at] && ms <= mk.at * 1000) {
+      run.fired[mk.at] = true;
+      if (mk.at * 1000 - ms < 3000) { showBubble(mk.text); speak(mk.say); tone(880, 0, .2, 'triangle'); buzz(120); }
+    }
+  }
+  // 最後の3びょうは「ピッ」
+  if (sec <= 3 && sec >= 1 && !run.fired['t' + sec]) { run.fired['t' + sec] = true; sfx.tick(); }
+  if (ms <= 0) finish();
+}
+function finish() {
+  clearInterval(loop); loop = null;
+  const k = run.kind; run = null;
+  releaseWakeLock();
+  const praise = pick(PRAISE);
+  $('d-medal').textContent = pick(MEDALS);
+  $('d-praise').textContent = praise;
+  $('d-sub').textContent = k.e + ' ' + k.name + ' おわり！';
+  $('timerbox').style.display = 'none'; $('done').style.display = 'flex';
+  $('btns-run').style.display = 'none'; $('btns-done').style.display = 'flex';
+  $('d-again').onclick = () => startTimer(k);
+  sfx.fanfare(); buzz([100, 80, 100, 80, 300]);
+  setTimeout(() => speak(k.name + '、おわり！ ' + praise), 900);
+  confetti();
+}
+function confetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const marks = ['🎉', '⭐', '✨', '🌟', '🎈', '💮'];
+  for (let i = 0; i < 22; i++) {
+    const c = el('span', 'confetti', pick(marks));
+    c.style.left = Math.random() * 92 + 'vw';
+    c.style.animationDuration = (2.2 + Math.random() * 1.8) + 's';
+    c.style.animationDelay = (Math.random() * .8) + 's';
+    document.body.append(c);
+    setTimeout(() => c.remove(), 5000);
+  }
+}
+$('r-pause').onclick = () => {
+  if (!run) return;
+  if (run.pausedLeft === null) { run.pausedLeft = leftMs(); $('r-pause').textContent = '▶ つづける'; speak('ちょっと まってるね'); }
+  else { run.endAt = Date.now() + run.pausedLeft; run.pausedLeft = null; $('r-pause').textContent = '⏸ まって'; speak('つづけるよ！'); }
+  tick();
+};
+function closeRun() {
+  clearInterval(loop); loop = null; run = null;
+  releaseWakeLock();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  document.querySelectorAll('.confetti').forEach((c) => c.remove());
+  $('run').classList.remove('open');
+}
+$('r-stop').onclick = () => { if (confirm('タイマーを やめますか？')) closeRun(); };
+$('d-back').onclick = closeRun;
+
+// ===== 画面を消さない機能（動いている間だけ） =====
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return; // 使えない端末では何もしない
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { wakeLock = null; }
+}
+function releaseWakeLock() { if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  // ほかのアプリから戻ってきたら、画面を消さない設定をかけ直し、表示を更新する
+  if (!document.hidden && run) { requestWakeLock(); tick(); }
+});
+
+// ===== 設定 =====
+function buildKindEdit() {
+  const box = $('k-edit'); box.innerHTML = '';
+  kinds.forEach((k) => addKindRow(k));
+}
+function addKindRow(k) {
+  const row = el('div', 'krow');
+  const se = el('select'); EMOJIS.forEach((e) => se.add(new Option(e, e)));
+  if (!EMOJIS.includes(k.e)) se.add(new Option(k.e, k.e));
+  se.value = k.e; se.setAttribute('aria-label', '絵');
+  const name = el('input'); name.value = k.name; name.maxLength = 8; name.placeholder = '名前'; name.setAttribute('aria-label', '名前');
+  const st = el('select'); TIMES.forEach((s) => st.add(new Option(jpTime(s), s)));
+  if (!TIMES.includes(k.sec)) st.add(new Option(jpTime(k.sec), k.sec));
+  st.value = String(k.sec); st.setAttribute('aria-label', '時間');
+  const del = el('button', 'del', '🗑'); del.setAttribute('aria-label', '消す');
+  del.onclick = () => { name.value = ''; row.style.opacity = '.35'; };
+  row.dataset.id = k.id;
+  row.append(se, name, st, del);
+  $('k-edit').append(row);
+  return name;
+}
+function openSettings() {
+  buildKindEdit();
+  $('s-sound').checked = settings.sound; $('s-voice').checked = settings.voice;
+  $('settings').classList.add('open'); window.scrollTo(0, 0);
+}
+$('open-settings').onclick = openSettings;
+$('k-add').onclick = () => addKindRow({ id: 'k' + Date.now(), e: '⏰', name: '', sec: 180 }).focus();
+$('k-reset').onclick = () => { if (confirm('タイマーの種類を、はじめの3つ（はみがき・おかたづけ・おきがえ）に戻しますか？')) { kinds = DEFAULT_KINDS.slice(); buildKindEdit(); } };
+$('s-test').onclick = () => {
+  settings.sound = $('s-sound').checked; settings.voice = $('s-voice').checked;
+  sfx.fanfare(); setTimeout(() => speak('あと30秒！'), 900);
+};
+$('s-save').onclick = () => {
+  const rows = [...$('k-edit').querySelectorAll('.krow')];
+  const list = rows.map((r) => {
+    const [se, name, st] = r.querySelectorAll('select, input');
+    return { id: r.dataset.id, e: se.value, name: name.value.trim().slice(0, 8), sec: Number(st.value) };
+  }).filter((k) => k.name);
+  if (!list.length) { alert('タイマーの種類を1つ以上入れてください。'); return; }
+  kinds = list; save(KEY_KINDS, kinds);
+  settings = { sound: $('s-sound').checked, voice: $('s-voice').checked }; save(KEY_SET, settings);
+  renderKinds();
+  $('settings').classList.remove('open');
+};
+$('s-close').onclick = () => { kinds = load(KEY_KINDS, DEFAULT_KINDS); settings = Object.assign({ sound: true, voice: true }, load(KEY_SET, {})); $('settings').classList.remove('open'); };
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || run || $('settings').classList.contains('open')) return; // タイマー中・設定中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+renderKinds();
+</script>
+</body>
+</html>

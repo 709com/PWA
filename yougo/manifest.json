@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です（区政用語じてん）。",
+  "id": "./",
+  "name": "区政用語じてん",
+  "short_name": "区政じてん",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5fb",
+  "theme_color": "#3f51a8",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

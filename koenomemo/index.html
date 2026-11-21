@@ -1,0 +1,452 @@
+<!doctype html>
+<!-- このファイルは「地域の声・現場メモ（位置情報つき）」の本体です。道路の傷みなど地域の気づきを、ボタンを押したときだけ取る位置つきで記録し、分類・状態で整理・書き出しできます。 -->
+<!-- 記録と位置はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは送りません。地図は表示せず、「マップアプリで開く」を押したときだけ外部のマップアプリへ渡します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>地域の声・現場メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="地域メモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f7f86">
+<style>
+  :root { --bg:#f1f7f7; --card:#fff; --text:#16292b; --sub:#566b6d; --accent:#0f7f86; --accent-soft:#dcefef; --line:#d6e3e4; --danger:#c8372d;
+          --s1:#f0a828; --s2:#2f8fd8; --s3:#2f9e6b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1617; --card:#182223; --text:#e6f0f0; --sub:#98abad; --accent:#5cc3c9; --accent-soft:#183a3c; --line:#283637; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  input[type=date] { min-height:44px; }
+  textarea { min-height:6em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .filters { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+  .filters select { padding:8px 6px; font-size:.9rem; }
+  .counts { font-size:.82rem; color:var(--sub); margin:8px 0 10px; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card[data-s="気づき"] { border-left-color:var(--s1); }
+  .card[data-s="区へ伝達"] { border-left-color:var(--s2); }
+  .card[data-s="対応済み"] { border-left-color:var(--s3); opacity:.75; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); margin-top:4px; }
+  .card .p { font-size:.85rem; color:var(--sub); word-break:break-word; }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
+  .maplink { display:inline-block; margin-left:4px; color:var(--accent); font-weight:700; text-decoration:none; white-space:nowrap; }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .catrow { display:flex; gap:6px; margin-bottom:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+
+  /* 位置の欄 */
+  .locbox { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-top:4px; }
+  #e-loc { font-size:.92rem; word-break:break-word; }
+  .locbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .locbtns button { padding:11px 14px; }
+  .bigmap { display:block; text-align:center; text-decoration:none; background:var(--accent-soft); color:var(--accent); border-radius:12px; padding:11px 14px; font-weight:700; margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📍 地域の声・現場メモ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <input id="q" type="search" placeholder="🔍 文字で検索（見出し・場所・詳細）">
+  <div class="filters">
+    <select id="f-cat"></select>
+    <select id="f-st"></select>
+  </div>
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ 記録と位置はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="記録を追加">＋</button>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">気づきを記録</h2>
+    <div class="warn">区民の方の名前や、相談者のお宅の場所など、個人を特定できる情報は書かないでください。位置は、道路や公園など公共の場所で記録してください。</div>
+    <label class="f" for="e-title">見出し（ひとこと）</label>
+    <input id="e-title" maxlength="60" placeholder="例：歩道の段差が大きい">
+    <div class="row2">
+      <div><label class="f" for="e-cat">分類</label><select id="e-cat"></select></div>
+      <div><label class="f" for="e-st">状態</label><select id="e-st"></select></div>
+    </div>
+    <label class="f">その場の位置</label>
+    <div class="locbox">
+      <div id="e-loc"></div>
+      <div class="locbtns">
+        <button class="primary" id="e-getloc">📍 今いる場所を記録</button>
+        <button class="plain" id="e-clearloc">位置を消す</button>
+      </div>
+      <a class="bigmap" id="e-map" target="_blank" rel="noopener" hidden>🗺 マップアプリで開く</a>
+      <p class="note">位置は、ボタンを押したときだけ調べます。位置はこのiPhoneの中だけに保存し、このアプリの中に地図は表示しません（地図を表示すると、地図の会社に位置が送られるため）。「マップアプリで開く」を押したときだけ、位置と見出しが外部のマップアプリ（Apple）へ渡ります。</p>
+    </div>
+    <label class="f" for="e-place">場所の目印（文字・なくても可）</label>
+    <input id="e-place" maxlength="80" placeholder="例：〇〇小学校の正門前の交差点">
+    <label class="f" for="e-body">詳しい内容</label>
+    <textarea id="e-body" placeholder="キーボードのマイクで話して入力もできます"></textarea>
+    <div class="row2">
+      <div><label class="f" for="e-date">気づいた日</label><input id="e-date" type="date"></div>
+      <div></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain" id="e-share" hidden>文章で共有</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-share-note" hidden>「文章で共有」の文章には、位置（マップのリンク）も入ります。</p>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">分類（名前を空にして保存すると消えます。すでにその分類の記録はそのまま残ります）</label>
+    <div id="cat-edit"></div>
+    <button class="plain" id="cat-add">＋ 分類を追加</button>
+    <div class="actions"><button class="primary" id="cat-save">分類を保存</button></div>
+
+    <label class="f" style="margin-top:22px">書き出し</label>
+    <p class="note" style="margin-top:0">表（CSV）は、Excelや Numbers で開けます。表示中の絞り込みに関係なく、すべての記録を書き出します。位置（緯度・経度）も入るので、渡す相手に注意してください。</p>
+    <div class="actions">
+      <button class="plain" id="csv">表（CSV）で書き出す</button>
+    </div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">バックアップを書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note" id="usage"></p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CATS = 'koenomemo:cats';       // 分類の一覧
+const KEY_FILTER = 'koenomemo:filter';   // 最後に選んだ絞り込み
+const STATES = ['気づき', '区へ伝達', '対応済み'];
+const DEFAULT_CATS = ['道路・歩道', '公園・緑', 'ごみ・清掃', '街灯・防犯', '自転車・交通', '子ども・通学路', '防災', '騒音・環境', 'その他'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('koenomemo', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function today() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function fmtDay(s) { if (!s) return '日付なし'; const [y, m, d] = s.split('-'); return y + '/' + Number(m) + '/' + Number(d); }
+function fmtDate(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function fillSelect(sel, values, firstLabel) {
+  sel.innerHTML = '';
+  if (firstLabel) sel.add(new Option(firstLabel, ''));
+  values.forEach((v) => sel.add(new Option(v, v)));
+}
+// 外部のマップアプリ（Apple）で開くためのリンク。押したときだけ位置と見出しが渡る
+function mapUrl(it) {
+  const q = (it.title || it.place || '地域メモ').slice(0, 40);
+  return 'https://maps.apple.com/?ll=' + it.lat + ',' + it.lng + '&q=' + encodeURIComponent(q);
+}
+function locText(loc) {
+  if (!loc || loc.lat == null) return '位置はまだ記録していません';
+  return '緯度 ' + loc.lat.toFixed(5) + '、経度 ' + loc.lng.toFixed(5) + (loc.acc ? '（誤差 約' + Math.round(loc.acc) + 'm）' : '') + (loc.posAt ? '　' + fmtDate(loc.posAt) + 'に記録' : '');
+}
+function shareFile(file) {
+  if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: file.name }).catch(() => {});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function stamp() { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); }
+
+let cats = load(KEY_CATS, DEFAULT_CATS);
+let items = [];
+let filter = load(KEY_FILTER, { cat: '', st: '' });
+
+// ===== 一覧の表示 =====
+function buildFilters() {
+  const allCats = [...new Set([...cats, ...items.map((i) => i.category).filter(Boolean)])];
+  fillSelect($('f-cat'), allCats, 'すべての分類');
+  fillSelect($('f-st'), STATES, 'すべての状態');
+  $('f-cat').value = allCats.includes(filter.cat) ? filter.cat : '';
+  $('f-st').value = STATES.includes(filter.st) ? filter.st : '';
+}
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  filter = { cat: $('f-cat').value, st: $('f-st').value };
+  save(KEY_FILTER, filter);
+  const shown = items.filter((i) =>
+    (!filter.cat || i.category === filter.cat) &&
+    (!filter.st || i.status === filter.st) &&
+    (!q || [i.title, i.place, i.body].join('\n').toLowerCase().includes(q)));
+  // 状態の順（気づき→対応済み）、同じ状態の中は日付の新しい順
+  shown.sort((a, b) => STATES.indexOf(a.status) - STATES.indexOf(b.status) || (b.date || '').localeCompare(a.date || '') || b.updatedAt - a.updatedAt);
+
+  const byState = STATES.map((s) => s + ' ' + items.filter((i) => i.status === s).length).join(' ／ ');
+  $('counts').textContent = '全' + items.length + '件（' + byState + '）' + (shown.length !== items.length ? '　表示中 ' + shown.length + '件' : '');
+
+  const list = $('list'); list.innerHTML = '';
+  if (!shown.length) {
+    list.append(el('p', 'empty', items.length ? '条件に合う記録はありません' : 'まだ記録はありません。右下の「＋」から追加してください。'));
+    return;
+  }
+  for (const it of shown) {
+    const c = el('div', 'card');
+    c.dataset.s = it.status;
+    c.append(el('div', 't', it.title || '（見出しなし）'));
+    if (it.place) c.append(el('div', 'p', it.place));
+    const m = el('div', 'm');
+    m.append(el('span', 'tag', it.status), el('span', 'tag', it.category || '分類なし'), document.createTextNode(fmtDay(it.date)));
+    if (it.lat != null) {
+      const a = el('a', 'maplink', '🗺 マップ'); a.href = mapUrl(it); a.target = '_blank'; a.rel = 'noopener';
+      a.onclick = (e) => e.stopPropagation();
+      m.append(a);
+    }
+    c.append(m);
+    c.onclick = () => openEdit(it);
+    list.append(c);
+  }
+}
+['q', 'f-cat', 'f-st'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', render));
+
+async function reload() {
+  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  buildFilters();
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null;
+let loc = null;   // 入力中の位置 { lat, lng, acc, posAt }
+function showLoc() {
+  $('e-loc').textContent = locText(loc);
+  $('e-clearloc').hidden = !loc;
+  const a = $('e-map');
+  if (loc) { a.href = mapUrl({ ...loc, title: $('e-title').value.trim(), place: $('e-place').value.trim() }); a.hidden = false; }
+  else { a.removeAttribute('href'); a.hidden = true; }
+}
+$('e-title').addEventListener('input', () => loc && showLoc());
+$('e-place').addEventListener('input', () => loc && showLoc());
+function openEdit(it) {
+  editing = it || null;
+  const allCats = [...new Set([...cats, ...(it && it.category ? [it.category] : [])])];
+  fillSelect($('e-cat'), allCats);
+  fillSelect($('e-st'), STATES);
+  $('edit-title').textContent = it ? '記録を見る・直す' : '気づきを記録';
+  $('e-title').value = it ? it.title : '';
+  $('e-cat').value = it ? it.category : (filter.cat || allCats[0]);
+  $('e-st').value = it ? it.status : STATES[0];
+  $('e-place').value = it ? (it.place || '') : '';
+  $('e-body').value = it ? (it.body || '') : '';
+  $('e-date').value = it ? (it.date || '') : today();
+  loc = it && it.lat != null ? { lat: it.lat, lng: it.lng, acc: it.acc, posAt: it.posAt } : null;
+  showLoc();
+  $('e-share').hidden = !it; $('e-share-note').hidden = !it || !loc;
+  $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtDate(it.createdAt) + ' ／ 更新 ' + fmtDate(it.updatedAt) : '';
+  $('edit').classList.add('open');
+  $('edit').scrollTop = 0;
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+
+// 位置：ボタンを押したときだけ調べる
+$('e-getloc').onclick = () => {
+  if (!navigator.geolocation) { alert('この端末では位置を調べられません。'); return; }
+  const btn = $('e-getloc'); btn.disabled = true; btn.textContent = '位置を調べています…';
+  const done = () => { btn.disabled = false; btn.textContent = '📍 今いる場所を記録'; };
+  navigator.geolocation.getCurrentPosition((pos) => {
+    done();
+    const r6 = (v) => Math.round(v * 1e6) / 1e6;
+    loc = { lat: r6(pos.coords.latitude), lng: r6(pos.coords.longitude), acc: pos.coords.accuracy, posAt: Date.now() };
+    showLoc();
+  }, (err) => {
+    done();
+    if (err.code === 1) alert('位置情報の利用が許可されていません。iPhoneの設定で位置情報の利用を許可してから、もう一度押してください。');
+    else if (err.code === 3) alert('時間内に位置を調べられませんでした。もう一度押してください。');
+    else alert('位置を調べられませんでした。少し場所を変えて、もう一度押してください。');
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+};
+$('e-clearloc').onclick = () => { if (confirm('記録した位置を消します。よろしいですか？')) { loc = null; showLoc(); } };
+
+$('e-save').onclick = async () => {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'k' + now + Math.random().toString(36).slice(2, 6), createdAt: now };
+  it.title = $('e-title').value.trim().slice(0, 60);
+  it.category = $('e-cat').value;
+  it.status = $('e-st').value;
+  it.place = $('e-place').value.trim().slice(0, 80);
+  it.body = $('e-body').value;
+  it.date = $('e-date').value;
+  if (loc) Object.assign(it, loc); else { delete it.lat; delete it.lng; delete it.acc; delete it.posAt; }
+  it.updatedAt = now;
+  if (!it.title && !it.body.trim() && !it.place) { alert('見出しか詳しい内容を入れてください。'); return; }
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return; }
+  closeSheet('edit');
+  reload();
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('「' + (editing.title || '見出しなし') + '」を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+function itemText(it) {
+  const lines = ['【' + (it.category || '分類なし') + '】' + (it.title || '（見出しなし）') + '（' + it.status + '）', fmtDay(it.date)];
+  if (it.place) lines.push('場所：' + it.place);
+  if (it.body && it.body.trim()) lines.push(it.body.trim());
+  if (it.lat != null) lines.push('地図：' + mapUrl(it));
+  return lines.join('\n');
+}
+$('e-share').onclick = async () => {
+  if (!editing) return;
+  const text = itemText(editing);
+  if (navigator.share) { try { await navigator.share({ title: editing.title, text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// ===== 設定：分類 =====
+function buildCatEdit() { const box = $('cat-edit'); box.innerHTML = ''; cats.forEach((c) => addCatRow(c)); }
+function addCatRow(value) {
+  const row = el('div', 'catrow');
+  const inp = el('input'); inp.value = value; inp.maxLength = 20;
+  row.append(inp); $('cat-edit').append(row);
+  return inp;
+}
+$('cat-add').onclick = () => addCatRow('').focus();
+$('cat-save').onclick = () => {
+  const vals = [...$('cat-edit').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+  cats = vals.length ? [...new Set(vals)] : DEFAULT_CATS.slice();
+  save(KEY_CATS, cats);
+  buildCatEdit(); buildFilters(); render();
+  alert('分類を保存しました。');
+};
+$('open-settings').onclick = () => { buildCatEdit(); showUsage(); $('settings').classList.add('open'); $('settings').scrollTop = 0; };
+$('s-close').onclick = () => closeSheet('settings');
+
+// ===== 設定：書き出し（CSV）・バックアップ =====
+function csvCell(v) { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+$('csv').onclick = () => {
+  const head = ['気づいた日', '分類', '状態', '見出し', '場所の目印', '詳しい内容', '緯度', '経度', '誤差（m）', 'マップのリンク', '作成', '更新'];
+  const rows = items.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map((i) => [
+    fmtDay(i.date), i.category, i.status, i.title, i.place, i.body,
+    i.lat != null ? i.lat : '', i.lng != null ? i.lng : '', i.acc ? Math.round(i.acc) : '', i.lat != null ? mapUrl(i) : '',
+    fmtDate(i.createdAt), fmtDate(i.updatedAt)]);
+  const csv = '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+  shareFile(new File([csv], 'chiiki-memo-' + stamp() + '.csv', { type: 'text/csv' }));
+};
+$('export').onclick = () => {
+  const data = JSON.stringify({ app: 'koenomemo', version: APP_VERSION, exportedAt: new Date().toISOString(), cats, items }, null, 1);
+  shareFile(new File([data], 'koenomemo-backup-' + stamp() + '.json', { type: 'application/json' }));
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'koenomemo' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
+  await reload();
+  alert('読み込みました。');
+};
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }
+  const { usage } = await navigator.storage.estimate();
+  $('usage').textContent = '使用量：約' + Math.max(0.1, (usage || 0) / 1024 / 1024).toFixed(1) + 'MB';
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!doctype html>
+<!-- このファイルは「他自治体の取り組みカード」の本体です。knowledge/ の調査メモの表を1行ずつカードにして、めくって読む・テーマで絞る・検索する・お気に入りに入れることができます。 -->
+<!-- カードの中身は調査メモの表をそのまま埋め込んだものです（書き換えていません）。お気に入りはiPhoneの中（localStorage）だけに保存し、外部へは送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>他自治体の取り組みカード</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="事例カード">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#b0472e">
+<style>
+  :root { --bg:#f6f4f2; --card:#fff; --text:#1f1b18; --sub:#6a625b; --accent:#b0472e; --accent-soft:#f6e3dd; --line:#e4ddd7; --star:#e0a100;
+          --warn-bg:#fff5e0; --warn-text:#6b4a00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151312; --card:#211e1c; --text:#efebe7; --sub:#a9a19a; --accent:#e58a72; --accent-soft:#3a2620; --line:#35302c; --star:#f2c14e;
+            --warn-bg:#3a2e12; --warn-text:#f3dca6; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.6; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(100px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .filters { display:grid; grid-template-columns:1fr auto; gap:6px; margin-top:6px; }
+  .favbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  .favbtn[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:700; }
+  .counts { font-size:.85rem; color:var(--sub); margin:8px 0; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .counts button { background:none; color:var(--accent); padding:4px 0; font-weight:700; }
+
+  /* カード */
+  .card { background:var(--card); border:1px solid var(--line); border-top:6px solid var(--accent); border-radius:14px; padding:14px 16px 16px; position:relative;
+          box-shadow:0 2px 8px rgba(0,0,0,.06); transition:transform .18s ease, opacity .18s ease; touch-action:pan-y; }
+  .card.out-l { transform:translateX(-40px); opacity:0; }
+  .card.out-r { transform:translateX(40px); opacity:0; }
+  .grp { font-size:.78rem; color:var(--accent); font-weight:700; margin-right:52px; }
+  .org { font-size:.95rem; color:var(--sub); margin-top:2px; margin-right:52px; word-break:break-word; }
+  .ttl { font-size:1.25rem; font-weight:800; line-height:1.45; margin:4px 44px 8px 0; word-break:break-word; }
+  .star { position:absolute; top:8px; right:8px; width:48px; height:48px; border-radius:50%; background:transparent; font-size:1.7rem; line-height:48px; color:var(--sub); }
+  .star.on { color:var(--star); }
+  .chk { display:inline-block; background:var(--warn-bg); color:var(--warn-text); border-radius:99px; padding:1px 10px; font-size:.8rem; font-weight:700; margin-bottom:6px; }
+  .field { margin-top:10px; }
+  .field .lb { font-size:.78rem; color:var(--sub); font-weight:700; }
+  .field .v { word-break:break-word; overflow-wrap:anywhere; }
+  .field.hint { background:var(--accent-soft); border-radius:10px; padding:8px 10px; }
+  .field a { color:var(--accent); }
+  .empty { color:var(--sub); text-align:center; padding:40px 0; }
+
+  /* 下のめくりボタン */
+  .pager { position:fixed; left:0; right:0; bottom:0; background:var(--bg); border-top:1px solid var(--line);
+           padding:10px 16px calc(10px + env(safe-area-inset-bottom)); z-index:5; }
+  .pager .in { max-width:640px; margin:0 auto; display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; }
+  .pager button { background:var(--accent); color:#fff; border-radius:12px; padding:13px 10px; font-weight:700; font-size:1.05rem; }
+  .pager button:disabled { opacity:.35; }
+  @media (prefers-color-scheme: dark) { .pager button, #update { color:#151312; } }
+  .pager .pos { font-size:.95rem; color:var(--sub); min-width:70px; text-align:center; }
+
+  /* 一覧（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; display:flex; justify-content:space-between; align-items:center; }
+  .row { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .row .t { font-weight:700; word-break:break-word; }
+  .row .m { font-size:.8rem; color:var(--sub); }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); margin-top:18px; }
+  footer .memo { font-weight:700; color:var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🗂 事例カード</h1>
+    <button class="iconbtn" id="open-list">☰ 一覧</button>
+  </header>
+
+  <input id="q" type="search" placeholder="🔍 文字で検索（自治体名・取り組み・内容）">
+  <div class="filters">
+    <select id="f-theme" aria-label="テーマ"></select>
+    <button class="favbtn" id="f-fav" aria-pressed="false">★ お気に入り</button>
+  </div>
+  <div class="counts"><span id="counts"></span><button id="random">🎲 ランダム</button></div>
+
+  <div id="view"></div>
+
+  <footer>
+    <p class="memo">2026年11月7日時点の調査メモ。使う前に出典で確認</p>
+    <p>「要確認」の印は、調査で確かめ方が弱かったものです。<br>カードの左右スワイプでもめくれます。</p>
+    <p>版 <span id="ver"></span> ・ お気に入りはこのiPhoneの中だけに保存されます</p>
+  </footer>
+</main>
+
+<nav class="pager"><div class="in">
+  <button id="prev" aria-label="前のカード">◀ 前へ</button>
+  <span class="pos" id="pos"></span>
+  <button id="next" aria-label="次のカード">次へ ▶</button>
+</div></nav>
+
+<!-- 一覧 -->
+<div class="sheet" id="list">
+  <div class="inner">
+    <h2><span>一覧（<span id="list-n"></span>件）</span><button class="iconbtn" id="list-close">閉じる</button></h2>
+    <div id="list-body"></div>
+  </div>
+</div>
+
+<!-- 調査メモ（knowledge/ の4ファイル）の表から、ビルド時にPythonで取り出したデータ。手で書き換えないこと -->
+<!--DATA-START-->
+<script type="application/json" id="data">[{"id":"jichitai-apps:事例一覧:1","group":"他自治体の公式アプリ・サービス","themes":["防災"],"org":"東京都","title":"東京都防災アプリ","fields":[["できること（1行）","「東京防災」の閲覧（オフライン可）、災害時モード、オフライン防災マップ、備蓄チェックリスト（期限アラート）、チャットボットでマイ・タイムライン作成、防災クイズ、やさしい日本語・多言語に対応","body"],["テーマ","防災","extra"],["出典URL","https://www.itmedia.co.jp/news/article/1910/11/1191011127/","src"],["PWAで真似するときのヒント（1行）","Service Workerで冊子・地図をキャッシュしてオフライン化する。備蓄品の期限をlocalStorageに保存し、期限が近づいたら通知する","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:2","group":"他自治体の公式アプリ・サービス","themes":["防災"],"org":"文京区","title":"文京区防災アプリ／防災ポータル","fields":[["できること（1行）","プッシュ通知で重要なお知らせを受け取れる。避難所・帰宅困難者一時滞在施設の開設状況と混雑状況を、一覧と地図で見られる","body"],["テーマ","防災","extra"],["出典URL","https://www.city.bunkyo.lg.jp/bosai/bosai/bousai/kinkyu/potal.html","src"],["PWAで真似するときのヒント（1行）","区の既存アプリと重複させない。平常時は「最寄り避難所までの経路を確認する」「家族で集合場所を決める」機能に絞り、災害時は区の公式ポータルへリンクで誘導する","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:3","group":"他自治体の公式アプリ・サービス","themes":["ごみ分別"],"org":"横浜市","title":"横浜市ごみ分別チャットボット（旧「イーオのごみ分別案内」）","fields":[["できること（1行）","会話形式で品目の出し方を案内する。旧サービスは令和8年3月31日に終了し、チャットボットへ移行した（2017年度の利用は年間216万件）","body"],["テーマ","ごみ分別","extra"],["出典URL","https://www.city.yokohama.lg.jp/kurashi/sumai-kurashi/gomi-recycle/gomi/dashikata.html","src"],["PWAで真似するときのヒント（1行）","まずは品目名のあいまい検索（ひらがな・カタカナを同一視）で十分に役立つ。会話UIは後から足せばよい","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:4","group":"他自治体の公式アプリ・サービス","themes":["ごみ分別"],"org":"盛岡市ほか多数（津市・栃木市・福島市・阿久比町など）","title":"さんあ〜る","fields":[["できること（1行）","収集日カレンダー、前日・当日の通知、品目別の分別検索。栃木市版は5か国語に対応し、盛岡市版は2025年9月からAlexaの音声案内にも対応","body"],["テーマ","ごみ分別","extra"],["出典URL","https://www.city.morioka.iwate.jp/_res/projects/default_project/_page_/001/051/363/250902sigenjunkan.pdf","src"],["PWAで真似するときのヒント（1行）","初回に「地区」を選ばせて保存し、その地区の収集曜日を表示する。iOSのPWAはWeb Pushが使える（ホーム画面に追加した場合のみ）","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:5","group":"他自治体の公式アプリ・サービス","themes":["ごみ分別"],"org":"神戸市","title":"5374（ゴミナシ）神戸市版","fields":[["できること（1行）","分別検索・収集日検索・資源集団回収の検索。市のオープンデータを使い、NPOが市と協働で作成（元はCode for Kanazawaが開発したOSS）","body"],["テーマ","ごみ分別","extra"],["出典URL","https://www.city.kobe.lg.jp/a04164/kurashi/recycle/gomi/dashikata/bunbetsukubun/apri/","src"],["PWAで真似するときのヒント（1行）","OSSの5374を土台にできる。CSVを差し替えるだけで別の自治体版が作れる構造が参考になる","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:6","group":"他自治体の公式アプリ・サービス","themes":["ごみ分別"],"org":"東京都オープンデータ（世田谷区・荒川区・西東京市など）","title":"ごみ分別一覧のAPI公開","fields":[["できること（1行）","区市ごとのごみ分別一覧をAPI形式で公開している","body"],["テーマ","ごみ分別（データ）","extra"],["出典URL","https://spec.api.metro.tokyo.lg.jp/spec/t131121d3000000001-91f5629e6b555b630790b0d81d6e664a-0?lang=en","src"],["PWAで真似するときのヒント（1行）","文京区のデータがこの基盤にあるかは**要確認**。あればfetchで取り込み、なければ区のPDFを手作業でJSON化する","hint"]],"check":true,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:7","group":"他自治体の公式アプリ・サービス","themes":["子育て"],"org":"練馬区","title":"ねりすく（練馬区公式電子母子手帳アプリ）","fields":[["できること（1行）","妊婦・子ども向けのお知らせ通知、予防接種スケジュール管理。区の乳幼児健診の結果や予防接種の履歴が自動で反映される","body"],["テーマ","子育て","extra"],["出典URL","https://www.city.nerima.tokyo.jp/hokenfukushi/hoken/sukoyaka/nerisuku.html","src"],["PWAで真似するときのヒント（1行）","区のデータとの連携は真似できないので、生年月日から標準の予防接種スケジュールを計算して表示する部分を作る","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:8","group":"他自治体の公式アプリ・サービス","themes":["子育て"],"org":"練馬区","title":"ねりはぐ（ねりま子育て応援アプリ）","fields":[["できること（1行）","地域・子どもの年齢・関心を設定すると、関連するイベントや講座の情報が届く。保育所・子育て支援施設の地図もある","body"],["テーマ","子育て","extra"],["出典URL","https://www.city.nerima.tokyo.jp/kosodatekyoiku/kodomo/kosodate_appli/index.html","src"],["PWAで真似するときのヒント（1行）","「子どもの年齢×地域」で絞り込む情報フィルタは、アカウントなしでも端末内の設定だけで作れる","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:9","group":"他自治体の公式アプリ・サービス","themes":["子育て"],"org":"渋谷区","title":"シブヤ母子健康ノート（母子モ）","fields":[["できること（1行）","母子手帳アプリ。予防接種のお知らせ、健康・成長の記録","body"],["テーマ","子育て","extra"],["出典URL","https://resemom.jp/release/prtimes/20190902/56361.html","src"],["PWAで真似するときのヒント（1行）","2019年の記事なので現在も提供しているかは**要確認**。成長記録はIndexedDBに保存すれば端末内で完結する","hint"]],"check":true,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:10","group":"他自治体の公式アプリ・サービス","themes":["子育て","行政手続き"],"org":"渋谷区","title":"渋谷区LINE公式アカウント（@shibuyacity）の「子育て」メニュー","fields":[["できること（1行）","2016年に子育て支援の強化を目的として開設（自治体として国内初とされる）。メニューから子育て関連の申請ができる","body"],["テーマ","子育て／手続き","extra"],["出典URL","https://ieagent.jp/blog/eria/shibuyakukosodate-247997","src"],["PWAで真似するときのヒント（1行）","民間サイトの情報なので**要確認**。メニューをボタンで選ぶ形の導線は、PWAのトップ画面設計の参考になる","hint"]],"check":true,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:11","group":"他自治体の公式アプリ・サービス","themes":["子育て"],"org":"文京区","title":"文京区保育所案内アプリ","fields":[["できること（1行）","電子申請の一覧、認可保育所等のマップ・施設検索、最新の空き情報、申込スケジュール、必要書類の検索","body"],["テーマ","子育て","extra"],["出典URL","https://www.city.bunkyo.lg.jp/kyoiku/kosodate/okosan/nicchu/ninkahoikusho/apri.html","src"],["PWAで真似するときのヒント（1行）","区に既にある。PWAでは「申込までの自分用ToDo（書類チェックリスト）」のように、既存アプリを補う機能にする","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:12","group":"他自治体の公式アプリ・サービス","themes":["行政手続き"],"org":"港区","title":"スマホ区役所（LINE公式×GovTech Express）","fields":[["できること（1行）","2023年6月から、子どもの一時預かりの予約などを、LINEのトーク画面で質問に答えるだけで申請できる","body"],["テーマ","行政手続き","extra"],["出典URL","https://ascii.jp/elem/000/004/134/4134963/","src"],["PWAで真似するときのヒント（1行）","「質問に答えていくと、必要な手続きと持ち物が分かる」ウィザード形式は、申請をしなくてもPWAで作れる","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:13","group":"他自治体の公式アプリ・サービス","themes":["行政手続き"],"org":"北九州市","title":"書かない窓口／区役所の窓口予約","fields":[["できること（1行）","全区役所で窓口を予約できる。マイナンバーカードや運転免許証の情報を読み取って申請書に自動で印字する。スマホからのオンライン申請もある","body"],["テーマ","行政手続き","extra"],["出典URL","https://www.city.kitakyushu.lg.jp/files/001146731.pdf","src"],["PWAで真似するときのヒント（1行）","来庁前に「手続きナビ」で必要な書類を確認させ、窓口の待ち時間を減らす発想が使える","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:14","group":"他自治体の公式アプリ・サービス","themes":["行政手続き","市民参加"],"org":"千葉市","title":"ちばレポ（My City Report）","fields":[["できること（1行）","道路の陥没・破損などを写真と位置情報付きで投稿し、対応状況（受付済・対応中・対応済）を確認できる。LINEからも投稿できる","body"],["テーマ","行政手続き／市民参加","extra"],["出典URL","https://www.city.chiba.jp/sogoseisaku/shichokoshitsu/kohokocho/chibarepo_reportnoshurui.html","src"],["PWAで真似するときのヒント（1行）","写真（input capture）と位置情報（Geolocation）を取得して、メールの下書きを作るだけでも試作になる。緊急時は電話へ誘導する","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:15","group":"他自治体の公式アプリ・サービス","themes":["地域ポイント"],"org":"さいたま市","title":"さいたま市みんなのアプリ（さいコイン・たまポン）","fields":[["できること（1行）","2024年7月31日開始。デジタル地域通貨とポイント（1pt＝1円、市内の約3,100店舗）、図書館カード、ごみ情報、医療機関検索、防災アプリ連携","body"],["テーマ","地域ポイント","extra"],["出典URL","https://www.city.saitama.lg.jp/006/014/008/003/013/011/p119507.html","src"],["PWAで真似するときのヒント（1行）","決済は真似しない。「行政情報＋地域のお店」を1つのホーム画面に集めるポータル型の構成を参考にする","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:16","group":"他自治体の公式アプリ・サービス","themes":["地域ポイント"],"org":"中央区","title":"中央区公式アプリ","fields":[["できること（1行）","2026年10月1日開始。地域活動・ボランティア・イベントへの参加でポイントが貯まり、名産品や体験と交換できる。令和9年度以降に店舗での利用や商品券のデジタル化を予定","body"],["テーマ","地域ポイント","extra"],["出典URL","https://www.city.chuo.lg.jp/a0003/kusei/kouhoukouchou/press/261001.html","src"],["PWAで真似するときのヒント（1行）","23区の最新事例。PWAでは「参加したイベントの記録（スタンプ帳）」を端末内で持つところまでなら試作できる","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:17","group":"他自治体の公式アプリ・サービス","themes":["地域ポイント"],"org":"世田谷区","title":"せたがやPay","fields":[["できること（1行）","区内限定のデジタル地域通貨。毎月のポイント還元、区の情報・イベント案内、歩数計「せたWalk」（国保の健康ポイント事業）、現地決済型ふるさと納税（2025年2月〜）","body"],["テーマ","地域ポイント","extra"],["出典URL","https://paymentnavi.com/?p=120020","src"],["PWAで真似するときのヒント（1行）","歩数を使う健康ポイントの考え方が参考になる（ただしPWAで歩数を取るのは難しいので、まち歩きのチェックインで代用する）","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:18","group":"他自治体の公式アプリ・サービス","themes":["地域ポイント"],"org":"東京都","title":"東京アプリ（東京ポイント）","fields":[["できること（1行）","マイナンバーカードで本人確認すると、15歳以上の都民に11,000pt。PayPayポイントやWAON POINTに交換できる（2026年7月27日〜）。事業期間は2027年4月1日まで","body"],["テーマ","地域ポイント","extra"],["出典URL","https://zaikei.co.jp/releases/3542203/","src"],["PWAで真似するときのヒント（1行）","マイナンバー連携はPWAでは扱わない。「区民が使える都・区の給付やポイントの期限一覧」として案内するページは作れる","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:19","group":"他自治体の公式アプリ・サービス","themes":["観光・まち歩き"],"org":"京都市（京都市観光協会）","title":"京都観光Navi 観光快適度（混雑可視化）／京スマ","fields":[["できること（1行）","位置情報ビッグデータを元に時間帯別の観光快適度を予測して公開。ライブカメラ映像もある。2026年4月には京都駅周辺版の「駅スマ」も追加","body"],["テーマ","観光／まち歩き","extra"],["出典URL","https://ja.kyoto.travel/comfort/","src"],["PWAで真似するときのヒント（1行）","予測は無理でも「時間帯別のおすすめ（朝が空いている）」を静的データで示すだけで役立つ。出典：https://www.travelvoice.jp/20190919-138009","hint"]],"check":false,"file":"knowledge/jichitai-apps.md"},{"id":"jichitai-apps:事例一覧:20","group":"他自治体の公式アプリ・サービス","themes":["観光・まち歩き"],"org":"鎌倉市","title":"鎌倉観光公式ガイド／鎌倉観光混雑マップ／ぶらり鎌倉マップ","fields":[["できること（1行）","観光公式ガイド内の混雑可視化サイトへ誘導して、混雑緩和を促している。「歩く観光」用のマップも作っている","body"],["テーマ","観光／まち歩き","extra"],["出典URL","https://www.city.kamakura.kanagawa.jp/kankou/documents/over.pdf","src"],["PWAで真似するときのヒント（1行）","出典PDFの記述と各サービスの対応関係は**要確認**。「歩く観光」のコースを地図とGPXで配る形は、そのままPWAで真似できる","hint"]],"check":true,"file":"knowledge/jichitai-apps.md"},{"id":"kosodate-koreisha:事例一覧:1","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"練馬区","title":"ねりますくすくアプリ（ねりすく）＝区公式電子母子手帳","fields":[["できること（1行）","予防接種スケジュールの自動作成、成長記録（写真付き）、区のお知らせ、家族との共有","body"],["対象","妊婦・乳幼児の保護者","extra"],["出典URL","https://www.city.nerima.tokyo.jp/hokenfukushi/hoken/sukoyaka/nerisuku.files/nerisuku_goannai.pdf","src"],["PWAで真似するときのヒント","生年月日と接種記録はIndexedDBに置き、スケジュールは端末内で計算する。家族共有はファイル書き出しやQRコードで受け渡し、サーバーは使わない","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:2","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"港区","title":"みなと母子（親子）手帳アプリ","fields":[["できること（1行）","誕生日などを入れると予防接種スケジュールが自動作成される","body"],["対象","妊婦・乳幼児の保護者","extra"],["出典URL","https://apps.apple.com/jp/app/id1511360723","src"],["PWAで真似するときのヒント","接種ルールは静的JSONで配り、端末側で生年月日と照らし合わせる。通知はローカル通知かカレンダー（.ics）書き出しで済ませる","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:3","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"渋谷区","title":"シブヤ母子健康ノート（母子モ）","fields":[["できること（1行）","母子手帳アプリと渋谷区LINE公式アカウントの連携（2019年9月開始予定と発表）","body"],["対象","妊婦・乳幼児の保護者","extra"],["出典URL","https://resemom.jp/release/prtimes/20190902/56361.html","src"],["PWAで真似するときのヒント","手帳本体は端末内に置き、区の「お知らせ」だけを公開フィード（RSSやJSON）から取る。個人データとお知らせを分けて持つ","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:4","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"板橋区（ほか荒川・江戸川・豊島区も）","title":"いたばし子育て応援アプリ（母子モ）","fields":[["できること（1行）","母子モを区の名前で導入（板橋2022年7月、荒川2018年11月、江戸川2019年12月、豊島2021年4月）","body"],["対象","妊婦・乳幼児の保護者","extra"],["出典URL","https://resemom.jp/release/prtimes/20220701/84524.html","src"],["PWAで真似するときのヒント","既製品に頼らなくても、記録・スケジュール・お知らせの3つの機能だけならPWAで作れる。オフラインでも使えるようにService Workerでキャッシュする","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:5","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"練馬区","title":"母子保健オンライン相談","fields":[["できること（1行）","産婦人科医・小児科医・助産師へのフォーム相談（24時間以内に回答）、予約制の夜間ビデオ・チャット相談、助産師チャット","body"],["対象","妊婦・子育て中の保護者","extra"],["出典URL","https://www.city.nerima.tokyo.jp/hokenfukushi/hoken/sukoyaka/boshihokenonrain.html","src"],["PWAで真似するときのヒント","PWAは「相談窓口の振り分け役」にとどめ、症状や時間帯から窓口を案内する。相談内容そのものはPWAで保存も送信もしない","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:6","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"中野区","title":"子育て応援LINE（妊娠・出産）","fields":[["できること（1行）","手続きの確認、一時保育の予約、妊娠週数に合わせたアドバイスの配信","body"],["対象","妊婦・子育て中の保護者","extra"],["出典URL","https://www.city.tokyo-nakano.lg.jp/kosodate/kosodatesite_ohirune/nenreibetsu/ninshin/tool/ohirune.files/02_LINE.pdf","src"],["PWAで真似するときのヒント","出産予定日を端末内だけに保存し、週数ごとのアドバイスは静的データから表示する。予約は区の既存フォームへのリンクで済ませる","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:7","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"東京都（千代田・豊島・葛飾・江戸川区、町田市、瑞穂町が先行）","title":"プッシュ型子育てサービス／子育て支援制度レジストリ","fields":[["できること（1行）","制度をオープンデータ化（約7,400制度とされる）し、民間アプリがニーズに合う給付等を届けて「もらいそびれ」を防ぐ","body"],["対象","子育て家庭","extra"],["出典URL","https://www.metro.tokyo.lg.jp/tosei/hodohappyo/press/2024/03/27/19.html","src"],["PWAで真似するときのヒント","制度データだけを取り込み、子の年齢・世帯条件との照合は端末内で行う（条件をサーバーに送らない）。国の全国版は運用開始時期を要確認","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:8","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"千葉市","title":"保育園・認定こども園等 受入状況一覧（オープンデータ）","fields":[["できること（1行）","受入（空き）状況をPDFとExcelで公開。CC BY 4.0のオープンデータ","body"],["対象","保活中の保護者","extra"],["出典URL","https://www.city.chiba.jp/kodomomirai/yojikyoiku/unei/akizyoukyou.html","src"],["PWAで真似するときのヒント","機械で読めるデータを月ごとにJSON化して地図に重ねる。自宅の位置は端末内だけで使い、距離計算もブラウザ内で行う","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:9","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"郡山市（サイバーエージェント「ChilmAI」）","title":"保育所入所選考支援システム（OSS）","fields":[["できること（1行）","選考ルールを守りつつ待機児童数を最小化する選考支援。ソースコードを公開し無償で導入でき、2024年11月から郡山市で運用","body"],["対象","自治体職員（間接的に保護者）","extra"],["出典URL","https://www.cyberagent.co.jp/news/detail/id=31331","src"],["PWAで真似するときのヒント","保護者向けには「公開されている利用調整基準による指数の自己計算」機能が作れる。入力した世帯情報は端末内で計算するだけにする（出典記事のIDと郡山市の運用記載の対応は要確認）","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:10","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"福岡県","title":"こどもの居場所マップ","fields":[["できること（1行）","こども食堂などの居場所をWebで探せる（公開に同意した団体のみ掲載、公開当初434か所）","body"],["対象","子ども・保護者・支援者","extra"],["出典URL","https://www.pref.fukuoka.lg.jp/contents/kodomonoibasyomap1.html","src"],["PWAで真似するときのヒント","拠点データは静的GeoJSONで配る。開催日で絞り込み、地図タイルはキャッシュする。検索条件や現在地は送信しない","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:11","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"中央区","title":"高齢者通いの場（地域サロン）一覧・地図","fields":[["できること（1行）","区内の地域サロンの一覧と、会場地図へのリンクを掲載","body"],["対象","おおむね65歳以上","extra"],["出典URL","https://www.city.chuo.lg.jp/a0028/kenkouiryou/koureikaigo/koureisha-shien/ikigai/kayoinoba.html","src"],["PWAで真似するときのヒント","一覧を「曜日・徒歩圏」で探せる大きな文字のUIにする。お気に入りはlocalStorageに保存し、会員登録はさせない","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:12","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"港区","title":"チャレンジみなと（介護予防アプリ）","fields":[["できること（1行）","最大5人のチームで歩数を報告し合いコインを集める。令和8年9月から健康ポイントを始め、みなトクPAYポイントに交換可能","body"],["対象","60歳以上の区民","extra"],["出典URL","https://www.city.minato.tokyo.jp/kaigoyobousuisin/apri.html","src"],["PWAで真似するときのヒント","歩数は端末内に記録し、チーム共有は合計値だけを手動で送る形にする。ポイント交換はPWAでは扱わず公式の制度へ案内する","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:13","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"八王子市","title":"てくポ（健康ポイント）","fields":[["できること（1行）","健康アプリ「脳にいいアプリ」を使った健康ポイント施策（2021年10月開始、60歳以上の利用者13,140名とされる）","body"],["対象","主に60歳以上","extra"],["出典URL","https://dxmagazine.jp/?p=166801","src"],["PWAで真似するときのヒント","歩数と脳トレの記録は端末内に置き、達成バッジを出す。数値の出典は要確認","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:14","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"東京都（品川・世田谷・豊島区、調布市と連携）","title":"東京Chojuアプリ＋活動量計「ミモリー」","fields":[["できること（1行）","リストバンド型の活動量計とアプリでフレイルのリスクを検知し、予防につなげる（効果検証が主な目的）","body"],["対象","高齢者","extra"],["出典URL","https://www.metro.tokyo.lg.jp/information/press/2025/10/2025102001","src"],["PWAで真似するときのヒント","PWAなら「指輪っかテスト」や基本チェックリストのようなセルフチェックを端末内で採点し、結果を家族に見せる画面だけを作る","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:15","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"西東京市","title":"ひとり歩き高齢者位置探索等サービス","fields":[["できること（1行）","GPS端末（携帯用・靴用）を介護者に貸し出す。日常生活の賠償保険付き（2025年4月開始）","body"],["対象","認知症の方の介護者","extra"],["出典URL","https://www.city.nishitokyo.lg.jp/press/2025/press_kishakaiken_20250526.files/shiryo_5.pdf","src"],["PWAで真似するときのヒント","位置追跡はPWAの役割ではない。「行方不明時の連絡カード」（写真・特徴）を端末内で作り、必要なときだけ印刷・共有する","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:16","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"台東区","title":"台東区障害者支援アプリ「ささえ～る」","fields":[["できること（1行）","障害者支援の情報提供。台東区バリアフリーマップ（ユニバーサル地図／ナビ）との連携機能（アプリストアの説明による・要確認）","body"],["対象","障害のある方","extra"],["出典URL","https://apps.apple.com/jp/app/%E5%8F%B0%E6%9D%B1%E5%8C%BA%E9%9A%9C%E5%AE%B3%E8%80%85%E6%94%AF%E6%8F%B4%E3%82%A2%E3%83%97%E3%83%AA-%E3%81%95%E3%81%95%E3%81%88-%E3%82%8B/id6741409076","src"],["PWAで真似するときのヒント","手帳の等級などから使える制度を絞り込む処理を端末内で行う。等級などの入力値は保存しない設定も選べるようにする","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:17","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"新宿区","title":"新宿らくらくバリアフリーマップ","fields":[["できること（1行）","区の施設や商業施設など約430か所を掲載。設備からの逆引き検索、スマホ対応（2020年東京大会に向けて刷新、現状は要確認）","body"],["対象","車いす利用者・高齢者など","extra"],["出典URL","https://www.city.shinjuku.lg.jp/content/000255244.pdf","src"],["PWAで真似するときのヒント","「多目的トイレ・エレベーターがある所」のように設備で絞り込める静的データの地図にする。オフラインでも使えるようにキャッシュする","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:18","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"神戸市","title":"神戸市×WheeLog! バリアフリーマップ","fields":[["できること（1行）","市が公共施設の情報をNPOのWheeLog!に提供し、住民がアプリで投稿して地図を充実させる","body"],["対象","車いす利用者","extra"],["出典URL","https://www.city.kobe.lg.jp/a97737/kenko/handicap/syakaikatdudou/barrierfree/index.html","src"],["PWAで真似するときのヒント","投稿機能は既存サービスに任せ、PWAは区の公共施設データを見やすく出すだけにする（個人の投稿や位置履歴を持たない）","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:19","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"福知山市（ほか大野市・亀岡市など）","title":"ミライロID（障害者手帳のデジタル提示）の受け入れ","fields":[["できること（1行）","市の施設や市営バスで、アプリの画面を手帳の提示として扱う（福知山市は令和3年8月25日から）","body"],["対象","障害者手帳を持つ方","extra"],["出典URL","https://www.city.fukuchiyama.lg.jp/uploaded/attachment/26902.pdf","src"],["PWAで真似するときのヒント","PWAで手帳の代わりを作るのは不可（公的な証明が必要）。「ミライロIDが使える区の施設一覧」を案内するだけにする","hint"]],"check":false,"file":"knowledge/kosodate-koreisha.md"},{"id":"kosodate-koreisha:事例一覧:20","group":"子育て・高齢者・障害のある方向け","themes":[],"org":"世田谷区","title":"シニアボランティア・ポイント事業","fields":[["できること（1行）","介護施設などでのボランティア1時間でポイント1枚（100円相当）。年間最大12,000円を介護保険料の負担軽減資金として支給","body"],["対象","区内在住の65歳以上","extra"],["出典URL","https://www.city.setagaya.lg.jp/theme/008/002/d00016787.html","src"],["PWAで真似するときのヒント","活動時間の自己記録を端末内で集計するだけにする。正式な付与は施設のスタンプなど既存の手続きで行う（出典ページの内容一致は要確認）","hint"]],"check":true,"file":"knowledge/kosodate-koreisha.md"},{"id":"giin-hasshin:事例一覧:1","group":"議会・議員の情報発信","themes":[],"org":"埼玉県熊谷市議会","title":"本会議中継のスマホ対応","fields":[["内容（1行）","2016年第2回定例会から、本会議のネット中継をスマホでも見られるようにした（若い世代向け）","body"],["出典URL","https://seijiyama.jp/article/news/g20160726.html","src"],["PWAで真似するときのヒント（1行）","自分の質問の中継・録画へのリンクを、スマホ向けの1画面にまとめる","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:2","group":"議会・議員の情報発信","themes":[],"org":"栃木県日光市議会","title":"生中継・録画中継","fields":[["内容（1行）","PC・スマホ・タブレットで視聴できる。録画は本会議の約1週間後に公開され、日程や議員名から場面を探せる","body"],["出典URL","https://www.city.nikko.lg.jp/material/files/group/3/03031415.pdf","src"],["PWAで真似するときのヒント（1行）","「録画公開予定日」を自動で表示し、公開されたらリンクを差し替える","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:3","group":"議会・議員の情報発信","themes":[],"org":"東京都大田区議会","title":"定例会中継ページ","fields":[["内容（1行）","一般質問をした議員の名前・質問テーマ・動画の長さを一覧にして載せている","body"],["出典URL","https://www.city.ota.tokyo.jp/gikai/hirakareta_gikai/g_chuukei/r_7/7_3_teirei_chukei.html","src"],["PWAで真似するときのヒント（1行）","自分の質問を「テーマ／所要時間／動画リンク」のカードにして並べる","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:4","group":"議会・議員の情報発信","themes":[],"org":"大阪府箕面市議会","title":"一般質問の動画配信（YouTube）","fields":[["内容（1行）","質問者ごとに質問内容と再生時間を並べ、YouTubeへリンクしている","body"],["出典URL","https://www.city.minoh.lg.jp/gikai/douga/r7-2ippansitumon.html","src"],["PWAで真似するときのヒント（1行）","YouTubeのURLに再生開始時刻（t=秒）をつけて、聞きたい質問から始まるようにする","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:5","group":"議会・議員の情報発信","themes":[],"org":"山口県山陽小野田市議会","title":"議会モニターとの意見交換","fields":[["内容（1行）","市民から「議会動画は長い・面白くない」との声があり、短く編集する案や、一般質問にテーマのタグをつける案が出た","body"],["出典URL","https://www.city.sanyo-onoda.lg.jp/uploaded/attachment/62986.pdf （関連：…/65300.pdf）","src"],["PWAで真似するときのヒント（1行）","質問ごとに政策タグ（子育て・防災など）をつけ、タグで絞り込めるようにする","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:6","group":"議会・議員の情報発信","themes":[],"org":"岡山市議会","title":"議員ごとの賛否の公開","fields":[["内容（1行）","起立で採決した議案について、会派名・議員名を並べた表で議員ごとの賛否を載せている","body"],["出典URL","https://www.city.okayama.jp/gikai/0000078068.html","src"],["PWAで真似するときのヒント（1行）","自分の賛否を議案ごとに「賛成/反対＋理由1行」で記録する","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:7","group":"議会・議員の情報発信","themes":[],"org":"千葉県市川市議会","title":"議案の全文・議員別賛否","fields":[["内容（1行）","議案などの全文と議員別の賛否を市の公式サイトに載せていると明記している","body"],["出典URL","https://www.city.ichikawa.lg.jp/common/cou01/file/0000486148.pdf","src"],["PWAで真似するときのヒント（1行）","議案の原文PDFへのリンクと自分の賛否を、同じ画面に並べる","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:8","group":"議会・議員の情報発信","themes":[],"org":"千葉市議会","title":"議員提出議案の議決結果","fields":[["内容（1行）","会派ごとの賛否を「〇＝賛成・×＝反対・※＝除斥や棄権が混じる」の表で示している","body"],["出典URL","https://www.city.chiba.jp/shigikai/giinteisyutsu2403.html","src"],["PWAで真似するときのヒント（1行）","〇×の表をCSVやJSONで持ち、表を自動で作る","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:9","group":"議会・議員の情報発信","themes":[],"org":"大阪府堺市議会","title":"主な議案の会派別賛否一覧","fields":[["内容（1行）","○・×に加え、△（会派の中で賛否が分かれた）を使って示している","body"],["出典URL","https://www.city.sakai.lg.jp/shigikai/kekka/giketsukekka/sanpiichiran051220.files/030930sanpi.pdf","src"],["PWAで真似するときのヒント（1行）","賛否の項目に「会派と違う判断をした」かどうかの欄をつけておく","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:10","group":"議会・議員の情報発信","themes":[],"org":"世田谷区・八千代市（住民からの要望）","title":"採決結果をわかりやすく公開するよう求める陳情・請願","fields":[["内容（1行）","世田谷区では採決結果を○×の図で見やすく公開するよう求める陳情、八千代市では常任委員会の議員別賛否の公開を求める請願が出ている","body"],["出典URL","https://www.city.setagaya.lg.jp/documents/18581/seigan-8-6.pdf ／ https://www.city.yachiyo.lg.jp/uploaded/attachment/15429.pdf","src"],["PWAで真似するときのヒント（1行）","住民が求めているのは「図で見える賛否」。議員個人で先にやってみる価値がある","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:11","group":"議会・議員の情報発信","themes":[],"org":"札幌市議会","title":"市の公式LINEで議会からのお知らせを配信","fields":[["内容（1行）","2024年9月から、市の公式LINEの受信設定で「市議会からのお知らせ」を選ぶと届く","body"],["出典URL","https://www.city.sapporo.jp/gikai/gikailine.html","src"],["PWAで真似するときのヒント（1行）","Web Pushの通知を「議会日程」「質問予定」「報告」のように種類別に選べるようにする","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:12","group":"議会・議員の情報発信","themes":[],"org":"千葉県船橋市議会","title":"議会独自のLINE公式アカウント（@funabashi_gikai）","fields":[["内容（1行）","本会議・委員会・市議会だより・お知らせを配信している","body"],["出典URL","https://www.city.funabashi.lg.jp/assembly/012/p025779.html","src"],["PWAで真似するときのヒント（1行）","LINEとPWAの通知の役割を分ける（LINEはきっかけ、PWAは記録の置き場）","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:13","group":"議会・議員の情報発信","themes":[],"org":"群馬県議会／岩手県金ケ崎町議会","title":"議会だよりをアプリで配信","fields":[["内容（1行）","群馬県議会は議会だよりを無料アプリで読めるよう案内している。金ケ崎町は議会だよりと定例会の日程を「マチイロ」で配信している","body"],["出典URL","https://www.pref.gunma.jp/site/gikai/24801.html ／ https://www.soumu.go.jp/main_content/000881321.pdf （金ケ崎町の件は総務省資料中の記載、要確認）","src"],["PWAで真似するときのヒント（1行）","区政報告の紙面を、PDFではなくHTMLの記事にしてオフラインでも読めるようにする","hint"]],"check":true,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:14","group":"議会・議員の情報発信","themes":[],"org":"沖縄県南風原町（住民の玉城陽平さん）","title":"非公式南風原町議会アプリ","fields":[["内容（1行）","2021年8月に公開。一般質問のやりとりや各議員が重視する政策、議員の居住地・年代・会派・報酬などを紹介。ノウハウとデータを無償で提供し、ほかの若者もこれを参考にした","body"],["出典URL","https://ryukyushimpo.jp/news/entry-1390035.html （関連：https://ryukyushimpo.jp/news/entry-1474591.html ）","src"],["PWAで真似するときのヒント（1行）","「議員の基本データ＋質問の要約」を一覧にした形は、議員個人のPWAにも移せる。のちの町議会の通告書に同じ名前の議員が載っているが、同じ人かどうかは要確認","hint"]],"check":true,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:15","group":"議会・議員の情報発信","themes":[],"org":"茨城県取手市議会","title":"オンライン委員会・AIによる字幕","fields":[["内容（1行）","2020年にタブレットを入れ、同年11月にオンライン委員会を初めて開いた。「議会改革度調査2020」で全国1位。ネット中継にAIで文字起こしした字幕を表示しているとされる","body"],["出典URL","https://www.atpress.ne.jp/news/261468 ／ https://www.pref.mie.lg.jp/common/content/001040205.pdf （字幕の件は他県の資料中の記載、要確認）","src"],["PWAで真似するときのヒント（1行）","自分の質問動画に文字起こしをつけ、本文から検索できるようにする","hint"]],"check":true,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:16","group":"議会・議員の情報発信","themes":[],"org":"島根県浜田市議会","title":"生成AIで委員会の会議録を作る","fields":[["内容（1行）","令和7年7月から、委員会の会議録（要点筆記）作りに生成AI（Google AI Studio）を本格的に使い、作業時間が約1/4になったと報告している","body"],["出典URL","https://www.city.hamada.shimane.jp/www/gikai/contents/1765260112654/files/AI_kaigiroku.pdf","src"],["PWAで真似するときのヒント（1行）","自分の質問と答弁の要約をAIで下書きし、必ず人が確かめてから載せる","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:17","group":"議会・議員の情報発信","themes":[],"org":"研究者（木村泰知氏ら）","title":"地方議会会議録コーパス","fields":[["内容（1行）","全国の地方議会の会議録を「いつ・どの会議で・どの議員が・何を発言したか」で検索できる形に整えている。2018年時点で会議録をネット公開している自治体は約86%","body"],["出典URL","https://anlp.jp/proceedings/annual_meeting/2018/pdf_dir/P5-3.pdf","src"],["PWAで真似するときのヒント（1行）","自分の発言データも「日付・会議名・発言者・本文」の4項目で持っておくと、あとで使い回しやすい","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:18","group":"議会・議員の情報発信","themes":[],"org":"京都大学 河原達也教授ら（JSTのプロジェクト）","title":"地方議会の審議映像を検索・可視化","fields":[["内容（1行）","音声認識で映像を文字にし、キーワードをクリックすると該当する発言の場面が再生される仕組みを作っている（2023〜2025年度の予定）","body"],["出典URL","https://projectdb.jst.go.jp/grant/JST-PROJECT-23815655 （関連：https://shingi.jst.go.jp/pdf/2024/2024_jst-1_002.pdf ）","src"],["PWAで真似するときのヒント（1行）","文字起こしの各段落に動画の秒数を持たせ、文をタップすると動画が飛ぶようにする","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:19","group":"議会・議員の情報発信","themes":[],"org":"長岡市議会の議員（個人ブログ）","title":"議員ごとの一般質問回数の集計","fields":[["内容（1行）","2023年6月議会〜2026年9月議会の一般質問回数を議員ごとに一覧にしている（議会の公式データではなく個人の集計）","body"],["出典URL","https://go2senkyo.com/seijika/185614/posts/1486998 （自治体名・期間は検索の要約から。要確認）","src"],["PWAで真似するときのヒント（1行）","自分の質問回数・テーマの割合を自動で集計して見せる","hint"]],"check":true,"file":"knowledge/giin-hasshin.md"},{"id":"giin-hasshin:事例一覧:20","group":"議会・議員の情報発信","themes":[],"org":"海外：Council Data Project（米国）／The Hansard（英国）","title":"市議会の文字起こし検索／議会の記録と投票履歴のアプリ","fields":[["内容（1行）","CDPは市議会の会議を文字に起こして誰でも検索できるようにしている。Hansardアプリは議会の記録の検索と、議員のプロフィール・投票履歴を見られる","body"],["出典URL","https://blog.democracylab.org/council-data-project-demystifies-city-governments/ ／ https://mwm.ai/ja/apps/the-hansard/6762037651","src"],["PWAで真似するときのヒント（1行）","「発言の検索＋投票履歴」を1つのアプリに入れた形が、目指す姿の参考になる","hint"]],"check":false,"file":"knowledge/giin-hasshin.md"},{"id":"opendata-civictech:節2:1","group":"他自治体のシビックテック作品","themes":[],"org":"石川県金沢市（Code for Kanazawa）","title":"5374（ごみなし）.jp","fields":[["内容","ごみ収集日を色分けで表示し、分別の品目を一覧で見せる。100以上の都市に広がった（2018年IPA資料による）","body"],["出典URL","http://5374.jp ／ https://imi.ipa.go.jp/contents/2018/07/20180601_02_07_CfK.pdf","src"],["PWA化のヒント","ソースはMPLライセンスで公開。`data`フォルダを差し替えれば別の自治体で使える。文京区版がつくれるかを最初に検討する","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:2","group":"他自治体のシビックテック作品","themes":[],"org":"長野県塩尻市など","title":"5374 塩尻版などのフォーク","fields":[["内容","塩尻市の収集カレンダーで動かしたフォーク","body"],["出典URL","https://www.github.com/shiolab/5374 ／ https://github.com/myokoym/5374","src"],["PWA化のヒント","「データを差し替えるだけ」の実例として参考になる","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:3","group":"他自治体のシビックテック作品","themes":[],"org":"兵庫県神戸市（NPO法人コミュニティリンクと市環境局）","title":"5374（ごみなし）神戸版","fields":[["内容","6か国語に対応。収集日を調べられ、品目から分別も検索できる。2025年3月31日に更新","body"],["出典URL","https://www.city.kobe.lg.jp/a04164/kurashi/recycle/gomi/dashikata/bunbetsukubun/apri/","src"],["PWA化のヒント","多言語対応。文京区の留学生や外国人住民向けにも","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:4","group":"他自治体のシビックテック作品","themes":[],"org":"北海道札幌市（Code for Sapporo）","title":"さっぽろ保育園マップ（ぱぱまま）","fields":[["内容","認可保育所の一覧を整え、地図に載せた。住所が丁目までしかないこと、園名の表記ゆれが課題だった","body"],["出典URL","https://docs.google.com/document/d/1s8Y6Ahdl-MZY3OGiTaBs6MPAviujxuJx2uxk2uZ3rmY/export?format=pdf （現在の公開状況は要確認）","src"],["PWA化のヒント","住所から緯度経度に変える作業がいちばん大変。データを先に整える","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:5","group":"他自治体のシビックテック作品","themes":[],"org":"千葉県千葉市（Code for Chiba）","title":"ちば保育園マップ","fields":[["内容","市内の認可・認可外保育所と幼稚園を地図で探せる","body"],["出典URL","https://www.city.chiba.jp/somu/joho/kaikaku/chibadataportal_appli.html","src"],["PWA化のヒント","保育園の種類ごとにアイコンを分ける、空き情報を重ねる","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:6","group":"他自治体のシビックテック作品","themes":[],"org":"千葉県千葉市","title":"ちばレポ（ちば市民協働レポート）","fields":[["内容","道路の傷みや公園遊具の不具合を、写真と位置をつけてスマホで報告する。2014年に正式に始まった","body"],["出典URL","https://cloud.watch.impress.co.jp/docs/news/20140829_664217.html","src"],["PWA化のヒント","PWAではカメラとGPSが使える。文京区版の「まちの困りごと投稿」の試作に","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:7","group":"他自治体のシビックテック作品","themes":[],"org":"千葉県千葉市","title":"千葉市 公共施設の位置情報","fields":[["内容","市のサイトの施設案内で使っている位置情報をCSVで公開","body"],["出典URL","https://www.city.chiba.jp/sogoseisaku/shichokoshitsu/kohokocho/map_opendata.html","src"],["PWA化のヒント","施設マップの元データの公開のしかたとして参考になる（区への提案材料に）","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:8","group":"他自治体のシビックテック作品","themes":[],"org":"東京都（Code for Japan）","title":"東京都 新型コロナウイルス感染症対策サイト","fields":[["内容","感染者数などのオープンデータを見やすくしたサイト。オープンソースで公開され、すべての都道府県で同じ形のサイトがつくられた","body"],["出典URL","https://www.businessinsider.jp/post-212276 ／ https://atmarkit.itmedia.co.jp/ait/articles/2009/30/news031.html","src"],["PWA化のヒント","データの形をそろえ（標準フォーマット）、見せ方をテンプレート化すると横に広がる","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:9","group":"他自治体のシビックテック作品","themes":[],"org":"栃木県小山市（Code for OYAMA）","title":"おやまAEDマップ → 子ども施設マップ","fields":[["内容","市のオープンデータでAEDマップをつくり、同じ構成を子ども施設マップに使い回した。Claude Codeで移行した手順の記事あり","body"],["出典URL","https://zenn.dev/bishi/articles/20250810a_article","src"],["PWA化のヒント","地図アプリを1つ型にすれば、データを替えるだけで何本もつくれる。この実験室のやり方に近い","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:10","group":"他自治体のシビックテック作品","themes":[],"org":"全国（民間）","title":"日本全国AEDマップ（aedm.jp）","fields":[["内容","GPSで近くのAEDを表示。利用者の投稿で成り立ち、正確さの保証はない","body"],["出典URL","https://apps.apple.com/jp/app/id421697422","src"],["PWA化のヒント","公式データ（節1の3・4）と投稿データの違いを画面に書く","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:11","group":"他自治体のシビックテック作品","themes":[],"org":"愛知県","title":"愛知県 AED設置情報","fields":[["内容","AEDの設置情報をCSV（UTF-8）で公開し、毎日更新","body"],["出典URL","https://www.pref.aichi.jp/opendata/aichi-aedmap/aed.html","src"],["PWA化のヒント","「毎日更新するCSV」は区に求める公開の水準として参考になる","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:12","group":"他自治体のシビックテック作品","themes":[],"org":"全国（災害支援）","title":"mapprint（Code for Japan）","fields":[["内容","GoogleマイマップやuMapのデータを取り込み、印刷向けの地図にする。MITライセンス","body"],["出典URL","https://github.com/codeforjapan/mapprint","src"],["PWA化のヒント","避難所マップに「印刷する」ボタンをつける（スマホを持たない人に紙で配る）","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節2:13","group":"他自治体のシビックテック作品","themes":[],"org":"東京（Tokyo OSS Party!! で市民が開発）","title":"防災備蓄マップ（bichiku-map）","fields":[["内容","避難所の防災備蓄の状況を登録して表示できるオープンソースのテンプレート","body"],["出典URL","https://www.github.com/t-kurasawa/bichiku-map","src"],["PWA化のヒント","文京区の避難所CSV（節1の5）と組み合わせて「備蓄の見える化」","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:1","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"オープンデータBUNKYO（文京区オープンデータポータル）","fields":[["形式","分野別一覧。メタデータ一覧CSVあり","extra"],["利用条件","CC BY 4.0（「文京区のデータを使った」と表示する）","extra"],["URL","https://www.city.bunkyo.lg.jp/b004/p006286.html ／ 一覧 https://www.city.bunkyo.lg.jp/b004/p006749.html ／ FAQ https://www.city.bunkyo.lg.jp/kusejoho/opendata/opendatashitsumon.html","src"],["使えそうなアプリ案","区のデータ全体を探せる検索アプリ","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:2","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"文京区 イベント一覧","fields":[["形式","CSV（一覧ページに掲載）","extra"],["利用条件","CC BY 4.0（ポータル共通） ※どの範囲のイベントか、更新の頻度は要確認","extra"],["URL","https://www.city.bunkyo.lg.jp/b004/p006749.html","src"],["使えそうなアプリ案","「今週の文京区イベント」カレンダー","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:3","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"文京区のAED設置箇所一覧","fields":[["形式","都のAPIカタログに登録あり（形式は要確認）","extra"],["利用条件","要確認（都カタログは原則CC BY 4.0）","extra"],["URL","https://spec.api.metro.tokyo.lg.jp/spec/t131059d0000000002-1d218f3f609cad9767de90fa8e33c26e-0?lang=en","src"],["使えそうなアプリ案","現在地から近いAEDを示すマップ","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:4","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"区立小・中学校の校門等のAED（24時間利用可）","fields":[["形式","HTMLの一覧表（施設名・住所・「正門左手」などの設置場所）","extra"],["利用条件","オープンデータとしての表示はない（要確認）","extra"],["URL","https://www.city.bunkyo.lg.jp/b009/p000234.html （AED総合ページ https://www.city.bunkyo.lg.jp/b009/p000051.html 、ファミリーマート設置店 https://www.city.bunkyo.lg.jp/b009/p000164.html ）","src"],["使えそうなアプリ案","3と組み合わせて「夜でも使えるAED」で絞り込む","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:5","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"文京区の避難所・緊急避難場所一覧","fields":[["形式","CSV（都のAPIあり）","extra"],["利用条件","要確認（都カタログは原則CC BY 4.0）","extra"],["URL","https://spec.api.metro.tokyo.lg.jp/spec/t131059d0502060001-4621833cac34429f839636c33ade6e9f-0?lang=en","src"],["使えそうなアプリ案","オフラインでも見られる避難所マップ（PWAのキャッシュを使う）","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:6","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"文京区防災地図（令和7年4月発行版）","fields":[["形式","PDF地図","extra"],["利用条件","要確認","extra"],["URL","https://www.city.bunkyo.lg.jp/b009/p000027.html","src"],["使えそうなアプリ案","避難所アプリから元の地図PDFへのリンク","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:7","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"文京区の公衆無線LAN設置場所","fields":[["形式","CSV・Excel（都のAPIあり）","extra"],["利用条件","要確認（都カタログは原則CC BY 4.0）","extra"],["URL","https://spec.api.metro.tokyo.lg.jp/spec/t131059d0101040001-68c4b87646d45057353dc738cbcdb85f-0?lang=en","src"],["使えそうなアプリ案","「近くの無料Wi-Fi」マップ（災害時の連絡手段にも）","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:8","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"東京都防災マップ 避難所・避難場所一覧データ","fields":[["形式","都のAPIあり（形式は要確認）","extra"],["利用条件","CC BY 4.0（出典を表示する）","extra"],["URL","https://spec.api.metro.tokyo.lg.jp/spec/t000003d0000000093-0af9bfa497bc7be6ef83e5bfd1fdcfc6-0?lang=en","src"],["使えそうなアプリ案","区境をまたいで避難所を探せるマップ","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:9","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"車椅子使用者対応トイレのバリアフリー情報（東京都福祉局）。公共施設は令和6年度更新版、鉄道駅は令和4年度更新版","fields":[["形式","CSV＋写真（緯度経度、出入口の幅、オストメイト、ベビーチェアなど）。API（service.api.metro.tokyo.lg.jp）あり","extra"],["利用条件","要確認（都カタログは原則CC BY 4.0）。工事・故障で使えない場合があるとの注意書きあり","extra"],["URL","https://www.fukushi.metro.tokyo.lg.jp/kiban/machizukuri/bf_data.html ／ API https://spec.api.metro.tokyo.lg.jp/spec/t000054d0000000342-7a9c14dc8c4743458ac2ff54f1461aa1-0?lang=en","src"],["使えそうなアプリ案","文京区内のバリアフリートイレ・おむつ交換台マップ","hint"]],"check":true,"file":"knowledge/opendata-civictech.md"},{"id":"opendata-civictech:節1:10","group":"文京区・東京都のオープンデータ","themes":[],"org":"","title":"東京都オープンデータカタログサイト／利用規約（平成29年3月24日 総務局長決定）","fields":[["形式","CKANカタログ（CSVなど）。データごとのAPI仕様ページあり","extra"],["利用条件","原則CC BY 4.0。データごとにライセンスの表示を確認する","extra"],["URL","https://catalog.data.metro.tokyo.lg.jp/ ／ API一覧 https://spec.api.metro.tokyo.lg.jp/","src"],["使えそうなアプリ案","文京区のデータ（識別子 t131059…）を自動で取り込む仕組み","hint"]],"check":false,"file":"knowledge/opendata-civictech.md"}]</script>
+<!--DATA-END-->
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_FAVS = 'cards:favs';      // お気に入りにしたカードのID
+const KEY_STATE = 'cards:state';    // 最後に見ていたカードと絞り込み
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+let CARDS = [];
+try { CARDS = JSON.parse($('data').textContent); } catch (e) { CARDS = []; }
+let favs = new Set(load(KEY_FAVS, []));
+let state = load(KEY_STATE, { id: '', theme: '', fav: false, q: '' });
+let shown = [];
+let idx = 0;
+
+// ===== 表の文字をそのまま表示（URLはリンクに、**太字** は太字に） =====
+const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+/g;
+function rich(text) {
+  const frag = document.createDocumentFragment();
+  // まず **太字** で区切る
+  String(text).split(/(\*\*[^*]+\*\*)/).forEach((part) => {
+    if (!part) return;
+    if (/^\*\*[^*]+\*\*$/.test(part)) { frag.append(el('b', '', part.slice(2, -2))); return; }
+    let last = 0;
+    part.replace(URL_RE, (m, off) => {
+      let url = m.replace(/[).,;]+$/, '');            // 末尾の記号はURLに含めない
+      frag.append(document.createTextNode(part.slice(last, off)));
+      const a = el('a', '', url); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      frag.append(a);
+      last = off + url.length;
+      return m;
+    });
+    frag.append(document.createTextNode(part.slice(last)));
+  });
+  return frag;
+}
+
+// ===== テーマの選択肢 =====
+function buildThemes() {
+  const sel = $('f-theme');
+  sel.innerHTML = '';
+  sel.add(new Option('すべてのテーマ（' + CARDS.length + '件）', ''));
+  const groups = [];
+  CARDS.forEach((c) => { if (!groups.includes(c.group)) groups.push(c.group); });
+  groups.forEach((g) => {
+    const og = document.createElement('optgroup');
+    og.label = g;
+    const inG = CARDS.filter((c) => c.group === g);
+    og.append(new Option(g + '（' + inG.length + '件）', 'g:' + g));
+    const subs = [];
+    inG.forEach((c) => (c.themes || []).forEach((t) => { if (!subs.includes(t)) subs.push(t); }));
+    subs.forEach((t) => og.append(new Option('　' + t + '（' + inG.filter((c) => (c.themes || []).includes(t)).length + '件）', 't:' + g + ':' + t)));
+    sel.append(og);
+  });
+  sel.value = [...sel.options].some((o) => o.value === state.theme) ? state.theme : '';
+}
+
+function matches(c) {
+  const th = $('f-theme').value;
+  if (th.startsWith('g:') && c.group !== th.slice(2)) return false;
+  if (th.startsWith('t:')) {
+    const [, g, t] = th.split(':');
+    if (c.group !== g || !(c.themes || []).includes(t)) return false;
+  }
+  if ($('f-fav').getAttribute('aria-pressed') === 'true' && !favs.has(c.id)) return false;
+  const q = $('q').value.trim().toLowerCase();
+  if (q) {
+    const all = [c.org, c.title, ...c.fields.map((f) => f[1])].join('\n').toLowerCase();
+    if (!q.split(/\s+/).every((w) => all.includes(w))) return false;
+  }
+  return true;
+}
+
+function applyFilter(keepId) {
+  const curId = keepId || (shown[idx] && shown[idx].id);
+  shown = CARDS.filter(matches);
+  const i = shown.findIndex((c) => c.id === curId);
+  idx = i >= 0 ? i : 0;
+  render();
+}
+
+function remember() {
+  state = { id: shown[idx] ? shown[idx].id : '', theme: $('f-theme').value, fav: $('f-fav').getAttribute('aria-pressed') === 'true', q: $('q').value };
+  save(KEY_STATE, state);
+}
+
+// ===== 1枚のカードを表示 =====
+function render(dir) {
+  const view = $('view');
+  view.innerHTML = '';
+  const total = CARDS.length;
+  $('counts').textContent = shown.length === total ? '全' + total + '件' : total + '件中 ' + shown.length + '件を表示';
+  $('pos').textContent = shown.length ? (idx + 1) + ' / ' + shown.length : '0 / 0';
+  $('prev').disabled = $('next').disabled = shown.length < 2;
+  $('random').hidden = shown.length < 2;
+  remember();
+  if (!shown.length) {
+    view.append(el('p', 'empty', $('f-fav').getAttribute('aria-pressed') === 'true' && !favs.size
+      ? 'お気に入りはまだありません。カード右上の ☆ を押すと入ります。' : '条件に合うカードはありません'));
+    return;
+  }
+  const c = shown[idx];
+  const card = el('article', 'card');
+  card.append(el('div', 'grp', c.group));
+  if (c.org) card.append(el('div', 'org', c.org));
+  const t = el('div', 'ttl'); t.append(rich(c.title)); card.append(t);
+  if (c.check) card.append(el('span', 'chk', '⚠ 要確認の記載あり'));
+  const star = el('button', 'star' + (favs.has(c.id) ? ' on' : ''), favs.has(c.id) ? '★' : '☆');
+  star.setAttribute('aria-label', favs.has(c.id) ? 'お気に入りから外す' : 'お気に入りに入れる');
+  star.onclick = () => {
+    if (favs.has(c.id)) favs.delete(c.id); else favs.add(c.id);
+    save(KEY_FAVS, [...favs]);
+    applyFilter(c.id);
+  };
+  card.append(star);
+  c.fields.forEach(([label, value, kind]) => {
+    const f = el('div', 'field' + (kind === 'hint' ? ' hint' : ''));
+    f.append(el('div', 'lb', label));
+    const v = el('div', 'v'); v.append(rich(value)); f.append(v);
+    card.append(f);
+  });
+  if (dir) { card.classList.add(dir === 1 ? 'out-r' : 'out-l'); requestAnimationFrame(() => requestAnimationFrame(() => card.classList.remove('out-r', 'out-l'))); }
+  view.append(card);
+  addSwipe(card);
+}
+
+function go(step) {
+  if (shown.length < 2) return;
+  idx = (idx + step + shown.length) % shown.length;
+  render(step);
+  window.scrollTo(0, 0);
+}
+$('prev').onclick = () => go(-1);
+$('next').onclick = () => go(1);
+$('random').onclick = () => {
+  if (shown.length < 2) return;
+  let n; do { n = Math.floor(Math.random() * shown.length); } while (n === idx);
+  idx = n; render(1); window.scrollTo(0, 0);
+};
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+
+// 左右スワイプでめくる（縦のスクロールはそのまま）
+function addSwipe(node) {
+  let sx = 0, sy = 0, on = false;
+  node.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; on = true; }, { passive: true });
+  node.addEventListener('touchend', (e) => {
+    if (!on) return; on = false;
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+
+$('q').addEventListener('input', () => applyFilter());
+$('f-theme').addEventListener('change', () => applyFilter());
+$('f-fav').onclick = () => {
+  const on = $('f-fav').getAttribute('aria-pressed') !== 'true';
+  $('f-fav').setAttribute('aria-pressed', String(on));
+  applyFilter();
+};
+
+// ===== 一覧から選ぶ =====
+$('open-list').onclick = () => {
+  const box = $('list-body'); box.innerHTML = '';
+  $('list-n').textContent = shown.length;
+  if (!shown.length) box.append(el('p', 'empty', '条件に合うカードはありません'));
+  shown.forEach((c, i) => {
+    const r = el('div', 'row');
+    r.append(el('div', 't', (favs.has(c.id) ? '★ ' : '') + c.title));
+    r.append(el('div', 'm', [c.org, c.group].filter(Boolean).join(' ／ ') + (c.check ? ' ／ ⚠要確認' : '')));
+    r.onclick = () => { idx = i; $('list').classList.remove('open'); render(); window.scrollTo(0, 0); };
+    box.append(r);
+  });
+  $('list').classList.add('open');
+  $('list').scrollTo(0, 0);
+};
+$('list-close').onclick = () => $('list').classList.remove('open');
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+$('q').value = state.q || '';
+$('f-fav').setAttribute('aria-pressed', String(!!state.fav));
+buildThemes();
+applyFilter(state.id);
+</script>
+</body>
+</html>
