@@ -4,6 +4,7 @@
 (function () {
   'use strict';
   var root, api, h, D, st;
+  function setKids(el) { el.replaceChildren.apply(el, [].slice.call(arguments, 1).filter(Boolean)); }
 
   function norm(s) { // 全角の数字やカンマを直して数にする
     s = String(s).replace(/[０-９．]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).replace(/[,，\s]/g, '');
@@ -76,7 +77,7 @@
         h('td', { text: fmt(r.base / u.value) + ' ' + u.counter })));
     });
     st.last = { q: r.q, big: big, ref: st.dir === 'rev' ? '' : '比べた数字：' + pick.name + (pick.note ? '（' + pick.note + '）' : '') + ' ' + fmt(pick.value) + g.unit };
-    out.replaceChildren(
+    setKids(out,
       h('section', { class: 'result', 'aria-live': 'polite' },
         h('p', { class: 'q', text: r.q + ' は' }),
         h('p', { class: 'big' }, big.name, h('span', { class: 'num', text: big.num }), big.counter),
@@ -160,9 +161,9 @@
       : h('select', { 'aria-label': '単位', onchange: function (e) { st.unit = e.target.value; st.preset = null; draw(); } },
           g.plain.map(function (u) { return h('option', { value: u.id, selected: u.id === st.unit || null }, u.label); }));
     var kusei = (D.kusei || []).filter(function (k) { return k.kind === st.kind; });
-    root.replaceChildren(
+    setKids(root,
       seg([['area', '広さ'], ['height', '高さ']], 'kind', reset),
-      seg([['fwd', '数字から換算'], ['rev', '◯個分から逆算']], 'dir', reset),
+      seg([['fwd', '数字から換算'], ['rev', '何個分から逆算']], 'dir', reset),
       h('label', { class: 'lbl', for: 'dome-n', text: st.dir === 'rev' ? '文京区の単位で、いくつ分？' : (st.kind === 'area' ? '広さを入れる（自宅の広さでも）' : '高さを入れる（身長でも）') }),
       h('div', { class: 'row' }, input, select),
       st.dir === 'fwd' && g.familiar.length ? h('div', null,
@@ -179,7 +180,7 @@
               return h('button', { type: 'button', onclick: function () {
                 st.dir = 'fwd'; st.preset = { name: k.name, one: '', value: k.value }; st.text = ''; build();
                 root.querySelector('#dome-out').scrollIntoView({ behavior: 'smooth', block: 'center' });
-              } }, h('span', null, k.name, k.note ? h('small', { class: 'small', text: '　' + k.note }) : null), h('b', { text: fmt(k.value) + ' ' + k.unit }));
+              } }, h('span', null, k.name, k.note ? h('small', { class: 'small', text: k.note }) : null), h('b', { text: fmt(k.value) + ' ' + k.unit }));
             }))
         : h('div', { class: 'empty', text: st.kind === 'area' ? '区の数字を確かめているところです。' : '高さの区政モードは、これから用意します。' }));
     draw();

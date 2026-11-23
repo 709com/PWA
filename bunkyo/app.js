@@ -180,7 +180,8 @@
     var t = C.TILES.filter(function (x) { return x.id === id; })[0];
     if (!t || t.status !== 'open') { go('#/'); return; }
     var body = h('div');
-    view.replaceChildren(bar(t.name, t.no + '番窓口'), body, t.majime ? majime(t.majime) : null);
+    view.replaceChildren(bar(t.name, t.no + '番窓口'), body);
+    if (t.majime) view.append(majime(t.majime));
     var need = apps[id] ? Promise.resolve() : t.files.reduce(function (p, f) { return p.then(function () { return loadScript(f); }); }, Promise.resolve());
     need.then(function () {
       if (location.hash !== '#/app/' + id) return;

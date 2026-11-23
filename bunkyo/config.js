@@ -26,13 +26,13 @@ const BK_CONFIG = {
 
   // 6つのタイル。status は 'open'（開店）か 'soon'（準備中）。
   TILES: [
-    { id: 'dome', no: '一', name: '東京ドーム換算機', desc: '広さ・高さを文京区の単位に',
+    { id: 'dome', no: '一', name: '東京ドーム換算機', desc: '何でも文京区の単位に',
       status: 'open', files: ['./apps/dome.js'],
       majime: '区内の公園をぜんぶ足すと、東京ドーム何個分でしょう。足りていると思いますか？' },
     { id: 'saka', no: '二', name: '坂の水準器', desc: 'いまの傾き、何坂くらい？',
       status: 'soon', files: [],
       teaser: 'スマホの傾きを測って、区内の坂にたとえます。ふつうの水準器としても、ちゃんと使えるものにします。' },
-    { id: 'yayoi', no: '三', name: '弥生コンパス', desc: '土器が、あの碑の方角を指す',
+    { id: 'yayoi', no: '三', name: '弥生コンパス', desc: '土器が、あの碑を指す',
       status: 'soon', files: [],
       teaser: '画面の土器から伸びる光が、「弥生式土器発掘ゆかりの地」の碑の方角を指します。碑までの距離も出します。' },
     { id: 'kuka', no: '四', name: '区歌カラオケ', desc: '歌えたら、歌唱認定書',
