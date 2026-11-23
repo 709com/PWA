@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- このファイルは「文京区民アプリ」の入口です。画面の中身は app.js が組み立てます。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>文京区民アプリ 〜本家・東京ドーム換算機〜</title>
+<meta name="description" content="文京区民のための冗談アプリ（非公式・テスト公開中）。制作：ぶんきょう子育て.ネット">
+<meta name="theme-color" content="#f3efe4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15161a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="文京区民アプリ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<p class="testband" id="testband">テスト公開中<span>文京区の公式アプリではありません</span></p>
+<div class="update" id="update" hidden>
+  <span>新しい機能が届きました</span>
+  <button type="button" id="update-btn">切り替える</button>
+</div>
+<main id="view" tabindex="-1"></main>
+<noscript><p class="noscript">このアプリは、JavaScript を有効にするとお使いいただけます。</p></noscript>
+<script src="config.js"></script>
+<script src="data/units.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
