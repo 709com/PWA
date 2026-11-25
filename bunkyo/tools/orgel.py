@@ -4,7 +4,9 @@
 # 旋律（MELODY）：弘田龍太郎 作曲「文京区歌」（昭和26年制定。著作権は消滅。JASRAC作品コード 075-4363-8）。
 #   区が公開している楽譜の「歌の段」だけを目で読み取ったもの。旋律は変えない。読み違いがないか、耳での確認が要る。
 # 伴奏（CHORDS と分散和音）：このアプリのために新しく作ったもの。区の楽譜のピアノ伴奏（編曲）は使っていない。
-# 速さ：楽譜は1分間に112拍。寝かしつけ用に、1回目は60拍、2回目は56拍で鳴らす（2回目は音も小さくする）。
+# 速さ：楽譜は1分間に112拍。寝かしつけ用に、1分間に56拍で鳴らす（高浜さんが聞いて決定・2026年11月25日）。
+# くり返し：前奏なしで歌い出しから始め、歌の終わりに1小節のつなぎを置いて、そのまま頭に戻る（何回くり返しても同じ速さ・同じ大きさ）。
+# 使い方の2つ目の数字は、くり返す回数（省くと1回）。
 #   根拠：眠りのための音楽は「1分間に60〜80拍・やわらかく・なめらか・単純」が最もよく支持されている（2025年の総説。主に大人の研究）。
 #   赤ちゃんは、ゆっくりした子守唄で心拍が下がることが確かめられている（ハーバード大の研究など）。
 #   「赤ちゃんには何拍が最適」と数字で確かめた研究は見つからなかったため、範囲のいちばん遅い側に置いた。
@@ -13,7 +15,7 @@ import sys, wave
 import numpy as np
 
 SR = 44100
-ROUNDS = [(60, 1.0), (56, 0.72)]   # （1分間の拍数, 音の大きさ）を、くり返しの回ごとに
+BPM = 56
 N = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 def midi(name): return 12 * (int(name[-1]) + 1) + N[name[0]]
 
@@ -47,38 +49,27 @@ def tine(m, dur, vol):
     s[:260] *= np.linspace(0, 1, 260)        # 立ち上がりをやわらかく
     return vol * s
 
-def build():
+def build(loops=1):
     bars = [b.split() for b in MELODY.replace('\n', ' ').split('|')]
-    chords = [c.split() for c in CHORDS.replace('\n', '').split('|')]
-    assert len(bars) == len(chords) == 40
-    notes = []                                 # （鳴らす時刻・秒, 音の高さ, 強さ）
-    t0 = 0.0
-    for r, (bpm, vol) in enumerate(ROUNDS):
-        U = 60 / bpm / 4                       # 16分音符1つの長さ（秒）
-        last = r == len(ROUNDS) - 1
-        intro = [] if r == 0 else [['C', 'C']]   # 前奏はなし（歌い出し「ああ大江戸の」から始める）。2回目の前だけ1小節のつなぎ
-        events = []
-        pos = len(intro) * 8
-        for b in bars:
-            assert sum(int(x) for x in b[1::2]) == 8, b
-            for name, n in zip(b[0::2], b[1::2]):
-                if name != 'R' and not name.endswith('+'):      # '+' は前の音をのばす印（タイ）
-                    events.append((pos, midi(name) + 12, 1.0))  # 旋律は1オクターブ上で鳴らす
-                pos += int(n)
-        for i, (x, y) in enumerate(intro + chords):             # 伴奏：1拍に1音
-            a, b2 = [midi(k) for k in TONES[x].split()], [midi(k) for k in TONES[y].split()]
-            events.append((i * 8, a[0] + 12, 0.30))
-            events.append((i * 8 + 4, (b2[2] if x == y else b2[0]) + 12, 0.24))
-        end = pos
-        if last:
-            for j, m in enumerate([midi('C4'), midi('G4'), midi('E5')]):   # 結びの和音
-                events.append((end + j * 0.7, m + 12, 0.4))
-        def when(p):                           # 最後の回の終わり2小節は、さらにゆっくり
-            slow = max(0.0, p - (end - 16)) if last else 0.0
-            return p * U + U * 0.014 * slow * slow
-        notes += [(t0 + when(p), m, v * vol) for p, m, v in events]
-        t0 += when(end)
-    out = np.zeros(int(SR * (t0 + 9)))
+    chords = [c.split() for c in CHORDS.replace('\n', '').split('|')] + [['C', 'C']]   # 最後の1小節は、頭に戻る前のつなぎ
+    assert len(bars) == 40 and len(chords) == 41
+    U = 60 / BPM / 4                           # 16分音符1つの長さ（秒）
+    events = []                                # （16分音符の位置, 音の高さ, 強さ）
+    pos = 0
+    for b in bars:
+        assert sum(int(x) for x in b[1::2]) == 8, b
+        for name, n in zip(b[0::2], b[1::2]):
+            if name != 'R' and not name.endswith('+'):      # '+' は前の音をのばす印（タイ）
+                events.append((pos, midi(name) + 12, 1.0))  # 旋律は1オクターブ上で鳴らす
+            pos += int(n)
+    for i, (x, y) in enumerate(chords):                     # 伴奏：1拍に1音
+        a, b2 = [midi(k) for k in TONES[x].split()], [midi(k) for k in TONES[y].split()]
+        events.append((i * 8, a[0] + 12, 0.30))
+        events.append((i * 8 + 4, (b2[2] if x == y else b2[0]) + 12, 0.24))
+    one = len(chords) * 8 * U                  # 1回ぶんの長さ（秒）
+    notes = [(k * one + p * U, m, v) for k in range(loops) for p, m, v in events]
+    t0 = loops * one
+    out = np.zeros(int(SR * (t0 + 5)))
     for t, m, v in notes:
         s = tine(m, 5.0, v); i = int(t * SR); out[i:i + len(s)] += s[:len(out) - i]
     # 箱の響きを少しだけ足す
@@ -90,7 +81,7 @@ def build():
     return out / np.max(np.abs(out)) * 0.8
 
 if __name__ == '__main__':
-    data = (build() * 32767).astype('<i2')
+    data = (build(int(sys.argv[2]) if len(sys.argv) > 2 else 1) * 32767).astype('<i2')
     with wave.open(sys.argv[1], 'wb') as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(data.tobytes())
     print('できました：', sys.argv[1], round(len(data) / SR), '秒')
