@@ -56,7 +56,7 @@ def build():
     for r, (bpm, vol) in enumerate(ROUNDS):
         U = 60 / bpm / 4                       # 16分音符1つの長さ（秒）
         last = r == len(ROUNDS) - 1
-        intro = [['C', 'C'], ['G', 'G']] if r == 0 else [['C', 'C']]   # 前奏・つなぎ（新しく作ったもの）
+        intro = [] if r == 0 else [['C', 'C']]   # 前奏はなし（歌い出し「ああ大江戸の」から始める）。2回目の前だけ1小節のつなぎ
         events = []
         pos = len(intro) * 8
         for b in bars:
