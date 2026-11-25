@@ -3,7 +3,7 @@
 // アプリを更新するときは、下の VERSION と config.js の VERSION を同じ番号に上げてください。
 // このファイルが読みに行くのは、同じフォルダの中のファイルだけです（外部へは通信しません）。
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 importScripts('./config.js?v=' + VERSION);
 const CACHE = 'bunkyo-' + VERSION;
 const FILES = self.BK_CONFIG.ALL_FILES;

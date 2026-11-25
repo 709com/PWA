@@ -14,7 +14,8 @@
 | `index.html` / `style.css` / `app.js` | 入口／見た目／骨組み（タイル画面・共通ページ・新しい版の知らせ） |
 | `apps/dome.js` | ①東京ドーム換算機 |
 | `data/units.js` | 換算に使う数字と出どころの一覧 |
-| `sw.js` / `manifest.json` / `icon-*.png` | 通信なしで開く仕組み／ホーム画面用の設定とアイコン（自作） |
+| `sw.js` / `manifest.json` / `icon-*.png` | 通信なしで開く仕組み／ホーム画面用の設定とアイコン（自作。金文字「文京区民」。書体は Noto Serif JP・SIL Open Font License 1.1） |
+| `tools/orgel.py` | 区歌オルゴール版の音を計算で作る道具（旋律は著作権消滅を確認済み。伴奏は自作。アプリには未接続） |
 | `tools/check.mjs` | 公開前の点検 |
 
 ## 直すときの決まり
