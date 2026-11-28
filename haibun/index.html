@@ -127,7 +127,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_CUR = 'haibun:current';   // いま画面に出している案
 const KEY_PLANS = 'haibun:plans';   // 名前をつけて保存した案
 const $ = (id) => document.getElementById(id);
@@ -213,9 +213,11 @@ function update() {
   });
   $('s-total').textContent = fmt(r.total);
   $('s-used').textContent = fmt(r.used);
-  $('s-left-l').textContent = r.left < 0 ? '超過' : '余り';
-  $('s-left').textContent = fmt(r.left);
-  $('sum').classList.toggle('over', r.left < 0);
+  // 持ち時間がまだ空（0）のときは「超過」にしない（普通の表示で、持ち時間を入れるよう伝える）
+  const over = !!r.total && r.left < 0;
+  $('s-left-l').textContent = over ? '超過' : '余り';
+  $('s-left').textContent = r.total ? fmt(r.left) : '―';
+  $('sum').classList.toggle('over', over);
   let msg = '';
   if (!r.total) msg = '持ち時間を入れてください。';
   else if (r.left < 0) msg = '項目の合計が、持ち時間を ' + fmt(-r.left) + ' 超えています。';
@@ -243,7 +245,7 @@ function shareText() {
   const r = calc();
   const lines = ['【発言時間の配分】' + (plan.name ? plan.name : ''), '持ち時間 ' + fmt(r.total) + (r.reserve ? '（予備 ' + fmt(r.reserve) + '）' : ''), ''];
   plan.items.forEach((it, i) => lines.push((i + 1) + '. ' + (it.name || '（名前なし）') + ' … ' + fmt(r.secs[i]) + (it.mode === 'w' ? '（比重 ' + num(it.value) + '）' : '（時間を指定）')));
-  lines.push('', '合計 ' + fmt(r.used) + ' ／ ' + (r.left < 0 ? '超過 ' : '余り ') + fmt(r.left));
+  lines.push('', '合計 ' + fmt(r.used) + (r.total ? ' ／ ' + (r.left < 0 ? '超過 ' : '余り ') + fmt(r.left) : ''));
   return lines.join('\n');
 }
 $('share').onclick = async () => {

@@ -130,7 +130,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 const KEY_DRAFT = 'onseimemo:draft';   // 保存前の書きかけ（アプリを閉じても消えないように）
 const KEY_FILTER = 'onseimemo:filter'; // 最後に選んだタグの絞り込み
 const $ = (id) => document.getElementById(id);
@@ -321,9 +321,10 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'onseimemo' || !Array.isArray(data.memos)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.memos.length + '件のメモを読み込みます。同じメモは、ファイルの内容で上書きします（ほかのメモは消えません）。よろしいですか？')) return;
-  for (const m of data.memos) {
-    if (!m || !m.id || typeof m.text !== 'string') continue;
+  const okMemos = data.memos.filter((m) => m && m.id && typeof m.text === 'string');
+  if (!okMemos.length) { alert('読み込めるメモがありませんでした。'); return; }
+  if (!confirm(okMemos.length + '件のメモを読み込みます。同じメモは、ファイルの内容で上書きします（ほかのメモは消えません）。よろしいですか？')) return;
+  for (const m of okMemos) {
     // 日時がない・壊れているメモは、読み込んだ時刻にする（一覧に NaN と出ないように）
     const now = Date.now(), c = Number(m.createdAt) || now;
     await dbPut({ ...m, tags: Array.isArray(m.tags) ? m.tags.map(String) : [], createdAt: c, updatedAt: Number(m.updatedAt) || c });

@@ -1,0 +1,948 @@
+<!doctype html>
+<!-- このファイルは「AI株シミュレーション（架空の市場）」の本体です。架空の会社10社の株価が現実の時間に合わせて動き、4人のロボット投資家とあなたが架空のお金で売買を競います。 -->
+<!-- 実在の会社・株価とは関係ありません。状態はiPhoneの中（localStorage、キーは kabu: で始まる）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI株シミュレーション（架空の市場）</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="AI株ゲーム">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1d6f5f">
+<style>
+  :root { --bg:#f3f6f5; --card:#fff; --text:#1b2621; --sub:#5a6863; --accent:#1d6f5f; --accent-soft:#dcefe9; --line:#dbe3e0; --danger:#c8372d;
+          --up:#d0342c; --down:#2563c9; --grid:#e4eae8;
+          --c0:#1d6f5f; --c1:#e4572e; --c2:#2f9e44; --c3:#8a5cd0; --c4:#c99700; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111715; --card:#1b2421; --text:#e8f0ed; --sub:#98a7a1; --accent:#5cc2a8; --accent-soft:#1c3a33; --line:#2a3632; --danger:#ef6b61;
+            --up:#ff7b72; --down:#6ea8ff; --grid:#26312d;
+            --c0:#5cc2a8; --c1:#ff8a5c; --c2:#6fd17f; --c3:#b48cff; --c4:#f2c94c; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { overflow-x:hidden; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; width:100%; }
+
+  /* 上の帯（いつも表示） */
+  .top { position:sticky; top:0; z-index:5; background:var(--bg); padding:calc(8px + env(safe-area-inset-top)) 16px 6px; border-bottom:1px solid var(--line); }
+  .top .in { max-width:640px; margin:0 auto; }
+  .hrow { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  h1 { font-size:1.15rem; margin:0; white-space:nowrap; }
+  .clock { font-size:.78rem; color:var(--sub); text-align:right; line-height:1.3; }
+  .clock b { color:var(--text); font-size:.9rem; }
+  .disc { font-size:.72rem; color:#6b4a00; background:#fff3d6; border-radius:8px; padding:4px 8px; margin-top:6px; line-height:1.4; }
+  @media (prefers-color-scheme: dark) { .disc { background:#3a2e12; color:#f3dca6; } }
+
+  main { max-width:640px; margin:0 auto; padding:10px 16px calc(96px + env(safe-area-inset-bottom)); }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .tab { display:none; }
+  .tab.on { display:block; }
+  h2 { font-size:1.05rem; margin:14px 0 8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .sub { color:var(--sub); font-size:.8rem; }
+  .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  canvas { display:block; width:100%; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:.78rem; margin-top:6px; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--dot); margin-right:4px; vertical-align:-1px; }
+  .up { color:var(--up); } .down { color:var(--down); } .flat { color:var(--sub); }
+  .big { font-size:1.5rem; font-weight:700; }
+
+  /* 順位 */
+  .rank { display:grid; grid-template-columns:2.2em 1fr auto; gap:4px 8px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }
+  .rank:first-of-type { border-top:none; }
+  .rank .no { font-weight:700; font-size:1.05rem; text-align:center; }
+  .rank .nm { font-weight:700; min-width:0; }
+  .rank .val { text-align:right; font-weight:700; white-space:nowrap; }
+  .rank .det { grid-column:2 / 4; font-size:.76rem; color:var(--sub); }
+  .me { background:var(--accent-soft); border-radius:8px; }
+
+  /* 銘柄 */
+  .stock { display:grid; grid-template-columns:1fr 92px; gap:2px 10px; align-items:center; cursor:pointer; }
+  .stock .nm { font-weight:700; min-width:0; overflow-wrap:anywhere; }
+  .stock .px { font-size:1.05rem; font-weight:700; }
+  .stock .px + span { font-size:.82rem; }
+  .stock canvas { grid-row:1 / 4; grid-column:2; height:46px; }
+  .pill { display:inline-block; font-size:.72rem; border-radius:99px; padding:0 8px; background:var(--accent-soft); color:var(--accent); margin-right:4px; }
+
+  /* 記録・ニュース */
+  .log { padding:8px 0; border-top:1px solid var(--line); font-size:.88rem; }
+  .log:first-child { border-top:none; }
+  .log .r { color:var(--sub); font-size:.8rem; }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; }
+
+  /* 下のタブ */
+  nav { position:fixed; left:0; right:0; bottom:0; z-index:6; background:var(--card); border-top:1px solid var(--line); display:flex; padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; padding:8px 0 6px; font-size:.7rem; color:var(--sub); display:flex; flex-direction:column; align-items:center; gap:1px; min-height:56px; }
+  nav button .ic { font-size:1.3rem; line-height:1.2; }
+  nav button.on { color:var(--accent); font-weight:700; }
+
+  /* 銘柄の詳しい画面 */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet-top { position:sticky; top:0; z-index:2; background:var(--bg); margin:calc(-12px - env(safe-area-inset-top)) -16px 0; padding:calc(12px + env(safe-area-inset-top)) 16px 8px; border-bottom:1px solid var(--line); }
+  .seg { display:flex; gap:6px; margin:8px 0; }
+  .seg button { flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 4px; font-size:.85rem; }
+  .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .buy { background:var(--up); color:#fff; border-radius:12px; padding:14px 0; font-weight:700; flex:1; font-size:1.05rem; }
+  .sell { background:var(--down); color:#fff; border-radius:12px; padding:14px 0; font-weight:700; flex:1; font-size:1.05rem; }
+  .danger { color:var(--danger); }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-size:.88rem; }
+  .kv div:nth-child(even) { text-align:right; font-weight:700; }
+  .speed { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .speed button { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 6px; }
+  .speed button.on { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
+  details summary { cursor:pointer; font-weight:700; }
+  #toast { position:fixed; left:16px; right:16px; bottom:calc(72px + env(safe-area-inset-bottom)); z-index:20; max-width:600px; margin:0 auto;
+           background:#24302c; color:#fff; border-radius:12px; padding:10px 14px; font-size:.9rem; display:none; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+  #toast.err { background:#8f241d; }
+  footer { text-align:center; font-size:.76rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <div class="hrow">
+    <h1>📈 AI株ゲーム</h1>
+    <div class="clock"><b id="day">市場の0日目</b><br><span id="next">次の日まで —</span></div>
+  </div>
+  <div class="disc">架空の市場です。実在の株価・会社とは関係ありません。投資の助言ではありません。</div>
+</div></div>
+
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+
+  <!-- ① ホーム -->
+  <section class="tab" id="t-home">
+    <div class="card">
+      <div class="sub">市場の指数「AIゲーム平均」（架空・最初＝1000）</div>
+      <div><span class="big" id="idx">1000.0</span> <span id="idx-chg" class="flat"></span></div>
+      <canvas id="c-idx" style="height:90px;margin-top:6px"></canvas>
+    </div>
+    <h2>資産の推移（現金＋持ち株）</h2>
+    <div class="card">
+      <canvas id="c-assets" style="height:200px"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+    <h2>順位</h2>
+    <div class="card" id="ranking"></div>
+    <h2>あなたの持ち株</h2>
+    <div class="card" id="mine"></div>
+    <details class="card">
+      <summary>ロボット投資家の考え方</summary>
+      <p class="note">ロボットは、このアプリの中の決まったルールで売買します（外部のAIは使っていません）。どのロボットも、あなたも、最初は架空のお金100万円です。売買の手数料は0円です。</p>
+      <div id="robots-help"></div>
+    </details>
+  </section>
+
+  <!-- ② 銘柄 -->
+  <section class="tab" id="t-stocks">
+    <p class="note" style="margin:0 0 8px">会社名を押すと、くわしいグラフと売り買いの画面が出ます。会社はすべて架空です。</p>
+    <div id="stocks"></div>
+  </section>
+
+  <!-- ③ 売買の記録 -->
+  <section class="tab" id="t-trades">
+    <label class="f" for="tr-who" style="margin-top:0">だれの記録を見るか</label>
+    <select id="tr-who"></select>
+    <div class="card" id="trades" style="margin-top:10px"></div>
+  </section>
+
+  <!-- ④ ニュース -->
+  <section class="tab" id="t-news">
+    <p class="note" style="margin:0 0 8px">ニュースはすべて架空の出来事です。株価が大きく動くきっかけになります。</p>
+    <div class="card" id="news"></div>
+  </section>
+
+  <!-- ⑤ 設定 -->
+  <section class="tab" id="t-settings">
+    <h2 style="margin-top:4px">時間の速さ</h2>
+    <p class="note" style="margin:0 0 8px">現実の時間がどれだけたつと、市場が1日進むかを選びます。アプリを閉じている間は止まり、次に開いたときに、たった分をまとめて進めます（最大365日分）。</p>
+    <div class="speed" id="speed"></div>
+    <p class="note" id="speed-now"></p>
+
+    <h2>最初からやり直す</h2>
+    <p class="note" style="margin:0 0 8px">全員の資産を100万円に戻し、株価・記録・ニュースを最初の状態にします。元に戻せません。</p>
+    <button class="plain danger" id="reset">最初からやり直す</button>
+
+    <h2>バックアップ</h2>
+    <p class="note" style="margin:0 0 8px">進み具合はこのiPhoneの中だけに保存されます。ホーム画面のアイコンを削除すると消えるので、残したいときは書き出してください。</p>
+    <div class="actions" style="margin-top:0">
+      <button class="plain" id="export">書き出す（保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+
+    <h2>このアプリについて</h2>
+    <p class="note">架空の会社・架空のお金で遊ぶシミュレーションです。実在の会社・株価・指数とは関係ありません。投資の助言ではなく、実際のお金の判断には使わないでください。売買の手数料・税金は0円として計算しています。外部への送信はしません。</p>
+  </section>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<nav id="nav">
+  <button data-t="home"><span class="ic">🏠</span>ホーム</button>
+  <button data-t="stocks"><span class="ic">📊</span>銘柄</button>
+  <button data-t="trades"><span class="ic">📒</span>売買の記録</button>
+  <button data-t="news"><span class="ic">📰</span>ニュース</button>
+  <button data-t="settings"><span class="ic">⚙️</span>設定</button>
+</nav>
+
+<!-- 銘柄の詳しい画面 -->
+<div class="sheet" id="detail">
+  <div class="inner">
+    <div class="sheet-top">
+      <button class="plain" id="d-close">← 銘柄の一覧へ</button>
+      <div class="disc">架空の市場です。実在の株価・会社とは関係ありません。投資の助言ではありません。</div>
+    </div>
+    <h2 id="d-name" style="margin-top:14px"></h2>
+    <div><span class="big" id="d-price"></span> <span id="d-chg"></span></div>
+    <div class="seg" id="d-range">
+      <button data-r="30">30日</button><button data-r="120">120日</button><button data-r="0">全部</button>
+    </div>
+    <div class="card"><canvas id="c-detail" style="height:200px"></canvas></div>
+
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:6px">あなたの売り買い（手数料0円）</div>
+      <div class="kv" id="d-kv"></div>
+      <label class="f" for="d-qty">株数（1株から。整数で）</label>
+      <input id="d-qty" inputmode="numeric" autocomplete="off" placeholder="例：10">
+      <p class="note" id="d-cost"></p>
+      <label class="f" for="d-memo">理由のメモ（なくてもよい）</label>
+      <input id="d-memo" maxlength="40" placeholder="例：新製品のニュースを見て">
+      <div class="actions">
+        <button class="buy" id="d-buy">買う</button>
+        <button class="sell" id="d-sell">売る</button>
+      </div>
+      <p class="note">今の株価ですぐに売り買いします。架空のお金なので、実際のお金は動きません。</p>
+    </div>
+
+    <h2>ロボットの持ち株</h2>
+    <div class="card" id="d-robots"></div>
+    <h2>この会社のニュース</h2>
+    <div class="card" id="d-news"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_STATE = 'kabu:state';     // 市場と参加者の状態
+const KEY_UI = 'kabu:ui';           // 最後に開いたタブなど
+const START_CASH = 1000000;         // 最初のお金（架空）
+const MAX_CATCH = 365;              // 閉じていた分を追いつく日数の上限
+const HMAX = 400;                   // グラフ用にとっておく日数
+const TMAX = 800;                   // 売買の記録をとっておく件数
+const NMAX = 300;                   // ニュースをとっておく件数
+const SPEEDS = [
+  { ms: 10 * 60000, label: '10分で1日' },
+  { ms: 30 * 60000, label: '30分で1日' },
+  { ms: 60 * 60000, label: '1時間で1日' },
+  { ms: 24 * 60 * 60000, label: '1日で1日' },
+];
+const DEFAULT_SPEED = 60 * 60000;
+const $ = (id) => document.getElementById(id);
+
+// 架空の会社（名前も業種の組み合わせも作りもの）
+const GROUPS = ['ものづくり（電機・自動車）', 'まちとお金（銀行・不動産・鉄道）', 'くらし（食品・薬・小売）', 'あそびと通信（ゲーム・通信）'];
+const CO = [
+  { name: 'そらまめ電機',       sec: '電機',   g: 0, p0: 2400, vol: 0.018, beta: 1.2, items: ['冷蔵庫', 'おそうじロボ', '大きな画面のテレビ'] },
+  { name: 'はやて自動車',       sec: '自動車', g: 0, p0: 3100, vol: 0.017, beta: 1.3, items: ['電気で走る小型車', '新しいワゴン車'] },
+  { name: 'どんぐり銀行',       sec: '銀行',   g: 1, p0: 800,  vol: 0.013, beta: 1.0, items: ['スマホの通帳', '子ども向けの貯金箱口座'] },
+  { name: 'もぐもぐ食品',       sec: '食品',   g: 2, p0: 1500, vol: 0.010, beta: 0.5, items: ['カップスープ', '冷凍ギョーザ'] },
+  { name: 'ピコピコゲームス',   sec: 'ゲーム', g: 3, p0: 4200, vol: 0.026, beta: 1.1, items: ['新作のぼうけんゲーム', '小さなゲーム機'] },
+  { name: 'つみき不動産',       sec: '不動産', g: 1, p0: 1900, vol: 0.016, beta: 1.0, items: ['駅前のマンション', '木でできたオフィスビル'] },
+  { name: 'くすのめ製薬',       sec: '薬',     g: 2, p0: 5200, vol: 0.019, beta: 0.6, items: ['かぜ薬', '新しい飲み薬'] },
+  { name: 'かごいっぱいストア', sec: '小売',   g: 2, p0: 1100, vol: 0.012, beta: 0.7, items: ['新しいお店', 'ネットのお買い物'] },
+  { name: 'ことこと鉄道',       sec: '鉄道',   g: 1, p0: 2700, vol: 0.011, beta: 0.8, items: ['新しい特急列車', '駅ビル'] },
+  { name: 'いとでんわ通信',     sec: '通信',   g: 3, p0: 3600, vol: 0.012, beta: 0.7, items: ['安い料金プラン', '速いネット回線'] },
+];
+const NC = CO.length;
+
+// 参加者（0番があなた）
+const PEOPLE = [
+  { id: 'me',   emoji: '🙂', name: 'あなた',         help: '' },
+  { id: 'ike',  emoji: '🚀', name: 'イケイケくん',   help: '上がっている株を買う（順張り）。3日以上続けて上がった株を買い、2日続けて下がったら全部売ります。' },
+  { id: 'kotu', emoji: '🐢', name: 'コツコツさん',   help: '最初に10社すべてへ同じくらいずつ分けて買い、売らずに持ち続けます（分散・長期）。30日ごとに残りのお金で買い足します。' },
+  { id: 'ama',  emoji: '🔄', name: 'あまのじゃく',   help: '下がった株を買い、上がったら売る（逆張り）。5日間で5%以上下がった株を買い、買った値段より6%上がったら全部売ります。' },
+  { id: 'kima', emoji: '🎲', name: 'きまぐれ',       help: 'サイコロ（でたらめ）で売り買いします。ほかのロボットの成績と比べるための「基準役」です。' },
+];
+const NP = PEOPLE.length;
+
+// ===== 時刻（テストで差し替えやすいように1か所にまとめる） =====
+const now = () => Date.now();
+
+// ===== シード付きの擬似乱数（同じ状態からは必ず同じ結果になる） =====
+function rand(S) {
+  // mulberry32：状態は S.rng（32ビットの整数）に保存する
+  let t = (S.rng = (S.rng + 0x6D2B79F5) >>> 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function gauss(S) {
+  const u = Math.max(rand(S), 1e-12), v = rand(S);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ===== 状態 =====
+function freshState(seed) {
+  const s = (seed === undefined ? Math.floor(Math.random() * 4294967296) : seed) >>> 0;
+  return {
+    v: 1, seed: s, rng: s, day: 0, anchor: now(), speed: DEFAULT_SPEED,
+    prices: CO.map((c) => c.p0),
+    base: CO.map((c) => c.p0),
+    hist: CO.map((c) => [c.p0]),
+    ppl: PEOPLE.map(() => ({ cash: START_CASH, h: {}, hist: [START_CASH] })),
+    trades: [], news: [],
+  };
+}
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const isInt = (v, min) => Number.isInteger(v) && v >= min;
+
+// 読み込んだ状態を点検し、欠けた所・おかしな所を補う（直せないときは null）
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const s = freshState(isNum(raw.seed) ? raw.seed : undefined);
+  s.rng = isNum(raw.rng) ? (raw.rng >>> 0) : s.seed;
+  s.day = isInt(raw.day, 0) ? raw.day : 0;
+  s.anchor = isNum(raw.anchor) ? raw.anchor : now();
+  s.speed = SPEEDS.some((x) => x.ms === raw.speed) ? raw.speed : DEFAULT_SPEED;
+  const rp = Array.isArray(raw.prices) ? raw.prices : [];
+  s.prices = CO.map((c, i) => (isInt(rp[i], 1) ? rp[i] : c.p0));
+  const rb = Array.isArray(raw.base) ? raw.base : [];
+  s.base = CO.map((c, i) => (isNum(rb[i]) && rb[i] >= 1 ? rb[i] : s.prices[i]));
+  // グラフ用の履歴（全員同じ長さにそろえる）
+  const rh = Array.isArray(raw.hist) ? raw.hist : [];
+  let hist = CO.map((c, i) => (Array.isArray(rh[i]) ? rh[i].filter((x) => isInt(x, 1)) : []));
+  const rpp = Array.isArray(raw.ppl) ? raw.ppl : [];
+  const ppl = PEOPLE.map((p, k) => {
+    const r = rpp[k] && typeof rpp[k] === 'object' ? rpp[k] : {};
+    const h = {};
+    if (r.h && typeof r.h === 'object') {
+      for (let i = 0; i < NC; i++) {
+        const x = r.h[i];
+        if (x && isInt(x.q, 1)) h[i] = { q: x.q, c: isNum(x.c) && x.c >= 0 ? x.c : x.q * s.prices[i] };
+      }
+    }
+    return { cash: isNum(r.cash) && r.cash >= 0 ? Math.round(r.cash) : START_CASH, h,
+             hist: Array.isArray(r.hist) ? r.hist.filter((x) => isNum(x) && x >= 0) : [] };
+  });
+  let L = Math.min(...hist.map((a) => a.length), ...ppl.map((p) => p.hist.length), s.day + 1, HMAX);
+  if (L < 1) {
+    // 履歴が使えないときは、今の値だけから始め直す
+    hist = CO.map((c, i) => [s.prices[i]]);
+    ppl.forEach((p) => { p.hist = [totalOf(p, s.prices)]; });
+  } else {
+    hist = hist.map((a) => a.slice(a.length - L));
+    ppl.forEach((p) => { p.hist = p.hist.slice(p.hist.length - L); });
+    // 最後の点は今の株価にそろえる
+    hist.forEach((a, i) => { a[a.length - 1] = s.prices[i]; });
+  }
+  s.hist = hist; s.ppl = ppl;
+  s.trades = (Array.isArray(raw.trades) ? raw.trades : []).filter((t) => t && isInt(t.d, 0) && isInt(t.w, 0) && t.w < NP &&
+    (t.s === 'b' || t.s === 's') && isInt(t.c, 0) && t.c < NC && isInt(t.q, 1) && isNum(t.p) && t.p >= 1)
+    .map((t) => ({ d: t.d, w: t.w, s: t.s, c: t.c, q: t.q, p: t.p, r: typeof t.r === 'string' ? t.r.slice(0, 120) : '' })).slice(-TMAX);
+  s.news = (Array.isArray(raw.news) ? raw.news : []).filter((n) => n && isInt(n.d, 0) && typeof n.t === 'string')
+    .map((n) => ({ d: n.d, t: n.t.slice(0, 160), c: isInt(n.c, 0) && n.c < NC ? n.c : -1, g: isInt(n.g, 0) && n.g < GROUPS.length ? n.g : -1, up: !!n.up })).slice(-NMAX);
+  return s;
+}
+
+function totalOf(p, prices) {
+  let v = p.cash;
+  for (const i in p.h) v += p.h[i].q * prices[i];
+  return v;
+}
+function stockValue(p, prices) { return totalOf(p, prices) - p.cash; }
+
+function loadState() {
+  try { const t = localStorage.getItem(KEY_STATE); if (t) { const s = normalize(JSON.parse(t)); if (s) return s; } } catch (e) {}
+  return freshState();
+}
+let saveFailed = false;
+function saveState() {
+  try { localStorage.setItem(KEY_STATE, JSON.stringify(S)); saveFailed = false; }
+  catch (e) { if (!saveFailed) toast('保存できませんでした。iPhoneの空き容量を確認してください。', true); saveFailed = true; }
+}
+function loadUI() { try { return JSON.parse(localStorage.getItem(KEY_UI)) || {}; } catch (e) { return {}; } }
+function saveUI() { try { localStorage.setItem(KEY_UI, JSON.stringify(ui)); } catch (e) {} }
+
+let S = loadState();
+const ui = Object.assign({ tab: 'home', who: '', range: 120 }, loadUI());
+
+// ===== 売り買い（ロボットもあなたも同じ仕組み） =====
+function doBuy(k, i, q, reason) {
+  const p = S.ppl[k], price = S.prices[i], cost = q * price;
+  if (!isInt(q, 1) || cost > p.cash) return false;
+  p.cash -= cost;
+  const h = p.h[i] || (p.h[i] = { q: 0, c: 0 });
+  h.q += q; h.c += cost;
+  S.trades.push({ d: S.day, w: k, s: 'b', c: i, q, p: price, r: reason });
+  if (S.trades.length > TMAX) S.trades.splice(0, S.trades.length - TMAX);
+  return true;
+}
+function doSell(k, i, q, reason) {
+  const p = S.ppl[k], h = p.h[i], price = S.prices[i];
+  if (!h || !isInt(q, 1) || q > h.q) return false;
+  p.cash += q * price;
+  h.c = h.c * (h.q - q) / h.q;
+  h.q -= q;
+  if (h.q === 0) delete p.h[i];
+  S.trades.push({ d: S.day, w: k, s: 's', c: i, q, p: price, r: reason });
+  if (S.trades.length > TMAX) S.trades.splice(0, S.trades.length - TMAX);
+  return true;
+}
+
+// ===== ニュース（すべて架空の出来事） =====
+const GOOD_CO = [
+  (c) => `【好決算】${c.name}、売り上げが予想より伸びたと発表`,
+  (c, it) => `【新製品】${c.name}の「${it}」が発売され、評判になっている`,
+  (c) => `【大口の注文】${c.name}に大きな注文が入ったと発表`,
+];
+const BAD_CO = [
+  (c) => `【決算】${c.name}、利益が予想より少なかったと発表`,
+  (c) => `【事故】${c.name}の工場でトラブル、しばらく作業を止める`,
+  (c, it) => `【回収】${c.name}、「${it}」の一部を回収すると発表`,
+];
+const GOOD_G = [(g) => `【追い風】${g}の会社に、国の新しい支援策（架空）`, (g) => `【人気】${g}の分野で、買い物が増えているとの調べ（架空）`];
+const BAD_G = [(g) => `【規制】${g}の会社に、新しい決まりが加わる見込み（架空）`, (g) => `【逆風】${g}の分野で、材料の値上がりが続く（架空）`];
+const GOOD_M = ['【市場全体】景気がよくなりそうとの見方が広がり、全体に買いが入る', '【市場全体】海外の市場（架空）が大きく上がり、つられて上がる'];
+const BAD_M = ['【市場全体】景気が悪くなりそうとの見方が広がり、全体に売りが出る', '【市場全体】海外の市場（架空）が大きく下がり、つられて下がる'];
+function addNews(t, c, g, up) {
+  S.news.push({ d: S.day, t, c, g, up });
+  if (S.news.length > NMAX) S.news.splice(0, S.news.length - NMAX);
+}
+
+// ===== 市場を1日進める =====
+function step() {
+  S.day += 1;
+  // 1) ニュースによる大きな動き（決まった回数だけ乱数を引く）
+  const shock = new Array(NC).fill(0);
+  const a = [rand(S), rand(S), rand(S), rand(S), rand(S)];
+  if (a[0] < 0.15) {
+    const i = Math.floor(a[1] * NC), good = a[2] < 0.55, size = 0.03 + a[3] * 0.09, c = CO[i];
+    const list = good ? GOOD_CO : BAD_CO;
+    const it = c.items[Math.floor(a[4] * c.items.length)];
+    addNews(list[Math.floor(a[4] * list.length)](c, it), i, -1, good);
+    shock[i] += good ? size : -size;
+  }
+  const b = [rand(S), rand(S), rand(S), rand(S), rand(S)];
+  if (b[0] < 0.05) {
+    const g = Math.floor(b[1] * GROUPS.length), good = b[2] < 0.5, size = 0.02 + b[3] * 0.04;
+    const list = good ? GOOD_G : BAD_G;
+    addNews(list[Math.floor(b[4] * list.length)](GROUPS[g]), -1, g, good);
+    CO.forEach((c, i) => { if (c.g === g) shock[i] += good ? size : -size; });
+  } else if (b[0] > 0.98) {
+    const good = b[2] < 0.5, size = 0.015 + b[3] * 0.025;
+    const list = good ? GOOD_M : BAD_M;
+    addNews(list[Math.floor(b[4] * list.length)], -1, -1, good);
+    for (let i = 0; i < NC; i++) shock[i] += (good ? size : -size) * CO[i].beta;
+  }
+  // 2) ふだんの値動き：市場全体の連動＋業種のグループの連動＋会社ごとの動き
+  const m = gauss(S) * 0.008 + 0.0002;
+  const gf = GROUPS.map(() => gauss(S) * 0.006);
+  for (let i = 0; i < NC; i++) {
+    const c = CO[i], e = gauss(S);
+    let r = c.beta * m + gf[c.g] + c.vol * e + shock[i];
+    r += -0.01 * Math.log(S.prices[i] / S.base[i]);     // 長い目で見ると基準の値段にゆっくり戻る
+    S.base[i] = Math.max(1, S.base[i] * Math.exp(0.0002 + shock[i] * 0.5)); // ニュースの半分は基準の値段にも残る
+    S.prices[i] = Math.max(1, Math.round(S.prices[i] * Math.exp(r)));      // 1円より下にはならない
+    S.hist[i].push(S.prices[i]);
+  }
+  // 3) ロボットの売り買い
+  robotIke(); robotKotu(); robotAma(); robotKima();
+  // 4) 全員の資産を記録
+  S.ppl.forEach((p) => p.hist.push(totalOf(p, S.prices)));
+  if (S.hist[0].length > HMAX) {
+    const cut = S.hist[0].length - HMAX;
+    S.hist.forEach((h) => h.splice(0, cut));
+    S.ppl.forEach((p) => p.hist.splice(0, cut));
+  }
+}
+
+// 何日続けて上がった（下がった）か
+function streak(i, dir) {
+  const h = S.hist[i]; let n = 0;
+  for (let t = h.length - 1; t > 0 && n < 30; t--) {
+    if (dir > 0 ? h[t] > h[t - 1] : h[t] < h[t - 1]) n++; else break;
+  }
+  return n;
+}
+const yen = (n) => (isNum(n) ? Math.round(n).toLocaleString('ja-JP') + '円' : '—');
+
+function robotIke() {
+  const k = 1, p = S.ppl[k];
+  for (let i = 0; i < NC; i++) {
+    if (p.h[i] && streak(i, -1) >= 2) { const q = p.h[i].q; doSell(k, i, q, `2日連続で下がったので、${CO[i].name}を全部（${q}株）売った`); }
+  }
+  const total = totalOf(p, S.prices);
+  const cands = [];
+  for (let i = 0; i < NC; i++) { const n = streak(i, 1); if (!p.h[i] && n >= 3) cands.push([n, i]); }
+  cands.sort((x, y) => y[0] - x[0] || x[1] - y[1]);
+  for (const [n, i] of cands.slice(0, 2)) {
+    const q = Math.floor(Math.min(p.cash, total * 0.2) / S.prices[i]);
+    if (q >= 1) doBuy(k, i, q, `${n}日連続で上がったので、${CO[i].name}を${q}株買った`);
+  }
+}
+function robotKotu() {
+  const k = 2, p = S.ppl[k];
+  if (Object.keys(p.h).length === 0 && p.cash >= START_CASH * 0.5) {
+    const each = p.cash / NC;
+    for (let i = 0; i < NC; i++) {
+      const q = Math.floor(each / S.prices[i]);
+      if (q >= 1) doBuy(k, i, q, `10社すべてに同じくらいずつ分けるため、${CO[i].name}を${q}株買った`);
+    }
+    return;
+  }
+  if (S.day % 30 === 0) {
+    let best = -1, bv = Infinity;
+    for (let i = 0; i < NC; i++) {
+      const v = p.h[i] ? p.h[i].q * S.prices[i] : 0;
+      if (S.prices[i] <= p.cash && v < bv) { bv = v; best = i; }
+    }
+    if (best >= 0) {
+      const q = Math.floor(p.cash / S.prices[best]);
+      if (q >= 1) doBuy(k, best, q, `30日ごとの買い足し：持っている額がいちばん少ない${CO[best].name}を${q}株買った`);
+    }
+  }
+}
+function robotAma() {
+  const k = 3, p = S.ppl[k];
+  for (let i = 0; i < NC; i++) {
+    const h = p.h[i];
+    if (h) {
+      const avg = h.c / h.q;
+      if (S.prices[i] >= avg * 1.06) doSell(k, i, h.q, `買った平均の値段（${yen(avg)}）より6%以上上がったので、${CO[i].name}を全部（${h.q}株）売った`);
+    }
+  }
+  const total = totalOf(p, S.prices);
+  const cands = [];
+  for (let i = 0; i < NC; i++) {
+    const h = S.hist[i];
+    if (p.h[i] || h.length < 6) continue;
+    const ch = h[h.length - 1] / h[h.length - 6] - 1;
+    if (ch <= -0.05) cands.push([ch, i]);
+  }
+  cands.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  for (const [ch, i] of cands.slice(0, 2)) {
+    const q = Math.floor(Math.min(p.cash, total * 0.2) / S.prices[i]);
+    if (q >= 1) doBuy(k, i, q, `5日間で${Math.round(-ch * 100)}%下がったので、${CO[i].name}を${q}株買った`);
+  }
+}
+function robotKima() {
+  const k = 4, p = S.ppl[k];
+  const a = [rand(S), rand(S), rand(S), rand(S)];
+  if (a[0] >= 0.3) return;
+  const i = Math.floor(a[1] * NC);
+  if (a[2] < 0.5) {
+    const q = Math.floor(p.cash * (0.05 + a[3] * 0.2) / S.prices[i]);
+    if (q >= 1) doBuy(k, i, q, `サイコロで「買う」が出たので、${CO[i].name}を${q}株買った`);
+  } else if (p.h[i]) {
+    const q = Math.max(1, Math.floor(p.h[i].q * (0.3 + a[3] * 0.7)));
+    doSell(k, i, q, `サイコロで「売る」が出たので、${CO[i].name}を${q}株売った`);
+  }
+}
+
+// ===== 閉じていた間の分をまとめて進める =====
+function catchUp() {
+  const t = now();
+  if (!isNum(S.anchor) || t < S.anchor) { S.anchor = t; saveState(); return { n: 0, skipped: false }; }
+  let n = Math.floor((t - S.anchor) / S.speed);
+  if (n <= 0) return { n: 0, skipped: false };
+  let skipped = false;
+  if (n > MAX_CATCH) { skipped = true; S.anchor = t - ((t - S.anchor) % S.speed); n = MAX_CATCH; }
+  else S.anchor += n * S.speed;
+  for (let k = 0; k < n; k++) step();
+  saveState();
+  return { n, skipped };
+}
+
+// ===== 表示の道具 =====
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function chgSpan(cur, prev) {
+  if (!isNum(cur) || !isNum(prev) || prev <= 0) return el('span', 'flat', '');
+  const d = cur - prev, pct = d / prev * 100;
+  const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const mark = d > 0 ? '▲' : d < 0 ? '▼' : '±';
+  return el('span', cls, `${mark}${Math.abs(Math.round(d)).toLocaleString('ja-JP')}円（${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(pct).toFixed(1)}%）`);
+}
+function pctText(v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%'; }
+function man(n) { // 軸の目盛り：大きい金額は「万」で
+  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(Math.abs(n) >= 1e6 ? 0 : 1).replace(/\.0$/, '') + '万';
+  return Math.round(n).toLocaleString('ja-JP');
+}
+const firstDay = () => S.day - S.hist[0].length + 1;
+function indexSeries() {
+  const L = S.hist[0].length, out = [];
+  for (let t = 0; t < L; t++) { let v = 0; for (let i = 0; i < NC; i++) v += S.hist[i][t] / CO[i].p0; out.push(v / NC * 1000); }
+  return out;
+}
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'; }
+
+// 折れ線グラフ（canvas）
+function drawChart(cv, series, opt) {
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const small = opt && opt.small;
+  let lo = Infinity, hi = -Infinity, len = 0;
+  for (const s of series) for (const v of s.data) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  for (const s of series) len = Math.max(len, s.data.length);
+  if (!isFinite(lo)) return;
+  if (opt && isNum(opt.ref)) { lo = Math.min(lo, opt.ref); hi = Math.max(hi, opt.ref); }
+  if (hi - lo < 1e-9) { hi += Math.max(1, hi * 0.01); lo -= Math.max(1, lo * 0.01); }
+  const padY = (hi - lo) * 0.08; hi += padY; lo -= padY;
+  const L = small ? 2 : 44, R = small ? 2 : 6, T = small ? 3 : 8, B = small ? 3 : 18;
+  const X = (t) => L + (len <= 1 ? (w - L - R) : t * (w - L - R) / (len - 1));
+  const Y = (v) => T + (hi - v) * (h - T - B) / (hi - lo);
+  g.font = '10px -apple-system, sans-serif';
+  if (!small) {
+    g.strokeStyle = css('--grid'); g.fillStyle = css('--sub'); g.lineWidth = 1;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let k = 0; k <= 3; k++) {
+      const v = lo + (hi - lo) * k / 3, y = Y(v);
+      g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke();
+      g.fillText(opt.fmt(v), L - 4, y);
+    }
+    g.textBaseline = 'alphabetic';
+    const d0 = opt.startDay, d1 = opt.startDay + len - 1;
+    g.textAlign = 'left'; g.fillText(d0 + '日目', L, h - 4);
+    if (len > 1) { g.textAlign = 'right'; g.fillText(d1 + '日目', w - R, h - 4); }
+  }
+  if (opt && isNum(opt.ref)) {
+    g.setLineDash([4, 4]); g.strokeStyle = css('--sub'); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(L, Y(opt.ref)); g.lineTo(w - R, Y(opt.ref)); g.stroke(); g.setLineDash([]);
+  }
+  for (const s of series) {
+    g.strokeStyle = s.color; g.lineWidth = s.width || 2; g.lineJoin = 'round';
+    g.beginPath();
+    const off = len - s.data.length;
+    s.data.forEach((v, t) => { const x = X(t + off), y = Y(v); if (t === 0) g.moveTo(x, y); else g.lineTo(x, y); });
+    if (s.data.length === 1) { g.arc(X(off), Y(s.data[0]), 2, 0, Math.PI * 2); }
+    g.stroke();
+  }
+}
+
+let toastTimer = 0;
+function toast(msg, err) {
+  const t = $('toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.display = 'none'; }, err ? 4500 : 3200);
+}
+
+// ===== 画面：上の帯 =====
+function renderClock() {
+  $('day').textContent = '市場の' + S.day + '日目';
+  let rest = Math.max(0, S.anchor + S.speed - now());
+  const s = Math.ceil(rest / 1000), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+  $('next').textContent = '次の日まで ' + (hh ? hh + '時間' + String(mm).padStart(2, '0') + '分' : mm + '分' + String(ss).padStart(2, '0') + '秒');
+}
+
+// ===== 画面：ホーム =====
+function renderHome() {
+  const idx = indexSeries(), cur = idx[idx.length - 1], prev = idx.length > 1 ? idx[idx.length - 2] : cur;
+  $('idx').textContent = cur.toFixed(1);
+  const d = cur - prev;
+  const ic = $('idx-chg'); ic.className = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  ic.textContent = idx.length > 1 ? `前日比 ${d > 0 ? '▲' : d < 0 ? '▼' : '±'}${Math.abs(d).toFixed(1)}（${pctText(prev > 0 ? d / prev * 100 : 0)}）` : '前日比 —（まだ1日目が来ていません）';
+  drawChart($('c-idx'), [{ data: idx, color: css('--accent') }], { fmt: (v) => v.toFixed(0), startDay: firstDay(), ref: 1000 });
+
+  const ser = S.ppl.map((p, k) => ({ data: p.hist, color: css('--c' + k), width: k === 0 ? 3 : 2 }));
+  drawChart($('c-assets'), ser.slice().reverse(), { fmt: man, startDay: firstDay(), ref: START_CASH });
+  const lg = $('legend'); lg.innerHTML = '';
+  PEOPLE.forEach((pp, k) => { const s = el('span', '', pp.emoji + pp.name); s.style.setProperty('--dot', css('--c' + k)); lg.append(s); });
+
+  const rows = S.ppl.map((p, k) => ({ k, total: totalOf(p, S.prices), cash: p.cash }));
+  rows.sort((a, b) => b.total - a.total || a.k - b.k);
+  const box = $('ranking'); box.innerHTML = '';
+  let rank = 0, prevT = null;
+  rows.forEach((r, n) => {
+    if (r.total !== prevT) rank = n + 1; prevT = r.total;
+    const div = el('div', 'rank' + (r.k === 0 ? ' me' : ''));
+    const gain = (r.total - START_CASH) / START_CASH * 100;
+    div.append(el('div', 'no', rank + '位'), el('div', 'nm', PEOPLE[r.k].emoji + ' ' + PEOPLE[r.k].name));
+    const v = el('div', 'val', yen(r.total)); v.append(el('div', gain > 0 ? 'up' : gain < 0 ? 'down' : 'flat', pctText(gain)));
+    v.lastChild.style.fontSize = '.78rem';
+    div.append(v, el('div', 'det', `現金 ${yen(r.cash)} ／ 株 ${yen(r.total - r.cash)}`));
+    div.dataset.k = r.k; div.dataset.total = r.total;
+    box.append(div);
+  });
+
+  const mine = $('mine'); mine.innerHTML = '';
+  const me = S.ppl[0], ids = Object.keys(me.h).map(Number).sort((a, b) => a - b);
+  if (!ids.length) mine.append(el('p', 'empty', 'まだ株を持っていません。下の「銘柄」から会社を選んで買えます。'));
+  ids.forEach((i) => {
+    const h = me.h[i], val = h.q * S.prices[i], gain = val - h.c;
+    const row = el('div', 'log');
+    row.append(el('div', '', `${CO[i].name}　${h.q}株　${yen(val)}`));
+    row.append(el('div', 'r ' + (gain > 0 ? 'up' : gain < 0 ? 'down' : ''), `買った額との差 ${gain >= 0 ? '+' : '−'}${yen(Math.abs(gain))}`));
+    row.style.cursor = 'pointer'; row.onclick = () => openDetail(i);
+    mine.append(row);
+  });
+  if (ids.length) mine.append(el('p', 'note', `現金 ${yen(me.cash)}`));
+
+  const rh = $('robots-help'); rh.innerHTML = '';
+  PEOPLE.slice(1).forEach((pp) => { const d = el('p', 'note'); d.append(el('b', '', pp.emoji + pp.name + '：')); d.append(document.createTextNode(pp.help)); rh.append(d); });
+}
+
+// ===== 画面：銘柄 =====
+function renderStocks() {
+  const box = $('stocks'); box.innerHTML = '';
+  const recent = new Set(S.news.filter((n) => n.d >= S.day - 2).flatMap((n) => n.c >= 0 ? [n.c] : n.g >= 0 ? CO.map((c, i) => (c.g === n.g ? i : -1)) : []));
+  CO.forEach((c, i) => {
+    const h = S.hist[i], cur = S.prices[i], prev = h.length > 1 ? h[h.length - 2] : cur;
+    const card = el('div', 'card stock');
+    const nm = el('div', 'nm', c.name + (recent.has(i) ? ' 📰' : ''));
+    const meta = el('div', 'sub'); meta.append(el('span', 'pill', c.sec));
+    if (S.ppl[0].h[i]) meta.append(document.createTextNode('あなた ' + S.ppl[0].h[i].q + '株'));
+    const px = el('div'); px.append(el('span', 'px', yen(cur) + ' '), chgSpan(cur, h.length > 1 ? prev : NaN));
+    if (h.length <= 1) px.append(el('span', 'sub', '前日比 —'));
+    const cv = el('canvas');
+    card.append(nm, cv, px, meta);
+    card.onclick = () => openDetail(i);
+    box.append(card);
+    cv._data = h.slice(-60);
+    cv._color = h.length > 1 && cur < h[Math.max(0, h.length - 61)] ? css('--down') : css('--up');
+  });
+  box.querySelectorAll('canvas').forEach((cv) => drawChart(cv, [{ data: cv._data, color: cv._color, width: 1.5 }], { small: true }));
+}
+
+// ===== 銘柄の詳しい画面 =====
+let cur = -1;
+function openDetail(i) {
+  cur = i;
+  $('d-qty').value = ''; $('d-memo').value = '';
+  $('detail').classList.add('open');
+  $('detail').scrollTop = 0;
+  renderDetail();
+}
+function renderDetail() {
+  if (cur < 0) return;
+  const i = cur, c = CO[i], h = S.hist[i], price = S.prices[i];
+  $('d-name').textContent = `${c.name}（${c.sec}）`;
+  $('d-price').textContent = yen(price);
+  const ch = $('d-chg'); ch.innerHTML = ''; ch.append(h.length > 1 ? chgSpan(price, h[h.length - 2]) : el('span', 'sub', '前日比 —'));
+  document.querySelectorAll('#d-range button').forEach((b) => b.classList.toggle('on', Number(b.dataset.r) === ui.range));
+  const data = ui.range ? h.slice(-ui.range) : h;
+  drawChart($('c-detail'), [{ data, color: css('--accent') }], { fmt: man, startDay: S.day - data.length + 1 });
+  const me = S.ppl[0], mh = me.h[i];
+  const kv = $('d-kv'); kv.innerHTML = '';
+  [['今の株価', yen(price)], ['あなたの現金', yen(me.cash)], ['あなたの持ち株', (mh ? mh.q : 0) + '株'],
+   ['買える最大の株数', Math.floor(me.cash / price) + '株']].forEach(([a, b]) => kv.append(el('div', '', a), el('div', '', b)));
+  updateCost();
+  const rb = $('d-robots'); rb.innerHTML = '';
+  PEOPLE.forEach((pp, k) => { if (k === 0) return; const x = S.ppl[k].h[i]; rb.append(el('div', 'log', `${pp.emoji}${pp.name}：${x ? x.q + '株' : '持っていない'}`)); });
+  const nb = $('d-news'); nb.innerHTML = '';
+  const ns = S.news.filter((n) => n.c === i || (n.g >= 0 && n.g === c.g) || (n.c < 0 && n.g < 0)).slice(-30).reverse();
+  if (!ns.length) nb.append(el('p', 'empty', 'まだニュースはありません。'));
+  ns.forEach((n) => nb.append(newsRow(n)));
+}
+$('d-close').onclick = () => { $('detail').classList.remove('open'); cur = -1; renderAll(); };
+document.querySelectorAll('#d-range button').forEach((b) => { b.onclick = () => { ui.range = Number(b.dataset.r); saveUI(); renderDetail(); }; });
+
+// 株数の読み取り：1以上の整数だけ受け付ける（小数・マイナスは別の数に読み替えず、入れ直しをお願いする）
+function readQty() {
+  const raw = $('d-qty').value.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0)).trim();
+  if (raw === '') return { err: '株数を入れてください。' };
+  if (!/^[0-9]+$/.test(raw)) return { err: '株数は1以上の整数で入れてください（小数やマイナスは使えません）。' };
+  const q = Number(raw);
+  if (!Number.isSafeInteger(q) || q < 1) return { err: '株数は1以上の整数で入れてください（小数やマイナスは使えません）。' };
+  return { q };
+}
+function updateCost() {
+  if (cur < 0) return;
+  const r = readQty();
+  $('d-cost').textContent = r.q ? `${r.q}株 × ${yen(S.prices[cur])} ＝ ${yen(r.q * S.prices[cur])}` : '';
+}
+$('d-qty').addEventListener('input', updateCost);
+let busy = false;
+function trade(side) {
+  if (busy || cur < 0) return;
+  busy = true; setTimeout(() => { busy = false; }, 500);
+  // 閉じていた分などがあれば、先に市場を今に追いつかせる
+  const cu = catchUp();
+  if (cu.n) { renderAll(); toast(`市場が${cu.n}日進んだので株価が変わりました。値段を確かめて、もう一度押してください。`, true); return; }
+  const r = readQty();
+  if (r.err) { toast(r.err, true); return; }
+  const i = cur, q = r.q, me = S.ppl[0], price = S.prices[i];
+  const memo = $('d-memo').value.trim().slice(0, 40);
+  if (side === 'b') {
+    if (q * price > me.cash) { toast(`現金が足りません（必要 ${yen(q * price)}、現金 ${yen(me.cash)}）。`, true); return; }
+    doBuy(0, i, q, memo || 'あなたが自分で決めた');
+  } else {
+    const have = me.h[i] ? me.h[i].q : 0;
+    if (q > have) { toast(`持ち株が足りません（売ろうとした ${q}株、持っている ${have}株）。`, true); return; }
+    doSell(0, i, q, memo || 'あなたが自分で決めた');
+  }
+  saveState();
+  $('d-qty').value = ''; $('d-memo').value = '';
+  toast(`${CO[i].name}を${q}株${side === 'b' ? '買いました' : '売りました'}（1株 ${yen(price)}）。`);
+  renderDetail();
+}
+$('d-buy').onclick = () => trade('b');
+$('d-sell').onclick = () => trade('s');
+
+// ===== 画面：売買の記録 =====
+function renderTrades() {
+  const sel = $('tr-who');
+  if (!sel.options.length) {
+    sel.add(new Option('全員', ''));
+    PEOPLE.forEach((pp, k) => sel.add(new Option(pp.emoji + pp.name, String(k))));
+  }
+  sel.value = ui.who;
+  const box = $('trades'); box.innerHTML = '';
+  const list = S.trades.filter((t) => ui.who === '' || t.w === Number(ui.who)).slice(-200).reverse();
+  if (!list.length) box.append(el('p', 'empty', S.day === 0 ? 'まだ売り買いはありません。市場が1日進むと、ロボットが動き始めます。' : 'まだ売り買いはありません。'));
+  list.forEach((t) => {
+    const row = el('div', 'log');
+    const head = el('div');
+    head.append(el('span', 'sub', t.d + '日目 '), document.createTextNode(`${PEOPLE[t.w].emoji}${PEOPLE[t.w].name} `),
+      el('b', t.s === 'b' ? 'up' : 'down', t.s === 'b' ? '買い' : '売り'));
+    row.append(head, el('div', '', `${CO[t.c].name} ${t.q}株（1株 ${yen(t.p)}、計 ${yen(t.q * t.p)}）`));
+    if (t.r) row.append(el('div', 'r', '理由：' + t.r));
+    box.append(row);
+  });
+  if (list.length) box.append(el('p', 'note', '新しい順に最大200件を表示しています。'));
+}
+$('tr-who').onchange = () => { ui.who = $('tr-who').value; saveUI(); renderTrades(); };
+
+// ===== 画面：ニュース =====
+function newsRow(n) {
+  const row = el('div', 'log');
+  row.append(el('span', 'sub', n.d + '日目 '), el('span', n.up ? 'up' : 'down', n.up ? '▲ ' : '▼ '), document.createTextNode(n.t));
+  return row;
+}
+function renderNews() {
+  const box = $('news'); box.innerHTML = '';
+  const list = S.news.slice(-100).reverse();
+  if (!list.length) box.append(el('p', 'empty', 'まだニュースはありません。市場が進むと、ときどき出来事が起きます。'));
+  list.forEach((n) => box.append(newsRow(n)));
+}
+
+// ===== 画面：設定 =====
+function renderSettings() {
+  const box = $('speed'); box.innerHTML = '';
+  SPEEDS.forEach((sp) => {
+    const b = el('button', sp.ms === S.speed ? 'on' : '', sp.label);
+    b.onclick = () => {
+      catchUp();                 // 今までの速さで、たまった分を先に進める
+      S.speed = sp.ms; S.anchor = now();
+      saveState(); renderAll();
+      toast('時間の速さを「' + sp.label + '」にしました。');
+    };
+    box.append(b);
+  });
+  const sp = SPEEDS.find((x) => x.ms === S.speed);
+  $('speed-now').textContent = '今の速さ：現実の' + sp.label.replace('で1日', '') + 'で、市場が1日進みます。';
+}
+$('reset').onclick = () => {
+  if (!confirm('最初からやり直します。全員の資産・株価・記録・ニュースが最初の状態に戻ります。元に戻せません。よろしいですか？')) return;
+  const speed = S.speed;
+  S = freshState(); S.speed = speed;
+  saveState(); renderAll();
+  toast('最初からやり直しました。');
+};
+$('export').onclick = async () => {
+  const d = new Date(now()), p2 = (n) => String(n).padStart(2, '0');
+  const name = 'kabu-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'kabu', version: APP_VERSION, exportedAt: d.toISOString(), state: S });
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'kabu' || !data.state || typeof data.state !== 'object') { alert('このアプリのバックアップファイルではありません。'); return; }
+  const s = normalize(data.state);
+  if (!s) { alert('ファイルの中身がこわれているため、読み込めませんでした。'); return; }
+  if (!confirm(`市場の${s.day}日目の状態を読み込みます。今の進み具合は、ファイルの内容に置きかわります。よろしいですか？`)) return;
+  s.anchor = now();        // 読み込んだ時点から時間を数え直す
+  S = s; saveState(); renderAll();
+  alert('読み込みました。');
+};
+
+// ===== タブの切りかえと全体の表示 =====
+function renderAll() {
+  renderClock();
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.t === ui.tab));
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 't-' + ui.tab));
+  if (ui.tab === 'home') renderHome();
+  if (ui.tab === 'stocks') renderStocks();
+  if (ui.tab === 'trades') renderTrades();
+  if (ui.tab === 'news') renderNews();
+  if (ui.tab === 'settings') renderSettings();
+  if (cur >= 0) renderDetail();
+}
+document.querySelectorAll('nav button').forEach((b) => {
+  b.onclick = () => { ui.tab = b.dataset.t; saveUI(); renderAll(); window.scrollTo(0, 0); };
+});
+if (!['home', 'stocks', 'trades', 'news', 'settings'].includes(ui.tab)) ui.tab = 'home';
+if (![30, 120, 0].includes(ui.range)) ui.range = 120;
+if (!(ui.who === '' || /^[0-4]$/.test(ui.who))) ui.who = '';
+
+// 開いたとき・画面に戻ったとき・1秒ごとに、時間の進みを確かめる
+function tick(showMsg) {
+  const r = catchUp();
+  if (r.n) {
+    // 入力中の詳しい画面は、数字を消さずに表示だけ新しくする
+    renderAll();
+    if (showMsg && r.n > 1) toast(r.skipped ? `長い間閉じていたので、直近の${r.n}日分だけ進めました（それより前は飛ばしました）。` : `閉じている間に、市場が${r.n}日進みました。`);
+  } else renderClock();
+}
+setInterval(() => tick(false), 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(true); });
+let rsz = 0;
+window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(renderAll, 150); });
+if (window.matchMedia) { const mq = matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', renderAll); }
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('detail').classList.contains('open')) return; // 売り買いの画面を開いているときは読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+try { if (!localStorage.getItem(KEY_STATE)) saveState(); } catch (e) {}
+const first = catchUp();
+renderAll();
+if (first.n > 1) toast(first.skipped ? `長い間閉じていたので、直近の${first.n}日分だけ進めました（それより前は飛ばしました）。` : `閉じている間に、市場が${first.n}日進みました。`);
+</script>
+</body>
+</html>

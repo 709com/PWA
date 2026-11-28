@@ -177,7 +177,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_KIDS = 'otetsudai:kids';        // 子どもの呼び名とマーク
 const KEY_CHORES = 'otetsudai:chores';    // お手伝いの種類
 const KEY_REWARDS = 'otetsudai:rewards';  // ごほうび
@@ -333,8 +333,15 @@ function renderLog(pane) {
 }
 document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => { view.tab = b.dataset.v; render(); });
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normLog(it) {
+  if (!it || typeof it !== 'object' || !it.id || !it.kid || (it.kind !== 'earn' && it.kind !== 'spend') || typeof it.pt !== 'number' || !Number.isFinite(it.pt)) return null;
+  const n = Number(it.at), at = Number.isFinite(n) && n > 0 ? n : Date.now(), d = new Date(at);
+  return { ...it, id: String(it.id), kid: String(it.kid), name: typeof it.name === 'string' ? it.name : '', at,
+    ym: typeof it.ym === 'string' && /^\d{4}-\d{2}$/.test(it.ym) ? it.ym : d.getFullYear() + '-' + p2(d.getMonth() + 1) };
+}
 async function reload() {
-  try { logs = await dbAll(); } catch (e) { logs = []; alert('データベースを開けませんでした。'); }
+  try { logs = (await dbAll()).map(normLog).filter(Boolean); } catch (e) { logs = []; alert('データベースを開けませんでした。'); }
   render();
 }
 
@@ -452,18 +459,22 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'otetsudai' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の履歴を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。子どもの呼び名・お手伝い・ごほうびの一覧は、ファイルの内容になります。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id && it.kid && (it.kind === 'earn' || it.kind === 'spend') && Number.isFinite(it.pt)) await dbPut(it); }
+  const list = data.items.map(normLog).filter(Boolean);
+  if (!confirm(list.length + '件の履歴を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。子どもの呼び名・お手伝い・ごほうびの一覧は、ファイルの内容になります。よろしいですか？')) return;
+  for (const it of list) await dbPut(it);
   // 呼び名とマークは、同じ子どもはファイルの内容にそろえ、新しい子どもは足す
   (Array.isArray(data.kids) ? data.kids : []).forEach((k) => {
     if (!k || !k.id) return;
     const v = { id: String(k.id), name: String(k.name || '子ども').slice(0, 12), ava: AVATARS.includes(k.ava) ? k.ava : AVATARS[0] };
+    if (typeof k.name !== 'string' || !k.name.trim()) v.name = '子ども';
     const i = kids.findIndex((x) => x.id === v.id); if (i >= 0) kids[i] = v; else kids.push(v);
   });
   // お手伝い・ごほうびの一覧は、ファイルの内容に置きかえる
   const clean = (list) => list.filter((x) => x && x.id && x.name).map((x) => ({ id: String(x.id), name: String(x.name).slice(0, 24), pt: Math.min(999, Math.max(1, parseInt(x.pt, 10) || 1)), for: x.for ? String(x.for) : '' }));
   if (Array.isArray(data.chores)) chores = clean(data.chores);
   if (Array.isArray(data.rewards)) rewards = clean(data.rewards);
+  // 呼び名の一覧にない子の履歴は、呼び名を足して見えるようにする
+  list.forEach((it) => { if (!kids.some((k) => k.id === it.kid)) kids.push({ id: it.kid, name: '子ども' + (kids.length + 1), ava: AVATARS[0] }); });
   save(KEY_KIDS, kids); save(KEY_CHORES, chores); save(KEY_REWARDS, rewards);
   buildSettings();
   await reload();

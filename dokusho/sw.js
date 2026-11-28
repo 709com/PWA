@@ -1,7 +1,7 @@
 // このファイルは「サービスワーカー」です。アプリのファイルをiPhoneの中に保存しておき、電波がなくても起動できるようにします。
 // アプリを更新するときは、下の VERSION と index.html の APP_VERSION を同じ番号に上げてください。
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const CACHE = 'dokusho-' + VERSION;
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png'];
 

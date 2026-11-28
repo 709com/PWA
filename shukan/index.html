@@ -151,7 +151,7 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const KEY_DATA = 'shukan:data';   // { habits:[{id,name,color,createdAt}], done:{ 習慣id: ['2026-11-13', ...] } }
 const COLORS = ['#2f8f5b', '#2f6fd0', '#e07b1f', '#c0457a', '#7a52c7', '#1f9aa8'];
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
@@ -168,8 +168,21 @@ const parse = (s) => { const [y, m, d] = s.split('-').map(Number); return new Da
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); };
 const todayStr = () => ymd(new Date());
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、変な表示を出さない）
+const okDay = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(parse(d));
+function normHabit(h) {
+  if (!h || typeof h !== 'object' || !h.id) return null;
+  const c = Number(h.createdAt);
+  return { ...h, id: String(h.id), name: typeof h.name === 'string' ? h.name : (typeof h.name === 'number' ? String(h.name) : ''),
+    color: typeof h.color === 'string' && /^#[0-9a-f]{6}$/i.test(h.color) ? h.color : COLORS[0],
+    createdAt: Number.isFinite(c) && c > 0 ? c : Date.now() };
+}
+const normDays = (a) => (Array.isArray(a) ? [...new Set(a.filter(okDay))].sort() : []);
 let data = load(KEY_DATA, { habits: [], done: {} });
-if (!data.habits) data = { habits: [], done: {} };
+if (!data || !Array.isArray(data.habits)) data = { habits: [], done: {} };
+data.habits = data.habits.map(normHabit).filter(Boolean);
+if (!data.done || typeof data.done !== 'object' || Array.isArray(data.done)) data.done = {};
+Object.keys(data.done).forEach((k) => { data.done[k] = normDays(data.done[k]); });
 const doneSet = (id) => new Set(data.done[id] || []);
 function setDone(id, day, on) {
   const s = doneSet(id);
@@ -342,11 +355,13 @@ $('import').onchange = async (e) => {
   let b;
   try { b = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!b || b.app !== 'shukan' || !b.data || !Array.isArray(b.data.habits)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(b.data.habits.length + '件の習慣を読み込みます。同じ習慣は記録を合わせます（ほかの習慣は消えません）。よろしいですか？')) return;
-  for (const h of b.data.habits) {
-    if (!h || !h.id) continue;
+  const list = b.data.habits.map(normHabit).filter(Boolean);
+  if (!list.length) { alert('読み込める習慣がありませんでした。'); return; }
+  if (!confirm(list.length + '件の習慣を読み込みます。同じ習慣は記録を合わせます（ほかの習慣は消えません）。よろしいですか？')) return;
+  const fileDone = b.data.done && typeof b.data.done === 'object' ? b.data.done : {};
+  for (const h of list) {
     if (!data.habits.some((x) => x.id === h.id)) data.habits.push(h);
-    data.done[h.id] = [...new Set([...(data.done[h.id] || []), ...((b.data.done || {})[h.id] || [])])].sort();
+    data.done[h.id] = normDays([...(data.done[h.id] || []), ...normDays(fileDone[h.id])]);
   }
   save(KEY_DATA, data);
   render();
