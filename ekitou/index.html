@@ -125,13 +125,13 @@
     <label class="f" for="e-body">内容</label>
     <textarea id="e-body" maxlength="400" placeholder="例：区政報告チラシをお配りします"></textarea>
     <label class="check"><input type="checkbox" id="e-wx"> 天候で変更あり</label>
+    <div class="stop" id="e-vote" hidden>投票日のため、告知文の作成と共有はできません。翌日以降に行ってください。</div>
     <div class="actions">
       <button class="primary" id="e-save">保存する</button>
       <button class="plain" id="e-cancel">やめる</button>
       <button class="plain" id="e-notice" hidden>📣 告知文を作る</button>
       <button class="plain danger" id="e-del" hidden>削除</button>
     </div>
-    <div class="stop" id="e-vote" hidden>投票日のため、告知文の作成と共有はできません。翌日以降に行ってください。</div>
     <p class="note" id="e-meta"></p>
   </div>
 </div>
@@ -141,6 +141,7 @@
   <div class="inner">
     <h2>📣 告知文</h2>
     <div class="caution"><b>ご注意：</b>この文面は「政治活動の告知」（いつ・どこで・何をするか）にとどめてください。「投票をお願いします」「一票を」などの、選挙運動にあたる呼びかけは入れないでください。</div>
+    <div class="stop" style="margin:0 0 10px" id="n-vote" hidden>投票日のため共有できません。</div>
     <textarea id="n-text" maxlength="2000"></textarea>
     <div class="warn" id="n-word" hidden></div>
     <p class="note">文章は自由に直せます。直した文章は保存されません（予定から作り直せます）。</p>
@@ -149,7 +150,6 @@
       <button class="plain" id="n-copy">コピー</button>
       <button class="plain" id="n-close">閉じる</button>
     </div>
-    <div class="stop" id="n-vote" hidden>投票日のため共有できません。</div>
   </div>
 </div>
 

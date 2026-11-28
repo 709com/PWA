@@ -100,7 +100,7 @@
     <label class="f" for="e-name">品の名前</label>
     <input id="e-name" maxlength="40" placeholder="例：レジ袋（中）">
     <div class="row2">
-      <div><label class="f" for="e-qty">数（1〜9999の整数・空でもよい）</label><input id="e-qty" inputmode="numeric" maxlength="6" placeholder="例：3"></div>
+      <div><label class="f" for="e-qty">数（空でもよい）</label><input id="e-qty" inputmode="numeric" maxlength="6" placeholder="例：3"></div>
       <div><label class="f" for="e-unit">単位</label><input id="e-unit" maxlength="8" list="units" placeholder="例：箱"><datalist id="units"><option>個</option><option>本</option><option>箱</option><option>袋</option><option>ケース</option><option>kg</option></datalist></div>
     </div>
     <p class="err" id="e-err"></p>
@@ -296,6 +296,9 @@ $('share').onclick = async () => {
   if (navigator.share) { try { await navigator.share({ title: '注文メモ', text }); } catch (e) {} return; }
   try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
 };
+
+// 入れ直し始めたら、前のエラー表示を消す
+['e-qty'].forEach((id) => $(id).addEventListener('input', () => { $('e-err').textContent = ''; }));
 
 // ===== 設定 =====
 $('open-settings').onclick = () => { $('votedays').value = voteDays.join('\n'); $('vd-err').textContent = ''; $('settings').classList.add('open'); window.scrollTo(0, 0); };

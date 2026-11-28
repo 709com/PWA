@@ -35,7 +35,7 @@
   .stats div { font-size:.8rem; color:var(--sub); }
   .stats b { display:block; font-size:1.5rem; color:var(--text); }
   .stamps { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
-  .stamp { border:2px dashed var(--line); border-radius:14px; padding:10px 6px; text-align:center; }
+  .stamp { -webkit-user-select:none; user-select:none; border:2px dashed var(--line); border-radius:14px; padding:10px 6px; text-align:center; }
   .stamp.on { border-style:solid; border-color:var(--accent); background:var(--accent-soft); }
   .stamp .nm { font-weight:700; font-size:.92rem; word-break:break-all; }
   .stamp .ct { font-size:.8rem; color:var(--sub); }
@@ -94,7 +94,7 @@
   </section>
 
   <section>
-    <h2>🏅 坂スタンプ帳（これまでの合計）</h2>
+    <h2>🏅 坂スタンプ帳（合計）</h2>
     <div class="stamps" id="stamps"></div>
   </section>
 
@@ -117,9 +117,10 @@
     <label class="f">のぼった坂と本数</label>
     <div id="e-slopes"></div>
     <div class="row2">
-      <div><label class="f" for="e-km">距離 km（空でもよい）</label><input id="e-km" inputmode="decimal" maxlength="6" placeholder="例：5.2"></div>
-      <div><label class="f" for="e-min">時間 分（空でもよい）</label><input id="e-min" inputmode="numeric" maxlength="4" placeholder="例：40"></div>
+      <div><label class="f" for="e-km">距離 km</label><input id="e-km" inputmode="decimal" maxlength="6" placeholder="例：5.2"></div>
+      <div><label class="f" for="e-min">時間（分）</label><input id="e-min" inputmode="numeric" maxlength="4" placeholder="例：40"></div>
     </div>
+    <p class="note" style="margin-top:4px">距離と時間は、空でもかまいません。</p>
     <p class="err" id="e-err"></p>
     <label class="f" for="e-memo">ひとことメモ</label>
     <textarea id="e-memo" maxlength="120" placeholder="例：朝は涼しかった"></textarea>
@@ -338,6 +339,9 @@ $('share').onclick = async () => {
   if (navigator.share) { try { await navigator.share({ title: '坂ランのまとめ', text }); } catch (e) {} return; }
   try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
 };
+
+// 入れ直し始めたら、前のエラー表示を消す
+['e-km', 'e-min'].forEach((id) => $(id).addEventListener('input', () => { $('e-err').textContent = ''; }));
 
 // ===== 設定 =====
 function buildSlopeEdit() { $('slope-edit').innerHTML = ''; slopes.filter((s) => s.active).forEach((s) => addSlopeRow(s.name, s.id)); }

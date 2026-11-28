@@ -19,9 +19,9 @@
 
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
-  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  main { max-width:640px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
   header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
-  h1 { font-size:1.25rem; margin:0; }
+  h1 { font-size:clamp(1.02rem, 5vw, 1.25rem); margin:0; }
   button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
   button:disabled { opacity:.45; cursor:default; }
   input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:100%; }
@@ -51,7 +51,7 @@
   .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; min-height:40px; }
   .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
   .seg { display:grid; gap:6px; }
-  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:18px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:auto; padding-top:18px; }
   @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
 
 
@@ -153,7 +153,7 @@
 <div class="sheet" id="settings">
   <div class="inner">
     <h2>⚙️ 設定</h2>
-    <p class="note">「やること」には、ワークのページや、覚えることなどを書いておくと、テスト前にチェックできます。点数を入れると、合計と平均を計算します。</p>
+    <p class="note">「やること」には（例：ワーク p.10〜15）、ワークのページや、覚えることなどを書いておくと、テスト前にチェックできます。点数を入れると、合計と平均を計算します。</p>
     
     <label class="f" style="margin-top:22px">バックアップ（データの保存）</label>
     <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、データもすべて消えます。ときどき「書き出す」で「ファイル」アプリなどに保存しておくと安心です。</p>
@@ -363,7 +363,7 @@ function renderDetail() {
       del.onclick = () => { s.todos = s.todos.filter((y) => y.id !== td.id); persist(); renderDetail(); render(); };
       r.append(ck, el('div', 'tx', td.text), del); b.append(r);
     });
-    const ar = el('div', 'addrow'); const inp = el('input'); inp.maxLength = 60; inp.placeholder = 'やることを追加（例：ワーク p.10〜15）';
+    const ar = el('div', 'addrow'); const inp = el('input'); inp.maxLength = 60; inp.placeholder = 'やることを追加';
     const ab = el('button', 'plain small', '追加');
     const addTodo = () => { const v = inp.value.trim().slice(0, 60); if (!v) return; s.todos.push({ id: uid(), text: v, done: false }); persist(); renderDetail(); render(); const ni = box.querySelector('[data-sid="' + s.id + '"]'); if (ni) ni.focus(); };
     inp.dataset.sid = s.id;
