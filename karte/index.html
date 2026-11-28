@@ -274,8 +274,19 @@ function render() {
 }
 ['q', 'f-cat', 'f-st', 'f-area', 'f-done'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', render));
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+function normItem(it) {
+  if (!it || typeof it !== 'object' || !it.id) return null;
+  const s = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+  const ymd = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v + 'T00:00:00')) ? v : '');
+  const now = Date.now(), c = normTime(it.createdAt) || normTime(it.updatedAt) || now;
+  return { ...it, id: String(it.id), date: ymd(it.date), category: s(it.category), area: s(it.area), body: s(it.body),
+    status: STATES.includes(it.status) ? it.status : STATES[0], next: ymd(it.next), memo: s(it.memo),
+    createdAt: c, updatedAt: normTime(it.updatedAt) || c };
+}
 async function reload() {
-  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  try { items = (await dbAll()).map(normItem).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
   buildFilters();
   render();
 }
@@ -389,7 +400,8 @@ function stamp() { const d = new Date(); return d.getFullYear() + p2(d.getMonth(
 $('export-csv').onclick = () => {
   const rows = shownItems();
   if (!rows.length) { alert('書き出す記録がありません。'); return; }
-  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  // 先頭が = + - @ などの欄は、Excelで式として動かないよう ' を付ける
+  const q = (v) => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r\n]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
   const head = ['受けた日', '分野', '地域', '相談の内容', '対応状況', '次の対応日', '対応メモ', '最終更新'];
   const body = rows.map((i) => [i.date, i.category, i.area, i.body, i.status, i.next, i.memo, fmtDate(i.updatedAt)].map(q).join(','));
   // 先頭の ﻿ は、Excelで文字化けしないための印
@@ -408,9 +420,11 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'karte' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id) await dbPut(it); }
-  if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
+  const list = data.items.map(normItem).filter(Boolean);
+  if (!list.length) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm(list.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of list) await dbPut(it);
+  if (Array.isArray(data.cats) && data.cats.some((c) => typeof c === 'string' && c.trim())) { cats = [...new Set([...cats, ...data.cats.filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim().slice(0, 20))])]; save(KEY_CATS, cats); buildCatEdit(); }
   await reload();
   alert('読み込みました。');
 };
