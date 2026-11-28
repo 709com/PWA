@@ -1,0 +1,452 @@
+<!doctype html>
+<!-- このファイルは「家族の防災カード」の本体です。家族の集合場所・連絡方法・一人ひとりのメモ・持ち出し袋の場所を1枚のカードにまとめ、画像にして家族に送れます。 -->
+<!-- 入力した内容はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。避難所の名前や電話番号などの事実の情報は、アプリには入っていません（ご自分で入力してください）。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>家族の防災カード</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="防災カード">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c4472c">
+<style>
+  :root { --bg:#f8f4f2; --card:#fff; --text:#2a1d19; --sub:#6d5b55; --accent:#c4472c; --accent-soft:#f9e3dc; --line:#e8ddd9; --danger:#c8372d;
+          --health:#fff1d6; --health-text:#6b4300; --ok:#1e8a50; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#181311; --card:#241c19; --text:#f3ebe8; --sub:#b3a39d; --accent:#ee7c60; --accent-soft:#3e231c; --line:#3a2d29; --danger:#ef6b61;
+            --health:#3a2c12; --health-text:#f6d796; --ok:#53c385; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.25rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:4.5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .offline { border:2px solid var(--ok); color:var(--ok); border-radius:12px; padding:8px 12px; font-weight:700; font-size:.92rem; margin-bottom:8px; }
+  .offline.wait { border-color:var(--line); color:var(--sub); font-weight:500; }
+  .privacy { background:#fde4df; color:#7a1d0e; border-radius:12px; padding:10px 12px; font-size:.86rem; margin-bottom:10px; font-weight:600; }
+  @media (prefers-color-scheme: dark) { .privacy { background:#4a1d15; color:#ffd2c8; } }
+
+  /* カード（大きな文字） */
+  .bigcard { background:var(--card); border:3px solid var(--accent); border-radius:16px; padding:14px 16px; }
+  .bigcard h2 { margin:0 0 4px; font-size:1.35rem; color:var(--accent); }
+  .sec { border-top:1px solid var(--line); padding:10px 0 6px; }
+  .sec:first-of-type { border-top:none; }
+  .sec .lab { font-size:.9rem; color:var(--sub); font-weight:700; }
+  .sec .val { font-size:1.35rem; font-weight:700; white-space:pre-wrap; word-break:break-word; line-height:1.45; }
+  .sec .val.empty { font-size:1rem; color:var(--sub); font-weight:500; }
+  .mem { padding:8px 0; border-top:1px dashed var(--line); }
+  .mem:first-of-type { border-top:none; }
+  .mem .nm { font-size:1.3rem; font-weight:700; word-break:break-word; }
+  .mem .sc { font-size:1.05rem; word-break:break-word; }
+  .mem .hl { background:var(--health); color:var(--health-text); border-radius:10px; padding:6px 10px; margin-top:4px; font-size:1.1rem; font-weight:700; white-space:pre-wrap; word-break:break-word; }
+  .updated { text-align:right; font-size:.8rem; color:var(--sub); margin-top:6px; }
+
+  .bigbtns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:14px 16px; font-weight:700; }
+  .primary:disabled { opacity:.45; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .plain:disabled { opacity:.45; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.84rem; margin-bottom:6px; font-weight:600; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .stop { background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:8px 10px; font-weight:700; margin-top:8px; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .membox { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px 12px 12px; margin-bottom:10px; }
+  .membox .del { margin-top:8px; padding:8px 12px; font-size:.88rem; }
+  .check { display:flex; gap:10px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:10px 0; }
+  .check input { width:24px; height:24px; flex:none; margin:0; }
+  #img-out { width:100%; border:1px solid var(--line); border-radius:12px; margin-top:10px; display:block; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🏠 家族の防災カード</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="offline wait" id="offline">一度開いたあとは、電波がなくても開けます。</div>
+  <div class="privacy">🔒 このカードには家族の大切な情報が入ります。本名・住所・電話番号など、個人を特定できる情報は書かず、呼び名で入れてください。画像は家族以外に送らないでください。</div>
+
+  <div class="bigcard" id="card"></div>
+
+  <div class="bigbtns">
+    <button class="primary" id="btn-edit">✏️ 編集する</button>
+    <button class="primary" id="btn-img">🖼️ 画像にする</button>
+  </div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます<br>避難所や連絡先などの情報は、区のお知らせなどで確かめて、ご自分で入力してください。</footer>
+</main>
+
+<!-- 編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2>カードを編集</h2>
+    <div class="warn">本名・住所・電話番号など、個人を特定できる情報は書かないでください。家族は呼び名で入れてください。</div>
+    <label class="f" for="e-meet1">集合場所（第1）</label>
+    <textarea id="e-meet1" maxlength="200" placeholder="家族で決めた場所を書く"></textarea>
+    <label class="f" for="e-meet2">集合場所（第2・第1に行けないとき）</label>
+    <textarea id="e-meet2" maxlength="200" placeholder="家族で決めた場所を書く"></textarea>
+    <label class="f" for="e-contact">連絡方法（家族で決めた方法・順番）</label>
+    <textarea id="e-contact" maxlength="400" placeholder="例：家族で決めた連絡の方法と、つながらないときの順番"></textarea>
+    <label class="f" for="e-bag">持ち出し袋の場所</label>
+    <input id="e-bag" maxlength="80" placeholder="例：玄関の収納の下の段">
+
+    <label class="f" style="margin-top:20px">家族それぞれ</label>
+    <div class="warn">持病・アレルギーのメモは大切な個人情報です。必要なことだけを短く書いてください。</div>
+    <div id="members"></div>
+    <button class="plain" id="mem-add">＋ 家族を追加</button>
+
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 画像 -->
+<div class="sheet" id="image">
+  <div class="inner">
+    <h2>🖼️ カードを画像にする</h2>
+    <div class="privacy">🔒 画像には入力した内容がそのまま入ります。家族以外に送らないでください。SNSなどに載せないでください。</div>
+    <label class="check"><input type="checkbox" id="i-health" checked><span>持病・アレルギーのメモを画像に入れる<br><span class="note">入れない場合は、呼び名と学校・保育園だけが入ります。</span></span></label>
+    <div class="actions" style="margin-top:6px">
+      <button class="primary" id="i-share">家族に送る（共有）</button>
+      <button class="plain" id="i-save">画像ファイルとして保存</button>
+      <button class="plain" id="i-close">閉じる</button>
+    </div>
+    <div class="stop" id="i-stop" hidden>投票日のため共有できません。翌日以降に送ってください。</div>
+    <p class="note">下の画像を長押しすると「"写真"に保存」もできます。</p>
+    <img id="img-out" alt="防災カードの画像">
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" for="vote">投票日（この日は共有ボタンを止めます。1行に1日、2027-04-25 の形で）</label>
+    <textarea id="vote" style="min-height:5em"></textarea>
+    <div class="actions"><button class="primary" id="vote-save">投票日を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、カードの内容も消えます。書き出して、「ファイル」アプリなどに保存しておけます。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <label class="f" style="margin-top:22px">すべて消す</label>
+    <div class="actions" style="margin-top:0"><button class="plain danger" id="wipe">カードの内容をすべて消す</button></div>
+    <div class="actions"><button class="plain" id="set-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CARD = 'bousai:card';         // カードの内容
+const KEY_VOTE = 'bousai:votedays';     // 投票日（共有を止める日）
+const DEFAULT_VOTE = ['2027-04-25'];
+const DEFAULT_NAMES = ['親1', '親2', '子ども1', '子ども2', '子ども3', '子ども4'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { return false; } }
+const p2 = (n) => String(n).padStart(2, '0');
+const str = (v) => (typeof v === 'string' ? v : '');
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function parseYmd(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null;
+}
+const newId = () => 'm' + Date.now() + Math.random().toString(36).slice(2, 6);
+
+// カードの形をそろえる（欠けた項目は空で補う。読み込み時にも使う）
+function normCard(x) {
+  const c = x && typeof x === 'object' ? x : {};
+  const members = Array.isArray(c.members) ? c.members.filter((m) => m && typeof m === 'object').map((m) => ({
+    id: str(m.id) || newId(), name: str(m.name).slice(0, 20), health: str(m.health).slice(0, 200), school: str(m.school).slice(0, 40),
+  })).filter((m) => m.name || m.health || m.school) : null;
+  return {
+    meet1: str(c.meet1).slice(0, 200), meet2: str(c.meet2).slice(0, 200), contact: str(c.contact).slice(0, 400), bag: str(c.bag).slice(0, 80),
+    members: members || DEFAULT_NAMES.map((n) => ({ id: newId(), name: n, health: '', school: '' })),
+    updatedAt: typeof c.updatedAt === 'number' && isFinite(c.updatedAt) ? c.updatedAt : 0,
+  };
+}
+let card = normCard(load(KEY_CARD, null));
+
+// ===== 投票日（この日は共有を止める） =====
+function voteDays() { const v = load(KEY_VOTE, null); return Array.isArray(v) ? v.filter((s) => parseYmd(s)) : DEFAULT_VOTE.slice(); }
+const isVoteDay = () => voteDays().includes(todayStr());
+
+// ===== カードの表示 =====
+function sec(label, value, emptyText) {
+  const s = el('div', 'sec');
+  s.append(el('div', 'lab', label));
+  s.append(el('div', 'val' + (value.trim() ? '' : ' empty'), value.trim() || emptyText));
+  return s;
+}
+function render() {
+  const c = $('card'); c.innerHTML = '';
+  c.append(el('h2', '', '家族の防災カード'));
+  c.append(sec('📍 集合場所（第1）', card.meet1, 'まだ入力されていません'));
+  c.append(sec('📍 集合場所（第2）', card.meet2, 'まだ入力されていません'));
+  c.append(sec('📞 連絡方法', card.contact, 'まだ入力されていません'));
+  c.append(sec('🎒 持ち出し袋の場所', card.bag, 'まだ入力されていません'));
+  const s = el('div', 'sec');
+  s.append(el('div', 'lab', '👪 家族'));
+  if (!card.members.length) s.append(el('div', 'val empty', 'まだ入力されていません'));
+  for (const m of card.members) {
+    const d = el('div', 'mem');
+    d.append(el('div', 'nm', m.name || '（呼び名なし）'));
+    if (m.school.trim()) d.append(el('div', 'sc', '🏫 ' + m.school.trim()));
+    if (m.health.trim()) d.append(el('div', 'hl', '⚠️ 持病・アレルギー：' + m.health.trim()));
+    s.append(d);
+  }
+  c.append(s);
+  if (card.updatedAt) { const d = new Date(card.updatedAt); c.append(el('div', 'updated', '更新 ' + d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate())); }
+  else c.append(el('div', 'updated', 'まず「編集する」から入力してください'));
+}
+
+// ===== 編集 =====
+function memRow(m) {
+  const box = el('div', 'membox');
+  box.dataset.id = m.id;
+  const l1 = el('label', 'f', '呼び名'); const n = el('input'); n.className = 'm-name'; n.maxLength = 20; n.value = m.name; n.placeholder = '例：子ども1';
+  const l2 = el('label', 'f', '学校・保育園などの呼び名（任意）'); const s = el('input'); s.className = 'm-school'; s.maxLength = 40; s.value = m.school; s.placeholder = '例：〇〇小（略称でOK）';
+  const l3 = el('label', 'f', '持病・アレルギーのメモ（任意）'); const h = el('textarea'); h.className = 'm-health'; h.maxLength = 200; h.value = m.health; h.style.minHeight = '3.2em';
+  const del = el('button', 'plain danger del', 'この人を消す');
+  del.type = 'button';
+  del.onclick = () => { if (confirm('「' + (n.value || '呼び名なし') + '」の欄を消します。よろしいですか？（保存するまで確定しません）')) box.remove(); };
+  box.append(l1, n, l2, s, l3, h, del);
+  return box;
+}
+function openEdit() {
+  $('e-meet1').value = card.meet1; $('e-meet2').value = card.meet2; $('e-contact').value = card.contact; $('e-bag').value = card.bag;
+  const ms = $('members'); ms.innerHTML = '';
+  card.members.forEach((m) => ms.append(memRow(m)));
+  $('edit').classList.add('open'); window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('btn-edit').onclick = openEdit;
+$('e-cancel').onclick = () => closeSheet('edit');
+$('mem-add').onclick = () => {
+  if ($('members').children.length >= 12) { alert('家族は12人まで入れられます。'); return; }
+  const r = memRow({ id: newId(), name: '', health: '', school: '' });
+  $('members').append(r); r.querySelector('.m-name').focus();
+};
+$('e-save').onclick = () => {
+  const members = [...$('members').querySelectorAll('.membox')].map((b) => ({
+    id: b.dataset.id, name: b.querySelector('.m-name').value.trim(), school: b.querySelector('.m-school').value.trim(), health: b.querySelector('.m-health').value.trim(),
+  })).filter((m) => m.name || m.school || m.health);
+  if (members.some((m) => !m.name)) { alert('呼び名が空の人がいます。呼び名を入れるか、「この人を消す」で消してください。'); return; }
+  const next = normCard({ meet1: $('e-meet1').value, meet2: $('e-meet2').value, contact: $('e-contact').value, bag: $('e-bag').value, members, updatedAt: Date.now() });
+  next.members = members.length ? next.members : [];
+  if (!save(KEY_CARD, next)) { alert('保存できませんでした。'); return; }
+  card = next;
+  closeSheet('edit'); render(); window.scrollTo(0, 0);
+};
+
+// ===== 画像（canvas → PNG） =====
+const FONT = '-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif';
+function wrap(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text).split('\n')) {
+    let line = '';
+    for (const ch of para) {
+      if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; } else line += ch;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function drawCard(withHealth) {
+  const W = 1080, P = 60, CW = W - P * 2;
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  // まず必要な高さを計算し、そのあと描く（2回同じ手順を通す）
+  const steps = (draw) => {
+    let y = 0;
+    const text = (t, size, color, weight, lh) => {
+      ctx.font = (weight || 'normal') + ' ' + size + 'px ' + FONT;
+      for (const ln of wrap(ctx, t, CW - 20)) { y += size * (lh || 1.45); if (draw) { ctx.fillStyle = color; ctx.fillText(ln, P + 10, y - size * 0.3); } }
+    };
+    const gap = (h) => { y += h; };
+    const rule = () => { gap(18); if (draw) { ctx.fillStyle = '#e3d6d1'; ctx.fillRect(P, y, CW, 3); } gap(10); };
+    // 見出しの帯
+    if (draw) { ctx.fillStyle = '#c4472c'; ctx.fillRect(0, 0, W, 150); ctx.fillStyle = '#fff'; ctx.font = 'bold 60px ' + FONT; ctx.fillText('家族の防災カード', P, 100); }
+    gap(170);
+    const item = (label, value) => {
+      text(label, 34, '#8a3a26', 'bold');
+      text(value.trim() || '（未入力）', 50, value.trim() ? '#1d1412' : '#9a8b86', 'bold');
+      rule();
+    };
+    item('集合場所（第1）', card.meet1);
+    item('集合場所（第2）', card.meet2);
+    item('連絡方法', card.contact);
+    item('持ち出し袋の場所', card.bag);
+    text('家族', 34, '#8a3a26', 'bold');
+    if (!card.members.length) text('（未入力）', 46, '#9a8b86', 'bold');
+    for (const m of card.members) {
+      gap(6);
+      text(m.name + (m.school.trim() ? '　（' + m.school.trim() + '）' : ''), 46, '#1d1412', 'bold');
+      if (withHealth && m.health.trim()) {
+        const top = y;
+        ctx.font = 'bold 40px ' + FONT;
+        const lines = wrap(ctx, '持病・アレルギー：' + m.health.trim(), CW - 40);
+        if (draw) { ctx.fillStyle = '#fff1d6'; ctx.fillRect(P, top + 8, CW, lines.length * 58 + 24); }
+        gap(14);
+        for (const ln of lines) { y += 58; if (draw) { ctx.fillStyle = '#6b4300'; ctx.fillText(ln, P + 20, y - 12); } }
+        gap(22);
+      }
+    }
+    gap(30);
+    const d = card.updatedAt ? new Date(card.updatedAt) : new Date();
+    text('更新 ' + d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + '　※家族以外に見せないでください', 28, '#7a6a64');
+    gap(40);
+    return y;
+  };
+  cv.width = W; cv.height = 2000;
+  const H = Math.ceil(steps(false));
+  cv.height = H;
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+  steps(true);
+  return cv;
+}
+let imgBlob = null;
+function makeImage() {
+  const cv = drawCard($('i-health').checked);
+  $('img-out').src = cv.toDataURL('image/png');
+  imgBlob = null;
+  cv.toBlob((b) => { imgBlob = b; }, 'image/png');
+}
+function refreshShareState() {
+  const stop = isVoteDay();
+  $('i-share').disabled = stop;
+  $('i-stop').hidden = !stop;
+}
+$('btn-img').onclick = () => { refreshShareState(); makeImage(); $('image').classList.add('open'); window.scrollTo(0, 0); };
+$('i-health').onchange = makeImage;
+$('i-close').onclick = () => closeSheet('image');
+const fileName = () => 'bousai-card-' + todayStr().replace(/-/g, '') + '.png';
+function getFile() { return imgBlob ? new File([imgBlob], fileName(), { type: 'image/png' }) : null; }
+$('i-share').onclick = async () => {
+  refreshShareState();
+  if (isVoteDay()) { alert('投票日のため共有できません。'); return; }
+  const f = getFile();
+  if (!f) { alert('画像を作っています。もう一度押してください。'); return; }
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '家族の防災カード' }); } catch (e) {} return; }
+  alert('この開き方では共有できません。「画像ファイルとして保存」するか、画像を長押しして保存してください。');
+};
+$('i-save').onclick = () => {
+  const f = getFile();
+  if (!f) { alert('画像を作っています。もう一度押してください。'); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f); a.download = f.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('vote').value = voteDays().join('\n'); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('set-close').onclick = () => closeSheet('settings');
+$('vote-save').onclick = () => {
+  const lines = $('vote').value.split('\n').map((s) => s.trim().replace(/\//g, '-')).filter(Boolean);
+  const bad = lines.filter((s) => !parseYmd(s));
+  if (bad.length) { alert('日付の形が正しくない行があります：' + bad.join('、') + '\n2027-04-25 の形で、1行に1日ずつ入れてください。'); return; }
+  if (!lines.length && !confirm('投票日が空です。共有ボタンを止める日がなくなります。よろしいですか？')) return;
+  save(KEY_VOTE, [...new Set(lines)]);
+  $('vote').value = voteDays().join('\n');
+  alert('投票日を保存しました。');
+};
+$('wipe').onclick = () => {
+  if (!confirm('カードの内容をすべて消します。元に戻せません。よろしいですか？')) return;
+  try { localStorage.removeItem(KEY_CARD); } catch (e) {}
+  card = normCard(null); render(); closeSheet('settings');
+};
+
+// ===== バックアップ =====
+$('export').onclick = async () => {
+  const name = 'bousai-backup-' + todayStr().replace(/-/g, '') + '.json';
+  const data = JSON.stringify({ app: 'bousai', version: APP_VERSION, exportedAt: new Date().toISOString(), card, voteDays: voteDays() }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!data || data.app !== 'bousai' || !data.card || typeof data.card !== 'object') { alert('このアプリのバックアップファイルではありません。'); return; }
+  if (!confirm('いまのカードの内容を、ファイルの内容で置き換えます。よろしいですか？')) return;
+  card = normCard(data.card);
+  if (!Array.isArray(data.card.members)) card.members = normCard(null).members;
+  save(KEY_CARD, card);
+  if (Array.isArray(data.voteDays)) save(KEY_VOTE, data.voteDays.filter((s) => parseYmd(s)));
+  $('vote').value = voteDays().join('\n');
+  render();
+  alert('読み込みました。');
+};
+
+// ===== 電波がなくても開けるかの表示 =====
+function showOffline() {
+  const ok = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+  $('offline').className = 'offline' + (ok ? '' : ' wait');
+  $('offline').textContent = ok ? '📶 このiPhoneに保存済み：電波がなくても開けます' : '一度開いたあとは、電波がなくても開けます（いま準備中）。';
+}
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    showOffline();
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+showOffline();
+render();
+</script>
+</body>
+</html>
