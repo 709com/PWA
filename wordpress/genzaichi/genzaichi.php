@@ -2,7 +2,7 @@
 /**
  * Plugin Name: 現在地（最寄駅）表示
  * Description: iPhoneのショートカットから送られた現在地をもとに最寄駅を計算し、地図と文字で表示します。正確な位置は保存せず、駅名と時刻だけを過去7日分保存します。表示したいページに [genzaichi] と書いてください。
- * Version: 1.5.0
+ * Version: 1.6.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * License: GPLv2 or later
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // WordPressの外から直接開かれたときは何もしない
 }
 
-define('GZ_VERSION', '1.5.0');
+define('GZ_VERSION', '1.6.0');
 define('GZ_KEEP_DAYS', 7);       // 履歴を残す日数
 define('GZ_MIN_INTERVAL', 20);   // 連続送信を受け付けない秒数
 
@@ -35,6 +35,12 @@ function gz_defaults() {
         'show_stats'  => 0,         // F2・F3 7日間の集計（区内の割合、よく行く駅）を出すか
         'show_posts'  => 0,         // F5 その日のブログ記事へのリンクを出すか
         'freeze_dates' => '2027-04-25', // 投票日（1行に1日）。その日は0時から終わりまで、記録も表示の変化も一切しない
+        'line_enabled'  => 0,       // LINE自動投稿（最初はオフ）
+        'line_daily'    => 1,       // 1日に送る上限回数
+        'line_monthly'  => 2,       // 1か月に送る上限回数
+        'line_stations' => '',      // 送る駅（1行に1駅。空なら全部の駅）
+        'line_template' => '{name}は今、{station}駅付近で活動しています。', // 送る文
+        'line_friends'  => 0,       // 友だちの人数（通数の見込みを出すためだけに使う）
     );
 }
 function gz_settings() {
@@ -126,6 +132,9 @@ function gz_slot($ts) {
         return $hour->modify('+1 hour')->getTimestamp();       // 例：14:59 → 15:00
     }
     return $hour->modify('+30 minutes')->getTimestamp();       // 例：15:12 → 15:30
+}
+function gz_time_label_raw($ts) {
+    return (new DateTimeImmutable('@' . $ts))->setTimezone(wp_timezone())->format('n/j G:i');
 }
 function gz_time_label($ts) {
     return (new DateTimeImmutable('@' . gz_slot($ts)))->setTimezone(wp_timezone())->format('G:i');
@@ -266,6 +275,76 @@ function gz_posts_on($date) {
     return $out;
 }
 
+// ===== LINEへの自動投稿（1.6.0） =====
+// 友だち全員への一斉送信（LINE Messaging API の broadcast）。費用が「送った回数×友だちの人数」で増えるため、
+// ・最初はオフ ・駅が変わったときだけ ・1日／1か月の上限回数 ・夜間は送らない ・投票日は送らない（記録自体を止める）
+// LINEの鍵（チャネルアクセストークン）は gz_line_token に保存し、リポジトリには入れない。
+function gz_last_station_name() {
+    $p = gz_points();
+    $last = end($p);
+    return $last ? $last['n'] : '';
+}
+function gz_line_log($entry) {
+    $log = (array) get_option('gz_line_log', array());
+    array_unshift($log, $entry);
+    update_option('gz_line_log', array_slice($log, 0, 30), false);
+}
+function gz_line_count($since_ts) {
+    $n = 0;
+    foreach ((array) get_option('gz_line_log', array()) as $e) {
+        if (!empty($e['ok']) && $e['t'] >= $since_ts) {
+            $n++;
+        }
+    }
+    return $n;
+}
+function gz_line_maybe_send($prev, $stationName) {
+    $s = gz_settings();
+    $token = (string) get_option('gz_line_token', '');
+    if (!$s['line_enabled'] || $token === '' || gz_is_freeze() || $s['paused']) {
+        return;
+    }
+    if ($prev === $stationName) {
+        return; // 駅が変わったときだけ
+    }
+    $allowed = array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) $s['line_stations'])));
+    if ($allowed && !in_array($stationName, array_map(function ($x) { return preg_replace('/駅$/u', '', $x); }, $allowed), true)) {
+        return; // 送る駅に入っていない
+    }
+    $now = gz_real_now();
+    $hour = (int) $now->format('G');
+    $isNight = ($s['night_start'] > $s['night_end'])
+        ? ($hour >= $s['night_start'] || $hour < $s['night_end'])
+        : ($hour >= $s['night_start'] && $hour < $s['night_end']);
+    if ($isNight) {
+        return;
+    }
+    $dayStart = $now->setTime(0, 0, 0)->getTimestamp();
+    $monthStart = $now->modify('first day of this month')->setTime(0, 0, 0)->getTimestamp();
+    if (gz_line_count($dayStart) >= (int) $s['line_daily'] || gz_line_count($monthStart) >= (int) $s['line_monthly']) {
+        gz_line_log(array('t' => time(), 'n' => $stationName, 'ok' => false, 'msg' => '上限回数のため送りませんでした'));
+        return;
+    }
+    $text = strtr((string) $s['line_template'], array('{name}' => $s['name'], '{station}' => $stationName));
+    $res = wp_remote_post('https://api.line.me/v2/bot/message/broadcast', array(
+        'timeout' => 8,
+        'headers' => array('Authorization' => 'Bearer ' . $token, 'Content-Type' => 'application/json'),
+        'body'    => wp_json_encode(array('messages' => array(array('type' => 'text', 'text' => mb_substr($text, 0, 500))))),
+    ));
+    $code = is_wp_error($res) ? 0 : (int) wp_remote_retrieve_response_code($res);
+    gz_line_log(array('t' => time(), 'n' => $stationName, 'ok' => ($code === 200),
+        'msg' => $code === 200 ? '送りました' : ('送れませんでした（' . ($code ?: '通信エラー') . '）')));
+}
+
+// ===== 移動ログ（PWA実験室の /idou/）からの読み込みを許可する（1.6.0） =====
+// 公開している表示用データだけを、別のサイト（709com.github.io）からも読めるようにする
+add_filter('rest_post_dispatch', function ($response, $server, $request) {
+    if ($request->get_route() === '/genzaichi/v1/data' && $response instanceof WP_REST_Response) {
+        $response->header('Access-Control-Allow-Origin', '*');
+    }
+    return $response;
+}, 10, 3);
+
 // ===== 表示する文章 =====
 function gz_status_text() {
     $s = gz_settings();
@@ -357,7 +436,9 @@ function gz_rest_update(WP_REST_Request $req) {
     if (!$station) {
         return new WP_Error('gz_no_station', '駅のデータを読み込めませんでした。', array('status' => 500));
     }
+    $prevStation = gz_last_station_name();
     gz_record($station, time());
+    gz_line_maybe_send($prevStation, $station['name']);
     // 受け取った正確な位置（$lat, $lon）は、ここで捨てる（どこにも保存しない）
     return array(
         'ok'      => true,
@@ -468,6 +549,19 @@ add_action('admin_post_gz_save', function () {
     $s['show_posts']  = empty($_POST['gz_show_posts']) ? 0 : 1;
     preg_match_all('/\d{4}-\d{2}-\d{2}/', (string) wp_unslash($_POST['gz_freeze_dates'] ?? ''), $fd);
     $s['freeze_dates'] = implode("\n", array_unique($fd[0]));
+    $s['line_enabled']  = empty($_POST['gz_line_enabled']) ? 0 : 1;
+    $s['line_daily']    = max(0, min(10, (int) ($_POST['gz_line_daily'] ?? 1)));
+    $s['line_monthly']  = max(0, min(100, (int) ($_POST['gz_line_monthly'] ?? 2)));
+    $s['line_stations'] = sanitize_textarea_field(wp_unslash($_POST['gz_line_stations'] ?? ''));
+    $tpl                = sanitize_text_field(wp_unslash($_POST['gz_line_template'] ?? ''));
+    $s['line_template'] = $tpl !== '' ? mb_substr($tpl, 0, 200) : gz_defaults()['line_template'];
+    $s['line_friends']  = max(0, min(1000000, (int) ($_POST['gz_line_friends'] ?? 0)));
+    $newToken = isset($_POST['gz_line_token']) ? trim(wp_unslash($_POST['gz_line_token'])) : '';
+    if ($newToken === '-') {
+        delete_option('gz_line_token'); // 「-」を入れると鍵を消す
+    } elseif ($newToken !== '') {
+        update_option('gz_line_token', $newToken, false);
+    }
     update_option('gz_settings', $s, false);
     wp_safe_redirect(add_query_arg(array('page' => 'genzaichi', 'gz_msg' => $error ?: 'saved'), admin_url('options-general.php')));
     exit;
@@ -549,6 +643,35 @@ function gz_admin_page() {
                     <td><textarea id="gz_freeze_dates" name="gz_freeze_dates" rows="3" class="regular-text" placeholder="2027-04-25"><?php echo esc_textarea($s['freeze_dates']); ?></textarea>
                         <p class="description">1行に1日（例：2027-04-25）。その日は日付が変わった0時から終わりまで、位置の記録・表示の変化・設定の変更を一切しません。当日は解除できません。日付は選挙管理委員会の公表で確かめてください。</p></td></tr>
             </table>
+            <h2>LINEへの自動投稿</h2>
+            <p>駅が変わったときだけ、LINE公式アカウントの友だち全員に送ります。<strong>LINEの料金は「送った回数×友だちの人数」で数えます</strong>（無料プランは月200通まで）。夜間・投票日・一時停止中は送りません。選挙期間中に使う前は、選挙管理委員会に確認してください。</p>
+            <table class="form-table" role="presentation">
+                <tr><th scope="row">自動投稿</th>
+                    <td><label><input type="checkbox" name="gz_line_enabled" value="1" <?php checked($s['line_enabled'], 1); ?>> 送る（最初はオフ）</label></td></tr>
+                <tr><th scope="row"><label for="gz_line_token">LINEの鍵</label></th>
+                    <td><input type="password" id="gz_line_token" name="gz_line_token" class="regular-text" autocomplete="new-password">
+                        <p class="description">今の状態：<?php echo get_option('gz_line_token', '') !== '' ? '設定済み' : '未設定'; ?>。LINE Developers の「チャネルアクセストークン（長期）」を貼ります。変えるときだけ入力（空欄なら今のまま、「-」だけを入れると消します）。</p></td></tr>
+                <tr><th scope="row">上限回数</th>
+                    <td>1日 <input type="number" name="gz_line_daily" min="0" max="10" value="<?php echo (int) $s['line_daily']; ?>" style="width:5em"> 回まで ／ 1か月 <input type="number" name="gz_line_monthly" min="0" max="100" value="<?php echo (int) $s['line_monthly']; ?>" style="width:5em"> 回まで</td></tr>
+                <tr><th scope="row"><label for="gz_line_stations">送る駅</label></th>
+                    <td><textarea id="gz_line_stations" name="gz_line_stations" rows="3" class="regular-text" placeholder="茗荷谷"><?php echo esc_textarea($s['line_stations']); ?></textarea>
+                        <p class="description">1行に1駅（駅名だけ）。空なら、どの駅でも送ります。駅頭をする駅だけに絞るのがおすすめです。</p></td></tr>
+                <tr><th scope="row"><label for="gz_line_template">送る文</label></th>
+                    <td><input type="text" id="gz_line_template" name="gz_line_template" class="large-text" value="<?php echo esc_attr($s['line_template']); ?>">
+                        <p class="description">{name} は表示する名前、{station} は駅名に置き換わります。政治活動の告知にとどめ、投票の呼びかけは入れないでください。</p></td></tr>
+                <tr><th scope="row">通数の見込み</th>
+                    <td>友だちの人数 <input type="number" name="gz_line_friends" min="0" value="<?php echo (int) $s['line_friends']; ?>" style="width:8em"> 人
+                        <?php if ($s['line_friends'] > 0) : ?>
+                            → 1回送ると約<?php echo number_format((int) $s['line_friends']); ?>通、月の上限まで送ると約<?php echo number_format((int) $s['line_friends'] * (int) $s['line_monthly']); ?>通
+                        <?php endif; ?>
+                        <p class="description">見込みを出すためだけに使います。</p></td></tr>
+            </table>
+            <?php $llog = (array) get_option('gz_line_log', array()); if ($llog) : ?>
+                <p>最近の送信：</p><ul>
+                <?php foreach (array_slice($llog, 0, 5) as $e) : ?>
+                    <li><?php echo esc_html(gz_time_label_raw($e['t']) . ' ' . $e['n'] . '駅 ' . $e['msg']); ?></li>
+                <?php endforeach; ?></ul>
+            <?php endif; ?>
             <?php submit_button('保存する'); ?>
         </form>
 
@@ -573,4 +696,6 @@ function gz_uninstall() {
     delete_option('gz_history');
     delete_option('gz_points');
     delete_option('gz_last_post');
+    delete_option('gz_line_token');
+    delete_option('gz_line_log');
 }
