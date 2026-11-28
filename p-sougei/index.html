@@ -46,7 +46,8 @@
   .who button.on.m3 { background:var(--c3); border-color:var(--c3); }
   .memo { margin-top:12px; }
   .hint { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
-  table { width:100%; border-collapse:collapse; font-size:.9rem; table-layout:fixed; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; table-layout:fixed; }
+  td:first-child { white-space:nowrap; }
   th, td { padding:6px 3px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; overflow-wrap:anywhere; }
   th { color:var(--sub); font-weight:600; font-size:.8rem; }
   tr:last-child td { border-bottom:none; }
@@ -98,7 +99,7 @@
 
   <section>
     <h2>📅 この週（月〜日）</h2>
-    <table><thead><tr><th style="width:30%">日</th><th>送り</th><th>迎え</th></tr></thead><tbody id="week"></tbody></table>
+    <table><thead><tr><th style="width:28%">日</th><th>送り</th><th>迎え</th></tr></thead><tbody id="week"></tbody></table>
   </section>
 
   <section>
@@ -210,7 +211,7 @@ function renderWeek() {
     const d = new Date(base); d.setDate(base.getDate() + i);
     const rec = days[dk(d)] || {};
     const tr = el('tr');
-    const td = el('td', dk(d) === today ? 'today' : '', d.getDate() + '日（' + WEEK[d.getDay()] + '）');
+    const td = el('td', dk(d) === today ? 'today' : '', d.getDate() + '（' + WEEK[d.getDay()] + '）');
     tr.append(td, cell(rec.o), cell(rec.m));
     body.append(tr);
   }
