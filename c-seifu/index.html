@@ -56,7 +56,7 @@
 
 
   .seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-  .seg3 .chip, .seg2 .chip { width:100%; }
+  .seg3 .chip, .seg2 .chip { width:100%; padding:8px 4px; white-space:nowrap; }
   .seg2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
   .hintbox { background:var(--accent-soft); border-radius:14px; padding:10px 14px; font-size:.9rem; margin:14px 0; }
   .bigstart { width:100%; font-size:1.2rem; padding:16px; border-radius:16px; margin-top:14px; }
@@ -70,7 +70,7 @@
   .pbar i { display:block; height:100%; background:var(--accent); transition:width .2s; }
   .prob { text-align:center; font-size:2rem; font-weight:800; margin:18px 0 8px; letter-spacing:.02em; word-break:keep-all; }
   .ans { background:var(--card); border:2px solid var(--accent); border-radius:16px; min-height:64px; font-size:2rem; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; max-width:240px; }
-  .ans.empty { color:var(--sub); font-weight:400; font-size:1.1rem; }
+  .ans.blank { color:var(--sub); font-weight:400; font-size:1.1rem; }
   .fb { text-align:center; min-height:2.2em; font-weight:700; font-size:1.1rem; }
   .fb.ok { color:var(--ok); } .fb.ng { color:var(--danger); }
   .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:380px; margin:0 auto; }
@@ -81,6 +81,7 @@
   .miss { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 14px; margin-top:12px; }
   .miss div { padding:4px 0; border-bottom:1px dashed var(--line); word-break:break-word; }
   .miss div:last-child { border-bottom:none; }
+  @media (max-height:620px) { .prob { font-size:1.7rem; margin:8px 0 6px; } .ans { min-height:54px; font-size:1.7rem; margin-bottom:4px; } .fb { min-height:1.8em; } .pad { gap:6px; } .pad button { min-height:44px; } .pbar { margin:4px 0 6px; } #play .inner { padding-bottom:calc(10px + env(safe-area-inset-bottom)); } .prog .iconbtn { padding:5px 12px; } .fb { min-height:1.6em; font-size:1rem; } }
 
 </style>
 </head>
@@ -107,6 +108,7 @@
       <button class="chip" data-v="10">−10 〜 10</button>
       <button class="chip" data-v="20">−20 〜 20</button>
     </div>
+    <p class="note">かけ算・わり算では、かける数・わる数・わり算の答えを 9 まで（−20〜20 のときは 12 まで）にしています。</p>
     <label class="f">問題の数</label>
     <div class="seg3" id="s-count">
       <button class="chip" data-v="5">5問</button>
@@ -134,7 +136,7 @@
     <div class="prog"><span id="p-prog"></span><span id="p-time"></span><button class="iconbtn" id="p-quit">やめる</button></div>
     <div class="pbar"><i id="p-bar"></i></div>
     <div class="prob" id="p-q"></div>
-    <div class="ans empty" id="p-ans">こたえを入れてね</div>
+    <div class="ans blank" id="p-ans">こたえを入れてね</div>
     <div class="fb" id="p-fb"></div>
     <div class="pad" id="pad">
       <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
@@ -343,7 +345,7 @@ function show() {
 }
 function drawAns() {
   const a = $('p-ans');
-  if (input === '' || input === '-') { a.className = 'ans' + (input ? '' : ' empty'); a.textContent = input ? M : 'こたえを入れてね'; }
+  if (input === '' || input === '-') { a.className = 'ans' + (input ? '' : ' blank'); a.textContent = input ? M : 'こたえを入れてね'; }
   else { a.className = 'ans'; a.textContent = input.replace('-', M); }
 }
 function key(k) {

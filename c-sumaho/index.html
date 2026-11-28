@@ -66,7 +66,7 @@
   .chart .bar.none { background:transparent; border:1px dashed var(--line); border-bottom:none; height:14px !important; }
   .chart .v { font-size:.68rem; color:var(--sub); white-space:nowrap; }
   .chart .goal { position:absolute; left:0; right:0; border-top:2px dashed var(--danger); pointer-events:none; }
-  .chart .goal span { position:absolute; right:0; top:-17px; font-size:.68rem; color:var(--danger); background:var(--card); padding:0 3px; }
+  .chart .goal span { position:absolute; left:0; top:-17px; font-size:.68rem; color:var(--danger); background:var(--card); padding:0 3px; }
   .days { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; text-align:center; font-size:.75rem; color:var(--sub); margin-top:4px; }
   .stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
   .stats div { background:var(--accent-soft); border-radius:12px; padding:8px 10px; font-size:.82rem; }
@@ -263,7 +263,7 @@ function render() {
   $('t-date').textContent = '今日 ' + fmtD(t);
   $('t-time').textContent = rec ? hm(rec.min) : 'まだ入れていません';
   $('t-time').style.fontSize = rec ? '' : '1.2rem';
-  const [c, m] = rec ? cmpMsg(rec.min) : ['', goal === null ? '⚙️ 設定で1日の目標を決めると、目標とくらべられます。' : '1日の目標：' + hm(goal)];
+  const [c, m] = goal === null ? ['', '⚙️ 設定で1日の目標を決めると、目標とくらべられます。'] : rec ? cmpMsg(rec.min) : ['', '1日の目標：' + hm(goal)];
   $('t-msg').className = 'msg ' + c; $('t-msg').textContent = m;
   $('t-rec').textContent = rec ? '今日の時間を直す' : '今日の時間を入れる';
 
