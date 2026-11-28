@@ -360,17 +360,22 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'mochimono' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の持ち物を読み込みます。同じものは、ファイルの内容で上書きします（ほかのものは消えません）。よろしいですか？')) return;
-  for (const it of data.items) {
-    if (!it || !it.id || !it.kid || !Array.isArray(it.days)) continue;
-    const i = items.findIndex((x) => x.id === it.id);
-    const clean = { id: String(it.id), kid: String(it.kid), name: String(it.name || '').slice(0, 30), daily: !!it.daily, days: it.days.filter((d) => d >= 0 && d <= 6) };
+  // 欠けた項目を補う（名前のない持ち物・どの子か分からないものは読み込まない）
+  const list = data.items.filter((it) => it && typeof it === 'object' && it.id && it.kid && typeof it.name === 'string' && it.name.trim()).map((it) => ({
+    id: String(it.id), kid: String(it.kid), name: it.name.slice(0, 30), daily: it.daily === true,
+    days: Array.isArray(it.days) ? [...new Set(it.days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : [] }));
+  if (!list.length) { alert('読み込める持ち物がありませんでした。'); return; }
+  if (!confirm(list.length + '件の持ち物を読み込みます。同じものは、ファイルの内容で上書きします（ほかのものは消えません）。よろしいですか？')) return;
+  for (const clean of list) {
+    const i = items.findIndex((x) => x.id === clean.id);
     if (i >= 0) items[i] = clean; else items.push(clean);
   }
   if (Array.isArray(data.kids)) {
-    data.kids.forEach((k) => { if (!k || !k.id) return; const name = String(k.name || '子ども').slice(0, 12); const cur = kids.find((x) => x.id === k.id); if (cur) cur.name = name; else kids.push({ id: String(k.id), name }); }); // 呼び名もファイルの内容にそろえる
-    save(KEY_KIDS, kids); buildKidEdit();
+    data.kids.forEach((k) => { if (!k || !k.id) return; const name = (typeof k.name === 'string' && k.name.trim() ? k.name : '子ども').slice(0, 12); const cur = kids.find((x) => x.id === String(k.id)); if (cur) cur.name = name; else kids.push({ id: String(k.id), name }); }); // 呼び名もファイルの内容にそろえる
   }
+  // 呼び名の一覧にない子の持ち物は、呼び名を足して見えるようにする
+  list.forEach((it) => { if (!kids.some((k) => k.id === it.kid)) kids.push({ id: it.kid, name: '子ども' + (kids.length + 1) }); });
+  save(KEY_KIDS, kids); buildKidEdit();
   save(KEY_ITEMS, items);
   render();
   alert('読み込みました。');
