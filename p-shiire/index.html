@@ -1,0 +1,372 @@
+<!doctype html>
+<!-- このファイルは「仕入れメモ」の本体です。お店で足りなくなった品を書き留め、「足りない→注文した→入った」と状態を進めて、注文の抜けや重なりを防ぎます。 -->
+<!-- メモはiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。「注文メモを送る」を押したときだけ、あなたが選んだ先へ渡します。非公式・個人の試作です。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>仕入れメモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="仕入れメモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3d5a99">
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --text:#1b2233; --sub:#5a6378; --accent:#3d5a99; --accent-soft:#e2e8f5; --line:#dde2ec; --danger:#c8372d;
+          --s0:#d9482b; --s1:#e0a000; --s2:#2f9e6b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151c; --card:#1b2029; --text:#e9edf5; --sub:#9ca6ba; --accent:#7f9fe0; --accent-soft:#1f2b45; --line:#2a313e; --danger:#ef6b61;
+            --s0:#f07457; --s1:#f0c040; --s2:#4fc48d; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  h3 { font-size:.95rem; color:var(--sub); margin:16px 0 6px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:4.5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .summary { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:6px; }
+  .summary div { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; text-align:center; font-size:.82rem; color:var(--sub); }
+  .summary b { display:block; font-size:1.4rem; color:var(--text); }
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; display:flex; gap:10px; align-items:center; }
+  .card.s0 { border-left-color:var(--s0); } .card.s1 { border-left-color:var(--s1); } .card.s2 { border-left-color:var(--s2); opacity:.8; }
+  .card .body { flex:1; min-width:0; cursor:pointer; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .m { font-size:.8rem; color:var(--sub); word-break:break-word; }
+  .stbtn { flex-shrink:0; border-radius:10px; padding:10px 10px; font-weight:700; font-size:.88rem; color:#fff; min-width:5.6em; }
+  .stbtn.s0 { background:var(--s0); } .stbtn.s1 { background:var(--s1); color:#2a2000; } .stbtn.s2 { background:var(--s2); }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .plain:disabled { opacity:.45; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .err { color:var(--danger); font-size:.85rem; margin:4px 0 0; min-height:1em; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chips button { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:6px 12px; font-size:.88rem; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📦 仕入れメモ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div class="summary">
+    <div><b id="n0">0</b>足りない</div>
+    <div><b id="n1">0</b>注文した</div>
+    <div><b id="n2">0</b>入った</div>
+  </div>
+  <p class="note" style="margin:0 0 6px">右のボタンを押すと「足りない → 注文した → 入った」と進みます。</p>
+  <div id="list"></div>
+  <div class="toolbar">
+    <button class="plain" id="share">📨 注文メモを送る</button>
+    <button class="plain" id="clear-done">「入った」を片づける</button>
+  </div>
+  <p class="note" id="share-note"></p>
+  <h3>よく頼む品（押すと「足りない」に入ります）</h3>
+  <div class="chips" id="usual"></div>
+  <footer>非公式・個人の試作です（文京区の公式アプリではありません）<br>版 <span id="ver"></span> ・ メモはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="品を追加">＋</button>
+
+<!-- 追加・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">品を追加</h2>
+    <div class="warn">取引先の担当者の名前や電話番号など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-name">品の名前</label>
+    <input id="e-name" maxlength="40" placeholder="例：レジ袋（中）">
+    <div class="row2">
+      <div><label class="f" for="e-qty">数（空でもよい）</label><input id="e-qty" inputmode="numeric" maxlength="6" placeholder="例：3"></div>
+      <div><label class="f" for="e-unit">単位</label><input id="e-unit" maxlength="8" list="units" placeholder="例：箱"><datalist id="units"><option>個</option><option>本</option><option>箱</option><option>袋</option><option>ケース</option><option>kg</option></datalist></div>
+    </div>
+    <p class="err" id="e-err"></p>
+    <label class="f" for="e-shop">仕入れ先（お店の呼び名）</label>
+    <input id="e-shop" maxlength="30" list="shops" placeholder="例：問屋A"><datalist id="shops"></datalist>
+    <label class="f" for="e-memo">メモ</label>
+    <textarea id="e-memo" maxlength="200"></textarea>
+    <label class="f" for="e-st">状態</label>
+    <select id="e-st"><option value="0">足りない</option><option value="1">注文した</option><option value="2">入った</option></select>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" for="votedays">共有を止める日（投票日など。1行に1日、例：2027-04-25）</label>
+    <textarea id="votedays" style="min-height:5em"></textarea>
+    <p class="err" id="vd-err"></p>
+    <div class="actions"><button class="primary" id="vd-save">止める日を保存</button></div>
+    <p class="note">この日は0時から終わりまで「注文メモを送る」が使えなくなります。</p>
+
+    <label class="f" style="margin-top:22px">よく頼む品</label>
+    <p class="note" style="margin-top:0">「入った」を片づけると、自動でここに加わります（20品まで）。</p>
+    <div class="actions"><button class="plain danger" id="usual-clear">よく頼む品を空にする</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、メモも消えます。ときどき書き出して保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_ITEMS = 'p-shiire:items';
+const KEY_USUAL = 'p-shiire:usual';
+const KEY_VOTE = 'p-shiire:votedays';
+const DEFAULT_VOTE = ['2027-04-25'];  // 投票日（見込み）。設定で変えられる
+const ST = ['足りない', '注文した', '入った'];
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { alert('保存できませんでした。'); } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+function dk(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function fmt(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+
+// 読み込んだ品を点検（壊れたものは捨て、欠けた項目は補う）
+function cleanItem(x, i) {
+  if (!x || typeof x !== 'object' || typeof x.name !== 'string' || !x.name.trim()) return null;
+  const q = Number.isInteger(x.qty) && x.qty >= 1 && x.qty <= 9999 ? x.qty : null;
+  const now = Date.now();
+  return { id: typeof x.id === 'string' && x.id ? x.id : 'i' + now + '-' + i, name: x.name.trim().slice(0, 40), qty: q,
+           unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : '', shop: typeof x.shop === 'string' ? x.shop.slice(0, 30) : '',
+           memo: typeof x.memo === 'string' ? x.memo.slice(0, 200) : '', st: [0, 1, 2].includes(x.st) ? x.st : 0,
+           updatedAt: Number.isFinite(x.updatedAt) ? x.updatedAt : now };
+}
+function cleanUsual(a) { return Array.isArray(a) ? a.map((x, i) => cleanItem(x, i)).filter(Boolean).map((x) => ({ name: x.name, qty: x.qty, unit: x.unit, shop: x.shop })).slice(0, 20) : []; }
+let items = (Array.isArray(load(KEY_ITEMS, [])) ? load(KEY_ITEMS, []) : []).map(cleanItem).filter(Boolean);
+let usual = cleanUsual(load(KEY_USUAL, []));
+let voteDays = load(KEY_VOTE, DEFAULT_VOTE);
+if (!Array.isArray(voteDays)) voteDays = DEFAULT_VOTE.slice();
+
+// ===== 投票日は共有を止める =====
+function isVoteDay() { return voteDays.includes(dk(new Date())); }
+
+// ===== 一覧 =====
+function qtyText(x) { return x.qty ? x.qty + (x.unit || '') : ''; }
+function render() {
+  [0, 1, 2].forEach((s) => { $('n' + s).textContent = items.filter((x) => x.st === s).length; });
+  const box = $('list'); box.innerHTML = '';
+  const shown = items.slice().sort((a, b) => a.st - b.st || b.updatedAt - a.updatedAt);
+  if (!shown.length) box.append(el('p', 'empty', 'いまは何もありません。右下の「＋」か、下の「よく頼む品」から入れてください。'));
+  for (const x of shown) {
+    const c = el('div', 'card s' + x.st);
+    const body = el('div', 'body');
+    body.append(el('div', 't', x.name + (qtyText(x) ? '　' + qtyText(x) : '')));
+    body.append(el('div', 'm', [x.shop, x.memo, '更新 ' + fmt(x.updatedAt)].filter(Boolean).join(' ・ ')));
+    body.onclick = () => openEdit(x);
+    const b = el('button', 'stbtn s' + x.st, ST[x.st] + (x.st < 2 ? ' ▶' : ''));
+    b.onclick = () => { if (Date.now() - lastSave < 700) return; x.st = (x.st + 1) % 3; x.updatedAt = Date.now(); save(KEY_ITEMS, items); render(); };
+    c.append(body, b);
+    box.append(c);
+  }
+  // 共有ボタン
+  const vote = isVoteDay();
+  $('share').disabled = vote || !items.some((x) => x.st === 0);
+  $('share-note').textContent = vote ? '投票日のため共有できません。' : (items.some((x) => x.st === 0) ? '' : '「足りない」品があるときに送れます。');
+  $('clear-done').disabled = !items.some((x) => x.st === 2);
+  // よく頼む品
+  const ub = $('usual'); ub.innerHTML = '';
+  if (!usual.length) ub.append(el('span', 'note', 'まだありません。'));
+  usual.forEach((u) => {
+    const b = el('button', '', '＋ ' + u.name);
+    b.onclick = () => {
+      if (items.some((x) => x.name === u.name && x.st === 0)) { alert('「' + u.name + '」はもう「足りない」に入っています。'); return; }
+      items.push({ id: 'i' + Date.now() + Math.random().toString(36).slice(2, 6), name: u.name, qty: u.qty, unit: u.unit, shop: u.shop, memo: '', st: 0, updatedAt: Date.now() });
+      save(KEY_ITEMS, items); render();
+    };
+    ub.append(b);
+  });
+  const dl = $('shops'); dl.innerHTML = '';
+  [...new Set([...items, ...usual].map((x) => x.shop).filter(Boolean))].forEach((s) => dl.append(new Option(s)));
+}
+
+// ===== 追加・編集 =====
+let editing = null, lastSave = 0;
+function openEdit(x) {
+  if (Date.now() - lastSave < 700) return; // 保存の2回目のタップが下の品に当たっても開かない
+  editing = x || null;
+  $('edit-title').textContent = x ? '品を編集' : '品を追加';
+  $('e-name').value = x ? x.name : '';
+  $('e-qty').value = x && x.qty ? x.qty : '';
+  $('e-unit').value = x ? x.unit : '';
+  $('e-shop').value = x ? x.shop : '';
+  $('e-memo').value = x ? x.memo : '';
+  $('e-st').value = x ? String(x.st) : '0';
+  $('e-err').textContent = '';
+  $('e-del').hidden = !x;
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => $('edit').classList.remove('open');
+$('e-save').onclick = () => {
+  if (Date.now() - lastSave < 1000) return; // 連打で同じ品が2つできないように
+  const name = $('e-name').value.trim();
+  if (!name) { alert('品の名前を入れてください。'); return; }
+  // 数は、1〜9999の整数だけ受け付ける（マイナスや小数は入れ直してもらう）
+  const raw = $('e-qty').value.trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  let qty = null;
+  if (raw !== '') {
+    if (!/^\d+$/.test(raw) || Number(raw) < 1 || Number(raw) > 9999) { $('e-err').textContent = '数は1〜9999の整数で入れてください（マイナスや小数は使えません）。'; $('e-qty').focus(); return; }
+    qty = Number(raw);
+  }
+  lastSave = Date.now();
+  const x = editing || { id: 'i' + Date.now() + Math.random().toString(36).slice(2, 6) };
+  Object.assign(x, { name: name.slice(0, 40), qty, unit: $('e-unit').value.trim().slice(0, 8), shop: $('e-shop').value.trim().slice(0, 30),
+                     memo: $('e-memo').value.trim().slice(0, 200), st: Number($('e-st').value), updatedAt: Date.now() });
+  if (!editing) items.push(x);
+  save(KEY_ITEMS, items);
+  $('edit').classList.remove('open');
+  render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.name + '」を削除します。よろしいですか？')) return;
+  items = items.filter((x) => x.id !== editing.id);
+  save(KEY_ITEMS, items);
+  $('edit').classList.remove('open');
+  render();
+};
+
+// 「入った」を片づける：一覧から外し、よく頼む品に加える
+$('clear-done').onclick = () => {
+  const done = items.filter((x) => x.st === 2);
+  if (!done.length || !confirm('「入った」' + done.length + '品を一覧から片づけます。よろしいですか？')) return;
+  for (const x of done) {
+    usual = usual.filter((u) => u.name !== x.name);
+    usual.unshift({ name: x.name, qty: x.qty, unit: x.unit, shop: x.shop });
+  }
+  usual = usual.slice(0, 20);
+  items = items.filter((x) => x.st !== 2);
+  save(KEY_ITEMS, items); save(KEY_USUAL, usual);
+  render();
+};
+
+// 注文メモを送る（「足りない」品を仕入れ先ごとにまとめた文章）
+$('share').onclick = async () => {
+  if (isVoteDay()) { alert('投票日のため共有できません。'); render(); return; }
+  const need = items.filter((x) => x.st === 0);
+  if (!need.length) return;
+  const groups = {};
+  need.forEach((x) => { (groups[x.shop || '仕入れ先未定'] = groups[x.shop || '仕入れ先未定'] || []).push(x); });
+  const lines = ['【注文メモ】' + fmt(Date.now())];
+  for (const [shop, list] of Object.entries(groups)) {
+    lines.push('', '■ ' + shop);
+    list.forEach((x) => lines.push('・' + x.name + (qtyText(x) ? '　' + qtyText(x) : '')));
+  }
+  const text = lines.join('\n');
+  if (navigator.share) { try { await navigator.share({ title: '注文メモ', text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// 入れ直し始めたら、前のエラー表示を消す
+['e-qty'].forEach((id) => $(id).addEventListener('input', () => { $('e-err').textContent = ''; }));
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('votedays').value = voteDays.join('\n'); $('vd-err').textContent = ''; $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('vd-save').onclick = () => {
+  const lines = $('votedays').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const bad = lines.filter((s) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return true; const [y, m, d] = s.split('-').map(Number); const t = new Date(y, m - 1, d); return t.getMonth() !== m - 1 || t.getDate() !== d; });
+  if (bad.length) { $('vd-err').textContent = '日付の形が正しくありません：' + bad.join('、') + '（例：2027-04-25）'; return; }
+  voteDays = [...new Set(lines)].sort();
+  save(KEY_VOTE, voteDays);
+  $('vd-err').textContent = '';
+  render();
+  alert('保存しました。');
+};
+$('usual-clear').onclick = () => { if (!confirm('よく頼む品を空にします。よろしいですか？')) return; usual = []; save(KEY_USUAL, usual); render(); };
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'p-shiire-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'p-shiire', version: APP_VERSION, exportedAt: d.toISOString(), items, usual, voteDays }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'p-shiire' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  const ni = data.items.map(cleanItem).filter(Boolean);
+  if (!confirm(ni.length + '品を読み込みます。同じ品は、ファイルの内容で上書きします。よろしいですか？')) return;
+  for (const x of ni) { const i = items.findIndex((y) => y.id === x.id); if (i >= 0) items[i] = x; else items.push(x); }
+  const nu = cleanUsual(data.usual);
+  usual = [...usual, ...nu.filter((u) => !usual.some((v) => v.name === u.name))].slice(0, 20);
+  save(KEY_ITEMS, items); save(KEY_USUAL, usual);
+  render();
+  alert('読み込みました。');
+};
+
+// 日付が変わったら（投票日の始まり・終わり）表示を直す
+setInterval(render, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('edit').classList.contains('open')) render(); });
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>

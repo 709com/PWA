@@ -1,0 +1,518 @@
+<!doctype html>
+<!-- このファイルは「駅頭・報告会の予定表」の本体です。駅頭活動や区政報告会の予定を登録して今週・来週の一覧で確かめ、予定からSNSやLINEに貼る告知文を作って共有できます。 -->
+<!-- 予定はiPhoneの中（IndexedDB）だけに保存し、外部へは一切送信しません。投票日（設定で変更可）は0時からその日の終わりまで、告知文の作成と共有を止めます。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>駅頭・報告会の予定表</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="活動予定">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3b5bab">
+<style>
+  :root { --bg:#f3f5fa; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#3b5bab; --accent-soft:#e2e8f6; --line:#dbe0ea; --danger:#c8372d; --on:#fff;
+          --k0:#d0532b; --k1:#2e8b57; --k2:#5a6675; --sat:#2f6fd0; --sun:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#11141b; --card:#1b2029; --text:#e9edf4; --sub:#9aa4b4; --accent:#8aa6ec; --accent-soft:#232f4a; --line:#2b3240; --danger:#ef6b61; --on:#121a2e;
+            --k0:#f08a62; --k1:#5fcf93; --k2:#9aa4b4; --sat:#7fb0f5; --sun:#ef7b71; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.2rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:var(--on); border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:#3b5bab; border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .stopbar { background:#fde8e6; color:#8a1f17; border-radius:10px; padding:8px 10px; font-size:.86rem; font-weight:700; margin-bottom:10px; }
+  @media (prefers-color-scheme: dark) { .stopbar { background:#46201c; color:#ffc9c3; } }
+  h2.wk { font-size:1rem; margin:16px 0 6px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  h2.wk small { color:var(--sub); font-weight:400; font-size:.8rem; white-space:nowrap; }
+  .week { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .day { display:grid; grid-template-columns:4.2em 1fr; border-top:1px solid var(--line); min-height:44px; }
+  .day:first-child { border-top:none; }
+  .day .dl { padding:8px 0 8px 10px; font-weight:700; font-size:.92rem; line-height:1.25; }
+  .day .dl small { display:block; font-weight:400; font-size:.75rem; color:var(--sub); }
+  .day.sat .dl { color:var(--sat); } .day.sun .dl { color:var(--sun); }
+  .day.today { background:var(--accent-soft); }
+  .day.today .dl small { color:var(--accent); font-weight:700; }
+  .day.past { opacity:.5; }
+  .day .evs { padding:5px 8px 5px 0; min-width:0; }
+  .day .none { color:var(--sub); font-size:.8rem; padding-top:6px; }
+  .ev { display:block; width:100%; text-align:left; background:var(--bg); border-left:5px solid var(--k2); border-radius:8px; padding:5px 8px; margin:3px 0; }
+  .ev.k0 { border-left-color:var(--k0); } .ev.k1 { border-left-color:var(--k1); }
+  .ev b { font-size:.9rem; word-break:break-word; }
+  .ev .m { display:block; font-size:.78rem; color:var(--sub); word-break:break-word; }
+  .wx { display:inline-block; font-size:.7rem; border-radius:99px; padding:0 6px; background:#fff0d6; color:#7a5200; margin-left:4px; vertical-align:1px; }
+  @media (prefers-color-scheme: dark) { .wx { background:#3a2e12; color:#f3dca6; } }
+  .flat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px 8px; }
+  .flat .row { display:grid; grid-template-columns:6.4em 1fr; gap:6px; align-items:start; border-top:1px solid var(--line); padding:4px 0; }
+  .flat .row:first-child { border-top:none; }
+  .flat .row .dl { font-size:.85rem; font-weight:700; padding-top:7px; }
+  details summary { cursor:pointer; font-weight:700; margin:18px 0 6px; color:var(--sub); }
+  .empty { color:var(--sub); text-align:center; padding:20px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:var(--on); font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row3 { display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:6px; }
+  .row3 > div { min-width:0; }
+  .kinds { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .kinds button { background:var(--card); border:2px solid var(--line); border-radius:10px; padding:9px 0; font-weight:700; font-size:.92rem; }
+  .kinds button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+  .check { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:12px; }
+  .check input { width:24px; height:24px; flex:none; margin:0; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:var(--on); border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .caution { border:2px solid var(--danger); border-radius:12px; padding:10px 12px; font-size:.86rem; margin-bottom:10px; }
+  .caution b { color:var(--danger); }
+  .stop { background:#fde8e6; color:#8a1f17; border-radius:10px; padding:8px 10px; font-size:.86rem; font-weight:700; margin-top:10px; }
+  @media (prefers-color-scheme: dark) { .stop { background:#46201c; color:#ffc9c3; } }
+  #n-text { min-height:13em; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📅 駅頭・報告会の予定表</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div class="stopbar" id="vote-bar" hidden>きょうは投票日のため、告知文の作成と共有を止めています。</div>
+  <div id="weeks"></div>
+  <div id="later"></div>
+  <div id="past"></div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="予定を追加">＋</button>
+
+<!-- 予定の入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">予定を追加</h2>
+    <div class="warn">区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f">種類</label>
+    <div class="kinds" id="e-kind"></div>
+    <div class="row3">
+      <div><label class="f" for="e-date">日付</label><input id="e-date" type="date"></div>
+      <div><label class="f" for="e-start">始まり</label><input id="e-start" type="time"></div>
+      <div><label class="f" for="e-end">終わり</label><input id="e-end" type="time"></div>
+    </div>
+    <label class="f" for="e-place">場所</label>
+    <input id="e-place" maxlength="60" list="place-list" placeholder="例：○○駅 改札前">
+    <datalist id="place-list"></datalist>
+    <label class="f" for="e-body">内容</label>
+    <textarea id="e-body" maxlength="400" placeholder="例：区政報告チラシをお配りします"></textarea>
+    <label class="check"><input type="checkbox" id="e-wx"> 天候で変更あり</label>
+    <div class="stop" id="e-vote" hidden>投票日のため、告知文の作成と共有はできません。翌日以降に行ってください。</div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain" id="e-notice" hidden>📣 告知文を作る</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 告知文 -->
+<div class="sheet" id="notice">
+  <div class="inner">
+    <h2>📣 告知文</h2>
+    <div class="caution"><b>ご注意：</b>この文面は「政治活動の告知」（いつ・どこで・何をするか）にとどめてください。「投票をお願いします」「一票を」などの、選挙運動にあたる呼びかけは入れないでください。</div>
+    <div class="stop" style="margin:0 0 10px" id="n-vote" hidden>投票日のため共有できません。</div>
+    <textarea id="n-text" maxlength="2000"></textarea>
+    <div class="warn" id="n-word" hidden></div>
+    <p class="note">文章は自由に直せます。直した文章は保存されません（予定から作り直せます）。</p>
+    <div class="actions">
+      <button class="primary" id="n-share">共有する</button>
+      <button class="plain" id="n-copy">コピー</button>
+      <button class="plain" id="n-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" for="sign">告知文の最後に付ける文（なくてもかまいません）</label>
+    <textarea id="sign" maxlength="200" style="min-height:3.5em" placeholder="例：文京区議会議員 ○○"></textarea>
+    <div class="actions"><button class="primary" id="sign-save">保存する</button></div>
+
+    <label class="f" style="margin-top:22px" for="vote-days">投票日（1行に1日。例：2027-04-25）</label>
+    <textarea id="vote-days" style="min-height:4.5em" placeholder="2027-04-25"></textarea>
+    <p class="note" style="margin-top:4px">この日は0時からその日の終わりまで、告知文の作成と共有が止まります。</p>
+    <div class="actions"><button class="primary" id="vote-save">投票日を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、予定もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_VOTE = 'ekitou:voteDays';   // 投票日の一覧
+const KEY_SIGN = 'ekitou:sign';       // 告知文の最後に付ける文
+const KEY_KIND = 'ekitou:lastKind';   // 最後に選んだ種類
+const DEFAULT_VOTE = ['2027-04-25'];
+const KINDS = ['駅頭', '区政報告会', 'その他'];
+const KIND_TITLE = { '駅頭': '【駅頭活動のお知らせ】', '区政報告会': '【区政報告会のお知らせ】', 'その他': '【活動のお知らせ】' };
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+// 告知文に入っていたら見直しを促す言葉（止めはしない）
+const CHECK_WORDS = ['投票', '一票', '清き', '当選', 'ご支持を', '支持をお願い', '選挙'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('ekitou', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbPutMany = (arr) => dbDo('readwrite', (s) => { arr.forEach((it) => s.put(it)); });
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function ymd(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function parseDay(k) { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function mdw(k) { const d = parseDay(k); return (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）'; }
+function fmtStamp(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const isTime = (t) => /^\d{2}:\d{2}$/.test(t || '');
+const hm = (t) => (isTime(t) ? +t.slice(0, 2) + ':' + t.slice(3) : '');
+function timeText(it) { return it.start ? hm(it.start) + (it.end ? '〜' + hm(it.end) : '〜') : (it.end ? '〜' + hm(it.end) : '時間未定'); }
+
+// ===== 投票日（この日は告知文の作成と共有を止める） =====
+let voteDays = load(KEY_VOTE, DEFAULT_VOTE);
+if (!Array.isArray(voteDays)) voteDays = DEFAULT_VOTE.slice();
+function isVoteDay() { return voteDays.includes(ymd(new Date())); }
+function parseVoteDays(text) {
+  const out = [], bad = [];
+  text.split(/\n/).map((l) => l.trim()).filter(Boolean).forEach((l) => {
+    const m = l.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).match(/^(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})日?$/);
+    if (!m) { bad.push(l); return; }
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (d.getFullYear() !== +m[1] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) { bad.push(l); return; }
+    out.push(ymd(d));
+  });
+  return { days: [...new Set(out)].sort(), bad };
+}
+function updateVoteUI() {
+  const v = isVoteDay();
+  $('vote-bar').hidden = !v;
+  $('e-notice').disabled = v;
+  $('e-vote').hidden = !(v && editing);
+  $('n-share').disabled = v; $('n-copy').disabled = v;
+  $('n-vote').hidden = !v;
+  if (v) $('n-text').value = '';   // 投票日になったら作りかけの告知文も消す
+}
+
+let items = [];
+let sign = load(KEY_SIGN, '');
+if (typeof sign !== 'string') sign = '';
+let today = ymd(new Date());
+
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const str = (v, n) => (typeof v === 'string' ? v : '').slice(0, n);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) return null;
+  const now = Date.now();
+  return {
+    id: str(raw.id, 60) || ('e' + now + Math.random().toString(36).slice(2, 8)),
+    kind: KINDS.includes(raw.kind) ? raw.kind : 'その他',
+    date: raw.date,
+    start: isTime(raw.start) ? raw.start : '',
+    end: isTime(raw.end) ? raw.end : '',
+    place: str(raw.place, 60).trim(),
+    body: str(raw.body, 400),
+    weather: raw.weather === true,
+    createdAt: Number.isFinite(raw.createdAt) ? raw.createdAt : now,
+    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+  };
+}
+const byTime = (a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0) || (a.start || '99').localeCompare(b.start || '99') || a.createdAt - b.createdAt;
+
+// ===== 一覧 =====
+function evButton(it) {
+  const b = el('button', 'ev k' + KINDS.indexOf(it.kind));
+  const t = el('b', '', timeText(it) + ' ' + it.kind);
+  if (it.weather) t.append(el('span', 'wx', '天候で変更あり'));
+  b.append(t, el('span', 'm', (it.place || '場所未定') + (it.body ? ' ・ ' + it.body.split('\n')[0].slice(0, 40) : '')));
+  b.onclick = () => openEdit(it);
+  return b;
+}
+function render() {
+  today = ymd(new Date());
+  const t = parseDay(today);
+  const monday = addDays(t, -((t.getDay() + 6) % 7));
+  const box = $('weeks'); box.innerHTML = '';
+  [['今週', 0], ['来週', 7]].forEach(([name, off]) => {
+    const s = addDays(monday, off), e = addDays(s, 6);
+    const h = el('h2', 'wk'); h.append(el('span', '', name), el('small', '', mdw(ymd(s)) + '〜' + mdw(ymd(e))));
+    box.append(h);
+    const wk = el('div', 'week');
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(s, i), k = ymd(d);
+      const row = el('div', 'day' + (d.getDay() === 6 ? ' sat' : d.getDay() === 0 ? ' sun' : '') + (k === today ? ' today' : '') + (k < today ? ' past' : ''));
+      const dl = el('div', 'dl', String(d.getDate())); dl.append(el('small', '', k === today ? '今日' : WEEK[d.getDay()] + '曜'));
+      const evs = el('div', 'evs');
+      const list = items.filter((x) => x.date === k).sort(byTime);
+      if (list.length) list.forEach((x) => evs.append(evButton(x))); else evs.append(el('div', 'none', '−'));
+      row.append(dl, evs); wk.append(row);
+    }
+    box.append(wk);
+  });
+  // 再来週より先
+  const endNext = ymd(addDays(monday, 13));
+  const later = items.filter((x) => x.date > endNext).sort(byTime);
+  const lb = $('later'); lb.innerHTML = '';
+  if (later.length) {
+    const h = el('h2', 'wk'); h.append(el('span', '', 'それより先の予定'), el('small', '', later.length + '件')); lb.append(h);
+    lb.append(flatList(later));
+  }
+  // 過去の予定（下にまとめる）
+  const past = items.filter((x) => x.date < today).sort(byTime).reverse();
+  const pb = $('past'); pb.innerHTML = '';
+  if (past.length) {
+    const d = el('details'); d.append(el('summary', '', '過去の予定（' + past.length + '件）'));
+    d.append(flatList(past)); pb.append(d);
+  }
+  if (!items.length) lb.append(el('p', 'empty', 'まだ予定はありません。右下の「＋」から予定を入れてください。'));
+  updateVoteUI();
+}
+function flatList(list) {
+  const f = el('div', 'flat');
+  list.forEach((x) => { const r = el('div', 'row'); const evs = el('div'); evs.append(evButton(x)); r.append(el('div', 'dl', parseDay(x.date).getFullYear() !== new Date().getFullYear() ? x.date.slice(0, 4) + '/' + mdw(x.date) : mdw(x.date)), evs); f.append(r); });
+  return f;
+}
+async function reload() {
+  try { items = (await dbAll()).map(normalize).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  const dl = $('place-list'); dl.innerHTML = '';
+  [...new Set(items.map((i) => i.place).filter(Boolean))].slice(0, 30).forEach((p) => dl.append(new Option(p)));
+  render();
+}
+// 日付が変わったら並べ直す・投票日の判定をし直す
+setInterval(() => { if (ymd(new Date()) !== today) render(); else updateVoteUI(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (ymd(new Date()) !== today) render(); else updateVoteUI(); } });
+
+// ===== 入力・編集 =====
+let editing = null, kind = KINDS[0], saving = false;
+function buildKinds() {
+  const box = $('e-kind'); box.innerHTML = '';
+  KINDS.forEach((k) => { const b = el('button', k === kind ? 'on' : '', k); b.type = 'button'; b.onclick = () => { kind = k; buildKinds(); }; box.append(b); });
+}
+function openEdit(it) {
+  editing = it || null;
+  $('edit-title').textContent = it ? '予定を見る・直す' : '予定を追加';
+  kind = it ? it.kind : (KINDS.includes(load(KEY_KIND, '')) ? load(KEY_KIND, '') : KINDS[0]);
+  buildKinds();
+  $('e-date').value = it ? it.date : today;
+  $('e-start').value = it ? it.start : '';
+  $('e-end').value = it ? it.end : '';
+  $('e-place').value = it ? it.place : '';
+  $('e-body').value = it ? it.body : '';
+  $('e-wx').checked = it ? it.weather : false;
+  $('e-notice').hidden = !it; $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtStamp(it.createdAt) + ' ／ 更新 ' + fmtStamp(it.updatedAt) : '';
+  updateVoteUI();
+  $('edit').classList.add('open'); $('edit').scrollTop = 0;
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+function readForm() {
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'e' + now + Math.random().toString(36).slice(2, 8), createdAt: now };
+  it.kind = kind;
+  it.date = $('e-date').value;
+  it.start = isTime($('e-start').value) ? $('e-start').value : '';
+  it.end = isTime($('e-end').value) ? $('e-end').value : '';
+  it.place = $('e-place').value.trim().slice(0, 60);
+  it.body = $('e-body').value.slice(0, 400);
+  it.weather = $('e-wx').checked;
+  it.updatedAt = now;
+  return it;
+}
+$('e-save').onclick = async () => {
+  if (saving) return;
+  const it = readForm();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(it.date)) { alert('日付を入れてください。'); return; }
+  if (it.start && it.end && it.end <= it.start) { alert('終わりの時刻が、始まりより前（または同じ）になっています。入れ直してください。'); return; }
+  saving = true; $('e-save').disabled = true;
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); saving = false; $('e-save').disabled = false; return; }
+  save(KEY_KIND, it.kind);
+  closeSheet('edit');
+  await reload();
+  saving = false; $('e-save').disabled = false;
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm(mdw(editing.date) + 'の「' + editing.kind + '」の予定を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// ===== 告知文 =====
+function noticeText(it) {
+  const d = parseDay(it.date);
+  const lines = [KIND_TITLE[it.kind] || KIND_TITLE['その他']];
+  lines.push('日時：' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEK[d.getDay()] + '）' + (it.start || it.end ? ' ' + timeText(it) : ''));
+  if (it.place) lines.push('場所：' + it.place);
+  if (it.body.trim()) lines.push('内容：' + it.body.trim());
+  if (it.weather) lines.push('※天候により、変更・中止になる場合があります。');
+  if (sign.trim()) lines.push('', sign.trim());
+  return lines.join('\n');
+}
+function checkWords() {
+  const t = $('n-text').value;
+  const hit = CHECK_WORDS.filter((w) => t.includes(w));
+  $('n-word').hidden = !hit.length;
+  $('n-word').textContent = hit.length ? '「' + hit.join('」「') + '」という言葉が入っています。選挙運動にあたる呼びかけになっていないか、見直してください。' : '';
+}
+$('n-text').addEventListener('input', checkWords);
+$('e-notice').onclick = () => {
+  if (!editing) return;
+  if (isVoteDay()) { updateVoteUI(); alert('投票日のため、告知文の作成と共有はできません。翌日以降に行ってください。'); return; }
+  // 画面で直したけれど保存していない内容も反映する
+  $('n-text').value = noticeText(readForm());
+  checkWords();
+  updateVoteUI();
+  $('notice').classList.add('open'); $('notice').scrollTop = 0;
+};
+$('n-share').onclick = async () => {
+  if (isVoteDay()) { updateVoteUI(); alert('投票日のため共有できません。翌日以降に共有してください。'); return; }
+  const text = $('n-text').value.trim();
+  if (!text) return;
+  if (navigator.share) { try { await navigator.share({ text }); } catch (e) {} return; }
+  copyText(text);
+};
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+}
+$('n-copy').onclick = () => {
+  if (isVoteDay()) { updateVoteUI(); alert('投票日のため共有できません。翌日以降に共有してください。'); return; }
+  const text = $('n-text').value.trim();
+  if (text) copyText(text);
+};
+$('n-close').onclick = () => closeSheet('notice');
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('sign').value = sign; $('vote-days').value = voteDays.join('\n'); $('settings').classList.add('open'); $('settings').scrollTop = 0; };
+$('s-close').onclick = () => closeSheet('settings');
+$('sign-save').onclick = () => { sign = $('sign').value.slice(0, 200); save(KEY_SIGN, sign); alert('保存しました。'); };
+$('vote-save').onclick = () => {
+  const { days, bad } = parseVoteDays($('vote-days').value);
+  if (bad.length) { alert('日付として読めない行があります。「2027-04-25」の形で入れ直してください。\n' + bad.join('\n')); return; }
+  if (!days.length && !confirm('投票日が1日も登録されていない状態になります。よろしいですか？')) return;
+  voteDays = days; save(KEY_VOTE, voteDays);
+  $('vote-days').value = voteDays.join('\n');
+  updateVoteUI();
+  alert('投票日を保存しました。');
+};
+async function giveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+$('export').onclick = () => {
+  const d = new Date();
+  giveFile('ekitou-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json',
+    JSON.stringify({ app: 'ekitou', version: APP_VERSION, exportedAt: d.toISOString(), voteDays, sign, items }, null, 1), 'application/json');
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!data || data.app !== 'ekitou' || !Array.isArray(data.items)) { alert('このアプリ（活動予定）のバックアップファイルではありません。'); return; }
+  const good = data.items.map(normalize).filter(Boolean);
+  if (!good.length) { alert('読み込める予定がありませんでした。'); return; }
+  if (!confirm(good.length + '件の予定を読み込みます。同じ予定は上書きし、ほかの予定は消えません。よろしいですか？')) return;
+  try { await dbPutMany(good); } catch (err) { alert('読み込みの途中で保存できませんでした。'); return; }
+  // 投票日は、今の設定に足す（減らさない）
+  if (Array.isArray(data.voteDays)) { const { days } = parseVoteDays(data.voteDays.filter((x) => typeof x === 'string').join('\n')); voteDays = [...new Set([...voteDays, ...days])].sort(); save(KEY_VOTE, voteDays); $('vote-days').value = voteDays.join('\n'); }
+  if (!sign && typeof data.sign === 'string') { sign = data.sign.slice(0, 200); save(KEY_SIGN, sign); $('sign').value = sign; }
+  await reload();
+  const skipped = data.items.length - good.length;
+  alert(good.length + '件を読み込みました。' + (skipped > 0 ? '（日付が読めない ' + skipped + '件は飛ばしました）' : ''));
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open') || $('notice').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

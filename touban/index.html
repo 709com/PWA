@@ -1,0 +1,506 @@
+<!doctype html>
+<!-- このファイルは「家族の当番表」の本体です。家事や送迎などの当番を家族の呼び名に曜日ごとに割り当て、今日の当番を大きく表示し、終わったらスタンプを押せます。 -->
+<!-- 記録はiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>家族の当番表</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="当番表">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1f6fb8">
+<style>
+  :root { --bg:#f2f6fb; --card:#fff; --text:#1a2430; --sub:#5a6676; --accent:#1f6fb8; --accent-soft:#e0ecf8; --line:#dce4ee; --danger:#c8372d;
+          --ok:#1e9e5a; --ok-soft:#e1f5ea; --stamp:#e0413a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#11161c; --card:#1b222b; --text:#e9eff5; --sub:#9ba8b6; --accent:#64a8ee; --accent-soft:#1c3149; --line:#2a3440; --danger:#ef6b61;
+            --ok:#45c27f; --ok-soft:#173a29; --stamp:#ff6b63; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .date { font-size:1.05rem; font-weight:700; margin:0 0 8px; }
+  .date small { color:var(--sub); font-weight:500; margin-left:6px; font-size:.85rem; }
+
+  /* 今日の当番 */
+  .duty { overflow:hidden; display:flex; align-items:center; gap:12px; background:var(--card); border:2px solid var(--line); border-radius:16px; padding:12px 14px; margin-bottom:10px; width:100%; text-align:left; }
+  .duty .ic { font-size:2.2rem; line-height:1; flex:0 0 auto; }
+  .duty .tx { flex:1; min-width:0; }
+  .duty .cn { font-size:1.05rem; color:var(--sub); font-weight:600; word-break:break-all; }
+  .duty .who { font-size:1.6rem; font-weight:800; line-height:1.2; word-break:break-all; }
+  .duty .ck { flex:0 0 auto; width:76px; height:76px; border-radius:50%; border:3px dashed var(--line); display:flex; align-items:center; justify-content:center; font-size:.8rem; color:var(--sub); text-align:center; line-height:1.1; }
+  .duty.done { background:var(--ok-soft); border-color:var(--ok); }
+  .duty.done .ck { border:3px solid var(--stamp); color:var(--stamp); font-size:.8rem; font-weight:800; transform:rotate(-12deg); }
+  .duty.done .ck.new { animation:stamp .45s ease-out; }
+  @keyframes stamp { 0% { transform:scale(2.4) rotate(-12deg); opacity:0; } 60% { transform:scale(.9) rotate(-12deg); opacity:1; } 100% { transform:scale(1) rotate(-12deg); } }
+  .nobody .who { color:var(--sub); font-size:1.1rem; font-weight:600; }
+  .alldone { text-align:center; font-weight:800; font-size:1.2rem; color:var(--ok); margin:4px 0 12px; }
+  .empty { color:var(--sub); text-align:center; padding:16px 6px; margin:0; }
+
+  /* スタンプの数 */
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:12px; }
+  .card h3 { margin:0 0 8px; font-size:1rem; }
+  .scores { display:flex; flex-wrap:wrap; gap:8px; }
+  .score { background:var(--bg); border-radius:12px; padding:6px 12px; font-weight:700; }
+  .score span { color:var(--stamp); }
+
+  /* 1週間の表（横は枠の中だけで動かす） */
+  .tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table { border-collapse:separate; border-spacing:3px; min-width:100%; }
+  th, td { font-size:.78rem; text-align:center; padding:6px 3px; border-radius:8px; word-break:break-all; }
+  th { color:var(--sub); font-weight:600; }
+  th.now { color:#fff; background:var(--accent); }
+  td.cname { text-align:left; font-weight:700; min-width:5.5em; max-width:7em; }
+  td.who { background:var(--accent-soft); min-width:3.2em; white-space:nowrap; }
+  td.who.now { outline:2px solid var(--accent); }
+  td.blank { color:var(--sub); background:var(--bg); }
+  .rot { font-size:.82rem; color:var(--sub); margin:8px 2px 0; }
+  .bigbtn { display:block; width:100%; background:var(--accent); color:#fff; border-radius:14px; padding:14px; font-weight:700; font-size:1.05rem; margin-bottom:12px; }
+
+  /* 当番の編集・設定（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .icons { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .icons button { background:var(--card); border:2px solid var(--line); border-radius:10px; padding:6px 0; font-size:1.5rem; }
+  .icons button.on { border-color:var(--accent); background:var(--accent-soft); }
+  .drow { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .drow span { width:3em; flex:0 0 auto; font-weight:700; }
+  .clist .item { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:6px; width:100%; text-align:left; }
+  .clist .item b { flex:1; word-break:break-all; }
+  .mrow { display:flex; gap:6px; margin-bottom:6px; }
+  .mrow button { flex:0 0 auto; }
+  .switch { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .switch input { width:26px; height:26px; flex:0 0 auto; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+  @media (prefers-reduced-motion: reduce) { .duty.done .ck.new { animation:none; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🧹 家族の当番表</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <p class="date" id="today-date"></p>
+  <div id="today"></div>
+  <div class="card" id="scores-card"><h3>💮 スタンプの数</h3><div class="scores" id="scores"></div></div>
+  <div class="card">
+    <h3>🗓 今週の当番表</h3>
+    <div class="tablewrap" id="week"></div>
+    <p class="rot" id="rot-note"></p>
+  </div>
+  <button class="bigbtn" id="open-chores">✏️ 当番を登録・変更する</button>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 当番の一覧 -->
+<div class="sheet" id="chores">
+  <div class="inner">
+    <h2>✏️ 当番の一覧</h2>
+    <div class="clist" id="clist"></div>
+    <div class="actions">
+      <button class="primary" id="c-new">＋ 当番を追加</button>
+      <button class="plain" id="c-close">閉じる</button>
+    </div>
+    <p class="note" id="c-rotnote"></p>
+  </div>
+</div>
+
+<!-- 当番1つの編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">当番を追加</h2>
+    <label class="f" for="e-name">当番の名前</label>
+    <input id="e-name" maxlength="16" placeholder="例：お風呂掃除、ごみ出し、送迎" list="chore-list">
+    <datalist id="chore-list"><option>お風呂掃除</option><option>ごみ出し</option><option>送迎</option><option>食器洗い</option><option>洗濯物たたみ</option><option>テーブルふき</option><option>ペットのえさ</option><option>植木の水やり</option></datalist>
+    <label class="f">マーク</label>
+    <div class="icons" id="e-icons"></div>
+    <label class="f">曜日ごとの担当（「なし」の日は表に出ません）</label>
+    <div id="e-days"></div>
+    <p class="note" id="e-rotnote"></p>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">家族の呼び名</label>
+    <div class="warn">本名など、個人を特定できる情報は書かないでください（例：「パパ」「長女」「おにいちゃん」など）。</div>
+    <div id="m-edit"></div>
+    <button class="plain" id="m-add">＋ 人を追加</button>
+    <div class="actions"><button class="primary" id="m-save">呼び名を保存</button></div>
+
+    <label class="f" style="margin-top:22px">交代</label>
+    <label class="switch"><input type="checkbox" id="rotate"><span>1週間ごとに自動で交代する<br><small style="color:var(--sub)">毎週月曜日に、担当が家族の並び順で1人ずつずれます</small></span></label>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、当番表もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_DATA = 'touban:data';   // 家族・当番・交代の設定・スタンプの数
+const KEY_DONE = 'touban:done';   // 今日終わった当番（日付が変わると外れる）
+const MAX_MEMBERS = 12, MAX_CHORES = 20;
+const ICONS = ['🛁', '🗑️', '🚗', '🍽️', '👕', '🧹', '🧺', '🐶', '🪴', '🛒', '🍳', '📮'];
+const WEEK_JA = ['日', '月', '火', '水', '木', '金', '土'];
+const ORDER = [1, 2, 3, 4, 5, 6, 0];   // 表は月曜はじまり
+const DAY_MS = 86400000;
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { alert('保存できませんでした。'); return false; } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const str = (v, max) => (typeof v === 'string' ? v : '').slice(0, max);
+const p2 = (n) => String(n).padStart(2, '0');
+function newId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function ymd(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function mondayOf(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function validDate(s) { if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const d = new Date(s + 'T00:00:00'); return !isNaN(d) && ymd(d) === s; }
+
+// データを、欠けや壊れがない形に整える
+function cleanData(d) {
+  d = d && typeof d === 'object' ? d : {};
+  const seen = new Set();
+  let members = (Array.isArray(d.members) ? d.members : []).slice(0, MAX_MEMBERS).map((m, i) => {
+    m = m && typeof m === 'object' ? m : {};
+    let id = str(m.id, 40); if (!id || seen.has(id)) id = newId('m'); seen.add(id);
+    const stamps = Number.isInteger(m.stamps) && m.stamps > 0 ? m.stamps : 0;
+    return { id, name: str(m.name, 12).trim() || ('家族' + (i + 1)), stamps };
+  });
+  if (!members.length) members = [1, 2, 3, 4].map((n) => ({ id: 'mem' + n, name: '子ども' + n, stamps: 0 }));
+  const ids = new Set(members.map((m) => m.id));
+  const cseen = new Set();
+  const chores = (Array.isArray(d.chores) ? d.chores : []).slice(0, MAX_CHORES).map((c) => {
+    if (!c || typeof c !== 'object') return null;
+    const name = str(c.name, 16).trim(); if (!name) return null;
+    let id = str(c.id, 40); if (!id || cseen.has(id)) id = newId('c'); cseen.add(id);
+    const assign = Array.from({ length: 7 }, (_, i) => (Array.isArray(c.assign) && ids.has(c.assign[i]) ? c.assign[i] : ''));
+    return { id, name, icon: ICONS.includes(c.icon) ? c.icon : ICONS[5], assign };
+  }).filter(Boolean);
+  const r = d.rotate && typeof d.rotate === 'object' ? d.rotate : {};
+  const rotate = { on: r.on === true, start: validDate(r.start) ? r.start : ymd(mondayOf(new Date())) };
+  return { members, chores, rotate };
+}
+
+let data = cleanData(load(KEY_DATA, null));
+function saveData() { return save(KEY_DATA, data); }
+
+// 今日終わった当番。日付が変わっていたら空にする
+function loadDone() {
+  const d = load(KEY_DONE, null);
+  const today = ymd(new Date());
+  if (!d || d.date !== today || !Array.isArray(d.ids)) return { date: today, ids: [] };
+  return { date: today, ids: d.ids.filter((x) => typeof x === 'string') };
+}
+let done = loadDone();
+
+// ===== 担当の決め方 =====
+// 交代ありのとき：登録した週から何週たったかの分だけ、家族の並び順で担当をずらす
+function weeksSinceStart(date) {
+  if (!data.rotate.on) return 0;
+  const start = new Date(data.rotate.start + 'T00:00:00');
+  return Math.round((mondayOf(date) - start) / (7 * DAY_MS));
+}
+function whoOn(chore, date) {
+  const base = chore.assign[date.getDay()];
+  if (!base) return null;
+  const n = data.members.length;
+  const i = data.members.findIndex((m) => m.id === base);
+  if (i < 0) return null;
+  const shift = weeksSinceStart(date);
+  return data.members[(((i + shift) % n) + n) % n];
+}
+// 編集画面で「今週の担当」を表示・保存するための変換
+function thisWeekAssign(chore) { const mon = mondayOf(new Date()); return ORDER.map((wd, k) => { const m = whoOn(chore, new Date(mon.getTime() + k * DAY_MS)); return m ? m.id : ''; }); }
+
+// ===== 画面の表示 =====
+let justStamped = '';
+function render() {
+  done = loadDone();
+  const now = new Date();
+  $('today-date').replaceChildren(document.createTextNode('今日の当番'), el('small', '', (now.getMonth() + 1) + '月' + now.getDate() + '日（' + WEEK_JA[now.getDay()] + '）'));
+  const box = $('today'); box.innerHTML = '';
+  const todays = data.chores.filter((c) => whoOn(c, now));
+  if (!data.chores.length) {
+    box.append(el('p', 'empty', 'まだ当番がありません。下の「当番を登録・変更する」から、お風呂掃除・ごみ出し・送迎などを登録してください。'));
+  } else if (!todays.length) {
+    box.append(el('p', 'empty', '今日の当番はありません 🎈'));
+  } else {
+    if (todays.every((c) => done.ids.includes(c.id))) box.append(el('div', 'alldone', '🎉 今日の当番はぜんぶ終わり！ おつかれさま！'));
+    todays.forEach((c) => {
+      const m = whoOn(c, now);
+      const isDone = done.ids.includes(c.id);
+      const b = el('button', 'duty' + (isDone ? ' done' : ''));
+      const tx = el('div', 'tx'); tx.append(el('div', 'cn', c.name), el('div', 'who', m.name));
+      const ck = el('div', 'ck' + (isDone && justStamped === c.id ? ' new' : ''), isDone ? 'よく\nできました' : 'できたら\nタップ');
+      ck.style.whiteSpace = 'pre-line';
+      b.append(el('span', 'ic', c.icon), tx, ck);
+      b.setAttribute('aria-label', c.name + '　' + m.name + (isDone ? '　終わり' : '　まだ'));
+      b.onclick = () => toggleDone(c, m);
+      box.append(b);
+    });
+  }
+  justStamped = '';
+  // スタンプの数
+  const sc = $('scores'); sc.innerHTML = '';
+  data.members.forEach((m) => { const s = el('div', 'score', m.name + ' '); s.append(el('span', '', '💮×' + m.stamps)); sc.append(s); });
+  // 今週の表
+  const w = $('week'); w.innerHTML = '';
+  if (!data.chores.length) { w.append(el('p', 'empty', '当番を登録すると、ここに1週間の表が出ます')); }
+  else {
+    const mon = mondayOf(now);
+    const t = el('table'); const hr = el('tr'); hr.append(el('th', '', '当番'));
+    ORDER.forEach((wd) => hr.append(el('th', wd === now.getDay() ? 'now' : '', WEEK_JA[wd])));
+    t.append(hr);
+    data.chores.forEach((c) => {
+      const tr = el('tr'); tr.append(el('td', 'cname', c.icon + ' ' + c.name));
+      ORDER.forEach((wd, k) => {
+        const m = whoOn(c, new Date(mon.getTime() + k * DAY_MS));
+        tr.append(el('td', (m ? 'who' : 'blank') + (wd === now.getDay() ? ' now' : ''), m ? m.name : '－'));
+      });
+      t.append(tr);
+    });
+    w.append(t);
+    if (w.scrollWidth > w.clientWidth + 1) w.append(el('p', 'rot', '↔ 表は横に動かせます'));
+  }
+  $('rot-note').textContent = data.rotate.on ? '🔄 1週間ごとに自動で交代中（毎週月曜日に担当が1人ずつずれます）' : '';
+}
+function toggleDone(c, m) {
+  done = loadDone();
+  const mem = data.members.find((x) => x.id === m.id);
+  if (done.ids.includes(c.id)) {
+    if (!confirm('「' + c.name + '」を、まだ終わっていないことに戻しますか？')) return;
+    done.ids = done.ids.filter((x) => x !== c.id);
+    if (mem && mem.stamps > 0) mem.stamps--;
+  } else {
+    done.ids.push(c.id);
+    if (mem) mem.stamps++;
+    justStamped = c.id;
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+  save(KEY_DONE, done); saveData();
+  render();
+}
+
+// ===== 当番の一覧・編集 =====
+function buildChoreList() {
+  const box = $('clist'); box.innerHTML = '';
+  if (!data.chores.length) {
+    box.append(el('p', 'empty', 'まだ当番がありません。'));
+    const ex = el('button', 'plain', '例を入れる（お風呂掃除・ごみ出し・送迎）');
+    ex.style.width = '100%';
+    ex.onclick = () => {
+      data.chores = [['お風呂掃除', '🛁'], ['ごみ出し', '🗑️'], ['送迎', '🚗']].map(([name, icon]) => ({ id: newId('c'), name, icon, assign: ['', '', '', '', '', '', ''] }));
+      saveData(); buildChoreList(); render();
+    };
+    box.append(ex);
+  }
+  data.chores.forEach((c) => {
+    const b = el('button', 'item'); b.append(el('span', '', c.icon), el('b', '', c.name), el('span', 'note', '直す ›'));
+    b.onclick = () => openEdit(c);
+    box.append(b);
+  });
+  $('c-rotnote').textContent = data.rotate.on ? '「1週間ごとに自動で交代」がオンです。当番を直すと、その表が「今週の担当」になり、来週から1人ずつずれます。' : '';
+}
+let editing = null, icon = ICONS[0];
+function openEdit(c) {
+  editing = c || null;
+  $('edit-title').textContent = c ? '当番を直す' : '当番を追加';
+  $('e-name').value = c ? c.name : '';
+  icon = c ? c.icon : ICONS[0];
+  const ib = $('e-icons'); ib.innerHTML = '';
+  ICONS.forEach((ic) => { const b = el('button', ic === icon ? 'on' : '', ic); b.onclick = () => { icon = ic; ib.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); }; ib.append(b); });
+  const cur = c ? thisWeekAssign(c) : ['', '', '', '', '', '', ''];
+  const db = $('e-days'); db.innerHTML = '';
+  ORDER.forEach((wd, k) => {
+    const r = el('div', 'drow'); r.append(el('span', '', WEEK_JA[wd]));
+    const s = el('select'); s.dataset.wd = wd; s.add(new Option('なし', ''));
+    data.members.forEach((m) => s.add(new Option(m.name, m.id)));
+    s.value = cur[k]; r.append(s); db.append(r);
+  });
+  $('e-rotnote').textContent = data.rotate.on ? '交代がオンなので、ここに出ているのは「今週の担当」です。来週からは1人ずつずれます。' : '';
+  $('e-del').hidden = !c;
+  $('edit').classList.add('open'); window.scrollTo(0, 0);
+}
+$('open-chores').onclick = () => { buildChoreList(); $('chores').classList.add('open'); window.scrollTo(0, 0); };
+$('c-close').onclick = () => { $('chores').classList.remove('open'); render(); };
+$('c-new').onclick = () => { if (data.chores.length >= MAX_CHORES) { alert(MAX_CHORES + 'こまでです。'); return; } openEdit(null); };
+$('e-cancel').onclick = () => $('edit').classList.remove('open');
+$('e-save').onclick = () => {
+  if (!$('edit').classList.contains('open')) return; // 連打で同じ当番が2つできないように（閉じた後の押下は無視）
+  const name = $('e-name').value.trim().slice(0, 16);
+  if (!name) { alert('当番の名前を入れてください。'); return; }
+  const assign = ['', '', '', '', '', '', ''];
+  $('e-days').querySelectorAll('select').forEach((s) => { assign[Number(s.dataset.wd)] = s.value; });
+  if (data.rotate.on) {
+    // 表に出ているのは今週の担当。もとの表（交代を始めた週の形）に戻して保存する
+    const shift = weeksSinceStart(new Date()); const n = data.members.length;
+    for (let wd = 0; wd < 7; wd++) {
+      const i = data.members.findIndex((m) => m.id === assign[wd]);
+      if (i >= 0) assign[wd] = data.members[(((i - shift) % n) + n) % n].id;
+    }
+  }
+  if (editing) {
+    const c = data.chores.find((x) => x.id === editing.id);
+    if (c) Object.assign(c, { name, icon, assign });
+  } else {
+    data.chores.push({ id: newId('c'), name, icon, assign });
+  }
+  editing = null;
+  $('edit').classList.remove('open');
+  saveData();
+  buildChoreList(); render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.name + '」を削除します。よろしいですか？')) return;
+  data.chores = data.chores.filter((c) => c.id !== editing.id);
+  saveData();
+  $('edit').classList.remove('open');
+  buildChoreList(); render();
+};
+
+// ===== 設定：家族の呼び名・交代 =====
+function buildMemberEdit() { $('m-edit').innerHTML = ''; data.members.forEach((m) => addMemberRow(m.id, m.name)); $('rotate').checked = data.rotate.on; }
+function addMemberRow(id, name) {
+  const row = el('div', 'mrow'); row.dataset.id = id;
+  const inp = el('input'); inp.value = name; inp.maxLength = 12; inp.placeholder = '呼び名';
+  const del = el('button', 'plain danger', '削除');
+  del.onclick = () => {
+    if ($('m-edit').children.length <= 1) { alert('1人は残してください。'); return; }
+    if (data.chores.some((c) => c.assign.includes(id)) && !confirm('この人が担当している当番は「なし」になります。「呼び名を保存」で確定します。')) return;
+    row.remove();
+  };
+  row.append(inp, del); $('m-edit').append(row);
+  return inp;
+}
+$('m-add').onclick = () => {
+  if ($('m-edit').children.length >= MAX_MEMBERS) { alert(MAX_MEMBERS + '人までです。'); return; }
+  addMemberRow(newId('m'), '').focus();
+};
+$('m-save').onclick = () => {
+  const rows = [...$('m-edit').children];
+  if (rows.some((r) => !r.querySelector('input').value.trim())) { alert('呼び名が空の欄があります。入れてください。'); return; }
+  // 人数や並びが変わっても、今週の担当はそのまま保つ
+  const now = thisWeekSnapshot();
+  data.members = rows.map((r) => { const old = data.members.find((m) => m.id === r.dataset.id); return { id: r.dataset.id, name: r.querySelector('input').value.trim(), stamps: old ? old.stamps : 0 }; });
+  restoreSnapshot(now);
+  data = cleanData(data);
+  if (!saveData()) return;
+  buildMemberEdit(); render();
+  alert('呼び名を保存しました。');
+};
+// 今週の担当をいったん控え、交代の起点を今週に置き直して戻す（設定を変えても今週の表が変わらないように）
+function thisWeekSnapshot() { return data.chores.map((c) => { const a = thisWeekAssign(c); const out = ['', '', '', '', '', '', '']; ORDER.forEach((wd, k) => { out[wd] = a[k]; }); return out; }); }
+function restoreSnapshot(snap) {
+  data.rotate.start = ymd(mondayOf(new Date()));
+  data.chores.forEach((c, i) => { c.assign = snap[i]; });
+}
+$('rotate').onchange = () => {
+  const snap = thisWeekSnapshot();
+  data.rotate.on = $('rotate').checked;
+  restoreSnapshot(snap);
+  saveData(); render();
+};
+$('open-settings').onclick = () => { buildMemberEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => { $('settings').classList.remove('open'); render(); };
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'touban-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app: 'touban', version: APP_VERSION, exportedAt: d.toISOString(), ...data }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let d;
+  try { d = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!d || d.app !== 'touban' || !Array.isArray(d.members) || !Array.isArray(d.chores)) { alert('このアプリ（当番表）のバックアップファイルではありません。'); return; }
+  if (!confirm('当番表を読み込みます。いまの家族・当番は、ファイルの内容に置きかわります。よろしいですか？')) return;
+  data = cleanData(d);
+  saveData();
+  buildMemberEdit(); render();
+  alert('読み込みました。');
+};
+
+// ===== 日付が変わったら、チェックを外して表示を新しくする =====
+let shownDate = ymd(new Date());
+function checkDate() { const t = ymd(new Date()); if (t !== shownDate) { shownDate = t; render(); } }
+setInterval(checkDate, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDate(); });
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || document.querySelector('.sheet.open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>

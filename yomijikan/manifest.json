@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です（原稿の読み上げ時間計算）。",
+  "id": "./",
+  "name": "原稿の読み上げ時間計算",
+  "short_name": "読み時間",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3fa",
+  "theme_color": "#7a4fb0",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

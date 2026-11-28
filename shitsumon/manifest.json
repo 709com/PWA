@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です（私の一般質問アーカイブ）。",
+  "id": "./",
+  "name": "私の一般質問アーカイブ",
+  "short_name": "質問記録",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f7f5",
+  "theme_color": "#2e6b4f",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

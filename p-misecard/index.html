@@ -1,0 +1,365 @@
+<!doctype html>
+<!-- このファイルは「見せるカード」の本体です。日本語に慣れていない人が、お店や駅で相手に見せる短い文（やさしい日本語＋英語）を大きく表示します。 -->
+<!-- カードはiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。非公式・個人の試作です。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>見せるカード</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="見せるカード">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c45a2c">
+<style>
+  :root { --bg:#fbf6f2; --card:#fff; --text:#2a211b; --sub:#6d5f55; --accent:#c45a2c; --accent-soft:#f8e4d8; --line:#eadfd6; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17130f; --card:#221c17; --text:#f3ece6; --sub:#b3a499; --accent:#f08a5a; --accent-soft:#3d2719; --line:#362c24; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  @media (max-width:360px) { h1 { font-size:1.1rem; } .iconbtn { padding:7px 9px; } }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:4.5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  .hbtns { display:flex; gap:6px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .lead { font-size:.88rem; color:var(--sub); margin:0 0 10px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tabs button { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:6px 14px; white-space:nowrap; font-size:.9rem; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:10px; display:flex; gap:10px; align-items:flex-start; }
+  .card .body { flex:1; min-width:0; cursor:pointer; }
+  .card .ja { font-size:1.15rem; font-weight:700; word-break:break-word; }
+  .card .en { font-size:.9rem; color:var(--sub); word-break:break-word; }
+  .star { font-size:1.4rem; background:none; padding:2px 4px; color:var(--sub); }
+  .star.on { color:#e0a000; }
+  .empty { color:var(--sub); text-align:center; padding:30px 0; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  /* 相手に見せる画面：白地に大きな黒い字（ダークモードでも読みやすく白地にする） */
+  #show { background:#fff; color:#111; }
+  #show .inner { min-height:100vh; display:flex; flex-direction:column; justify-content:center; text-align:center; }
+  #show .big { font-size:2.4rem; font-weight:800; line-height:1.4; word-break:break-word; margin:0 0 18px; }
+  #show .small { font-size:1.05rem; color:#555; word-break:break-word; margin:0 0 30px; }
+  #show button { background:#eee; color:#111; border-radius:12px; padding:14px 20px; font-size:1.05rem; margin:0 auto; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span data-t="update">新しい版があります</span><button id="update-btn" data-t="updateBtn">更新する</button></div>
+  <header>
+    <h1>🪪 <span data-t="title">見せるカード</span></h1>
+    <div class="hbtns">
+      <button class="iconbtn" id="lang">English</button>
+      <button class="iconbtn" id="open-settings" aria-label="設定">⚙️</button>
+    </div>
+  </header>
+  <p class="lead" data-t="lead">カードを おすと、大きな 字で 出ます。お店や 駅で 相手に 見せて ください。</p>
+  <div class="tabs" id="tabs"></div>
+  <div id="list"></div>
+  <footer><span data-t="unofficial">非公式・個人の試作です（文京区の公式アプリではありません）</span><br>版 <span id="ver"></span> ・ <span data-t="local">データは この iPhone の 中だけに 保存します</span></footer>
+</main>
+
+<button id="add" aria-label="カードを追加">＋</button>
+
+<!-- 相手に見せる画面 -->
+<div class="sheet" id="show">
+  <div class="inner">
+    <p class="big" id="show-ja"></p>
+    <p class="small" id="show-en"></p>
+    <button id="show-close" data-t="close">とじる</button>
+  </div>
+</div>
+
+<!-- 追加・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title"></h2>
+    <div class="warn" data-t="warn">住所・電話番号・名前など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-ja" data-t="labelJa">相手に見せる日本語</label>
+    <textarea id="e-ja" maxlength="120" placeholder="例：駅は どちらですか。"></textarea>
+    <label class="f" for="e-en" data-t="labelEn">自分用の意味（英語など）</label>
+    <textarea id="e-en" maxlength="160" placeholder="e.g. Which way is the station?"></textarea>
+    <label class="f" for="e-cat" data-t="labelCat">しゅるい</label>
+    <select id="e-cat"></select>
+    <div class="actions">
+      <button class="primary" id="e-save" data-t="save">保存する</button>
+      <button class="plain" id="e-cancel" data-t="cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden data-t="del">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ <span data-t="settings">設定</span></h2>
+    <label class="f" data-t="backup">バックアップ</label>
+    <p class="note" style="margin-top:0" data-t="backupNote">ホーム画面の アイコンを 消すと、カードも 消えます。ときどき 書き出して 保存して ください。</p>
+    <div class="actions">
+      <button class="plain" id="export" data-t="export">書き出す</button>
+      <button class="plain" id="import-btn" data-t="import">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <label class="f" style="margin-top:22px" data-t="resetLabel">はじめの カードに もどす</label>
+    <div class="actions"><button class="plain danger" id="reset" data-t="reset">すべて 消して もどす</button></div>
+    <p class="note" data-t="aboutNote">英語の文は、このアプリの作者が書いた参考の訳です。大切な場面では、相手に確かめてください。</p>
+    <div class="actions"><button class="plain" id="s-close" data-t="close">とじる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_CARDS = 'p-misecard:cards';
+const KEY_LANG = 'p-misecard:lang';
+const KEY_TAB = 'p-misecard:tab';
+const $ = (id) => document.getElementById(id);
+
+// 画面の文字（やさしい日本語／英語）。カードの中身ではなく、ボタンや説明の文字
+const T = {
+  ja: { title:'見せるカード', lead:'カードを おすと、大きな 字で 出ます。お店や 駅で 相手に 見せて ください。',
+        unofficial:'非公式・個人の試作です（文京区の公式アプリではありません）', local:'データは この iPhone の 中だけに 保存します',
+        update:'新しい版があります', updateBtn:'更新する', close:'とじる', warn:'住所・電話番号・名前など、個人を特定できる情報は書かないでください。',
+        labelJa:'相手に見せる日本語', labelEn:'自分用の意味（英語など）', labelCat:'しゅるい', save:'保存する', cancel:'やめる', del:'削除',
+        settings:'設定', backup:'バックアップ', backupNote:'ホーム画面の アイコンを 消すと、カードも 消えます。ときどき 書き出して 保存して ください。',
+        export:'書き出す', import:'読み込む', resetLabel:'はじめの カードに もどす', reset:'すべて 消して もどす',
+        aboutNote:'英語の文は、このアプリの作者が書いた参考の訳です。大切な場面では、相手に確かめてください。',
+        add:'カードを ふやす', editT:'カードを なおす', all:'ぜんぶ', fav:'★ よく使う', empty:'カードが ありません。右下の「＋」で ふやせます。',
+        needJa:'日本語の文を 入れてください。', delQ:'このカードを 消しますか？', resetQ:'自分で作ったカードも すべて 消えます。よろしいですか？',
+        badFile:'このアプリの バックアップファイルでは ありません。', readErr:'ファイルを 読めませんでした。', importQ:(n)=>n+'まいの カードを 読み込みます。同じカードは 上書きします。よろしいですか？',
+        done:'読み込みました。', saveErr:'保存できませんでした。', otherLang:'English' },
+  en: { title:'Show Cards', lead:'Tap a card to show it in big letters. Show it to staff at shops or stations.',
+        unofficial:'Unofficial personal prototype (not an official Bunkyo City app)', local:'Your data stays only on this iPhone',
+        update:'A new version is ready', updateBtn:'Update', close:'Close', warn:'Do not write personal information such as your address, phone number, or name.',
+        labelJa:'Japanese to show', labelEn:'Meaning for you (English, etc.)', labelCat:'Category', save:'Save', cancel:'Cancel', del:'Delete',
+        settings:'Settings', backup:'Backup', backupNote:'If you delete the home screen icon, your cards are deleted too. Export a backup sometimes.',
+        export:'Export', import:'Import', resetLabel:'Go back to the starter cards', reset:'Delete all and reset',
+        aboutNote:'The English lines are reference translations written by the app author. In important situations, please confirm with the other person.',
+        add:'Add a card', editT:'Edit card', all:'All', fav:'★ Favorites', empty:'No cards. Tap "+" at the bottom right to add one.',
+        needJa:'Please enter the Japanese sentence.', delQ:'Delete this card?', resetQ:'Your own cards will also be deleted. Are you sure?',
+        badFile:'This is not a backup file from this app.', readErr:'Could not read the file.', importQ:(n)=>'Import '+n+' cards? Cards with the same ID will be overwritten.',
+        done:'Imported.', saveErr:'Could not save.', otherLang:'にほんご' }
+};
+const CATS = [
+  { id:'daily', ja:'まいにち', en:'Daily' },
+  { id:'shop', ja:'お店', en:'Shops' },
+  { id:'way', ja:'道・駅', en:'Directions' },
+  { id:'help', ja:'こまったとき', en:'Trouble' },
+  { id:'mine', ja:'じぶんの', en:'My own' }
+];
+// はじめから入っているカード（文と訳はこのアプリの作者が書いたもの）
+const STARTER = [
+  ['s1','daily','ゆっくり 話して ください。','Please speak slowly.'],
+  ['s2','daily','もう一度 言って ください。','Could you say that again?'],
+  ['s3','daily','紙に 書いて もらえますか。','Could you write it down for me?'],
+  ['s4','daily','日本語が 少し わかります。','I understand a little Japanese.'],
+  ['s5','daily','英語は 話せますか。','Do you speak English?'],
+  ['s6','shop','これは 何ですか。','What is this?'],
+  ['s7','shop','袋は いりません。','I don\'t need a bag.'],
+  ['s8','shop','カードで 払えますか。','Can I pay by card?'],
+  ['s9','shop','これを ください。','I\'ll take this, please.'],
+  ['s10','way','ここへ 行きたいです。','I want to go here.'],
+  ['s11','way','トイレは どこですか。','Where is the restroom?'],
+  ['s12','way','この 電車は ここに 止まりますか。','Does this train stop here?'],
+  ['s13','help','道に まよいました。','I am lost.'],
+  ['s14','help','助けて ください。','Please help me.'],
+  ['s15','help','救急車を 呼んで ください。','Please call an ambulance.'],
+  ['s16','help','食べ物の アレルギーが あります。','I have a food allergy.']
+].map(([id, cat, ja, en], i) => ({ id, cat, ja, en, fav:false, order:i }));
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { alert(t('saveErr')); return false; } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+
+// 保存されたカードを点検して、欠けた項目を補う
+function clean(c, i) {
+  if (!c || typeof c !== 'object' || typeof c.ja !== 'string' || !c.ja.trim()) return null;
+  return { id: typeof c.id === 'string' && c.id ? c.id : 'c' + Date.now() + '-' + i,
+           cat: CATS.some((x) => x.id === c.cat) ? c.cat : 'mine',
+           ja: c.ja.slice(0, 120), en: typeof c.en === 'string' ? c.en.slice(0, 160) : '',
+           fav: c.fav === true, order: Number.isFinite(c.order) ? c.order : 1000 + i };
+}
+let cards = (load(KEY_CARDS, null) || STARTER.map((c) => ({ ...c }))).map(clean).filter(Boolean);
+let lang = load(KEY_LANG, 'ja') === 'en' ? 'en' : 'ja';
+let tab = load(KEY_TAB, 'all');
+function t(k) { return T[lang][k]; }
+
+// ===== 画面の文字を言語に合わせる =====
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = t(e.dataset.t); });
+  $('lang').textContent = t('otherLang');
+  $('add').setAttribute('aria-label', t('add'));
+}
+$('lang').onclick = () => { lang = lang === 'ja' ? 'en' : 'ja'; save(KEY_LANG, lang); applyLang(); render(); };
+
+// ===== 一覧 =====
+function render() {
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  const list = [{ id:'all', label:t('all') }, { id:'fav', label:t('fav') }, ...CATS.map((c) => ({ id:c.id, label:c[lang] }))];
+  if (!list.some((x) => x.id === tab)) tab = 'all';
+  for (const x of list) {
+    const b = el('button', x.id === tab ? 'on' : '', x.label);
+    b.onclick = () => { tab = x.id; save(KEY_TAB, tab); render(); };
+    tabs.append(b);
+  }
+  const shown = cards.filter((c) => tab === 'all' || (tab === 'fav' ? c.fav : c.cat === tab))
+    .sort((a, b) => (b.fav - a.fav) || (a.order - b.order));
+  const box = $('list'); box.innerHTML = '';
+  if (!shown.length) { box.append(el('p', 'empty', t('empty'))); return; }
+  for (const c of shown) {
+    const row = el('div', 'card');
+    const body = el('div', 'body');
+    body.append(el('div', 'ja', c.ja));
+    if (c.en) body.append(el('div', 'en', c.en));
+    body.onclick = () => openShow(c);
+    const star = el('button', 'star' + (c.fav ? ' on' : ''), c.fav ? '★' : '☆');
+    star.setAttribute('aria-label', 'よく使う');
+    star.onclick = () => { c.fav = !c.fav; save(KEY_CARDS, cards); render(); };
+    const ed = el('button', 'star', '✎');
+    ed.setAttribute('aria-label', t('editT'));
+    ed.onclick = () => openEdit(c);
+    row.append(body, star, ed);
+    box.append(row);
+  }
+}
+
+// ===== 相手に見せる =====
+function openShow(c) {
+  if (Date.now() - lastSave < 700) return; // 保存の2回目のタップが下のカードに当たっても開かない
+  $('show-ja').textContent = c.ja;
+  $('show-en').textContent = c.en || '';
+  $('show').classList.add('open');
+}
+$('show-close').onclick = () => $('show').classList.remove('open');
+$('show').onclick = (e) => { if (e.target.id === 'show' || e.target.classList.contains('inner')) $('show').classList.remove('open'); };
+
+// ===== 追加・編集 =====
+let editing = null;
+let lastSave = 0;
+function openEdit(c) {
+  if (Date.now() - lastSave < 700) return;
+  editing = c || null;
+  $('edit-title').textContent = c ? t('editT') : t('add');
+  const sel = $('e-cat'); sel.innerHTML = '';
+  CATS.forEach((x) => sel.add(new Option(x[lang], x.id)));
+  $('e-ja').value = c ? c.ja : '';
+  $('e-en').value = c ? c.en : '';
+  sel.value = c ? c.cat : (CATS.some((x) => x.id === tab) ? tab : 'mine');
+  $('e-del').hidden = !c;
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => $('edit').classList.remove('open');
+$('e-save').onclick = () => {
+  if (Date.now() - lastSave < 1000) return; // 連打で2枚できないように
+  const ja = $('e-ja').value.trim();
+  if (!ja) { alert(t('needJa')); return; }
+  lastSave = Date.now();
+  if (editing) {
+    editing.ja = ja.slice(0, 120); editing.en = $('e-en').value.trim().slice(0, 160); editing.cat = $('e-cat').value;
+  } else {
+    cards.push({ id: 'c' + Date.now() + Math.random().toString(36).slice(2, 6), cat: $('e-cat').value, ja: ja.slice(0, 120),
+                 en: $('e-en').value.trim().slice(0, 160), fav: false, order: Math.max(0, ...cards.map((c) => c.order)) + 1 });
+  }
+  save(KEY_CARDS, cards);
+  $('edit').classList.remove('open');
+  render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm(t('delQ'))) return;
+  cards = cards.filter((c) => c.id !== editing.id);
+  save(KEY_CARDS, cards);
+  $('edit').classList.remove('open');
+  render();
+};
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('reset').onclick = () => {
+  if (!confirm(t('resetQ'))) return;
+  cards = STARTER.map((c) => ({ ...c }));
+  save(KEY_CARDS, cards);
+  $('settings').classList.remove('open');
+  render();
+};
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'p-misecard-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'p-misecard', version: APP_VERSION, exportedAt: d.toISOString(), cards }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert(t('readErr')); return; }
+  if (!data || data.app !== 'p-misecard' || !Array.isArray(data.cards)) { alert(t('badFile')); return; }
+  const incoming = data.cards.map(clean).filter(Boolean);
+  if (!confirm(t('importQ')(incoming.length))) return;
+  for (const c of incoming) {
+    const i = cards.findIndex((x) => x.id === c.id);
+    if (i >= 0) cards[i] = c; else cards.push(c);
+  }
+  save(KEY_CARDS, cards);
+  render();
+  alert(t('done'));
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+applyLang();
+render();
+</script>
+</body>
+</html>

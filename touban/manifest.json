@@ -1,0 +1,25 @@
+{
+  "_comment": "このファイルは、「家族の当番表」をホーム画面に追加したときのアプリ名・アイコン・色・起動方法を決める設定です。",
+  "id": "./",
+  "name": "家族の当番表",
+  "short_name": "当番表",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f6fb",
+  "theme_color": "#1f6fb8",
+  "icons": [
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

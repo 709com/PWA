@@ -1,0 +1,495 @@
+<!doctype html>
+<!-- このファイルは「あやしい電話の相談メモ」の本体です。「詐欺かも」と思ったときにすぐ電話できる家族や公的な相談先、あやしい電話・訪問の記録、警察庁がまとめた手口の説明をまとめて見られます。 -->
+<!-- 入力した内容はこのiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>あやしい電話の相談メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="詐欺に注意">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#a4262c">
+<style>
+
+  /* ===== 色（ダークモードは下で切り替え） ===== */
+  :root { --bg:#f7f5ef; --card:#ffffff; --text:#111111; --sub:#3d3d3d; --accent:#a4262c; --on-accent:#ffffff;
+          --soft:#f8dedd; --line:#7d7d7d; --danger:#b3261e; --ok:#1b6b37; --ok-soft:#dff2e5; --warn-bg:#fff1cc; --warn-text:#4a3500; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d0e10; --card:#1b1d21; --text:#f5f5f5; --sub:#cfcfcf; --accent:#ff9b94; --on-accent:#0d0e10;
+            --soft:#4a1d1f; --line:#80858d; --danger:#ff8a80; --ok:#86e0a3; --ok-soft:#17331f; --warn-bg:#3a2f10; --warn-text:#ffe7a8; }
+  }
+  /* ===== 文字の大きさ（3段階） ===== */
+  html { font-size:19px; }
+  html[data-fs="1"] { font-size:23px; }
+  html[data-fs="2"] { font-size:27px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+         line-height:1.6; -webkit-text-size-adjust:100%; overflow-wrap:anywhere; }
+  main { max-width:640px; margin:0 auto; padding:calc(10px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 6px; }
+  h1 { font-size:1.15rem; margin:0; line-height:1.3; }
+  h2 { font-size:1.1rem; margin:1.2rem 0 .5rem; }
+  button { font:inherit; color:inherit; cursor:pointer; touch-action:manipulation; }
+  .btn { min-height:3rem; border:2px solid var(--line); background:var(--card); color:var(--text); border-radius:14px; padding:.45rem 1rem; font-weight:700; }
+  .btn:active { transform:scale(.97); }
+  .btn:disabled { opacity:.5; }
+  .primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .danger { color:var(--danger); border-color:var(--danger); }
+  .big { display:block; width:100%; min-height:3.6rem; font-size:1.1rem; margin:.4rem 0; }
+  .small { min-height:2.6rem; padding:.2rem .8rem; font-size:.95rem; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:2px solid var(--line); border-radius:12px;
+          padding:.5rem .7rem; width:100%; min-height:3rem; }
+  textarea { min-height:6em; resize:vertical; }
+  input:focus, select:focus, textarea:focus, .btn:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
+  label.f { display:block; font-weight:700; margin:1rem 0 .3rem; }
+  .help { color:var(--sub); font-size:.92rem; margin:.3rem 0 .8rem; }
+  .warn { background:var(--warn-bg); color:var(--warn-text); border-radius:12px; padding:.6rem .8rem; font-size:.92rem; margin:.5rem 0; }
+  .card { background:var(--card); border:2px solid var(--line); border-radius:14px; padding:.8rem 1rem; margin-bottom:.7rem; }
+  .tap { cursor:pointer; display:block; width:100%; text-align:left; }
+  .tag { display:inline-block; font-size:.85rem; border-radius:99px; padding:0 .6rem; margin:.15rem .3rem 0 0; background:var(--soft); color:var(--text); border:1px solid var(--line); }
+  .empty { color:var(--sub); text-align:center; padding:1.5rem 0; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:1.2rem; }
+  .actions .btn { flex:1 1 8rem; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > input { flex:1; min-width:0; }
+  .tabs { display:flex; gap:6px; margin:.4rem 0 .8rem; flex-wrap:wrap; }
+  .tabs button { flex:1 1 0; min-width:0; min-height:3.2rem; border:2px solid var(--line); background:var(--card); border-radius:14px; font-weight:700; padding:.2rem .4rem; }
+  .tabs button[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  /* 文字の大きさボタンは、どの大きさでも同じ大きさのまま（押しやすさを保つ） */
+  .fsrow { display:flex; align-items:center; gap:8px; margin:4px 0 10px; flex-wrap:wrap; color:var(--sub); font-size:17px; }
+  .fsrow button { width:52px; height:52px; border:2px solid var(--line); border-radius:12px; background:var(--card); color:var(--text); font-weight:700; padding:0; }
+  .fsrow button[data-fs="0"] { font-size:17px; } .fsrow button[data-fs="1"] { font-size:22px; } .fsrow button[data-fs="2"] { font-size:28px; }
+  .fsrow button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  #update { display:none; background:var(--accent); color:var(--on-accent); border-radius:12px; padding:.5rem .8rem; margin-bottom:.6rem; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  #update button { background:var(--card); color:var(--text); border:none; border-radius:99px; padding:.3rem 1rem; font-weight:700; min-height:2.6rem; }
+  /* 全面の画面（入力・設定など） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; -webkit-overflow-scrolling:touch; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+  .sheet h2 { margin-top:.3rem; }
+  /* 取り消しのお知らせ */
+  #toast { position:fixed; left:12px; right:12px; bottom:calc(14px + env(safe-area-inset-bottom)); max-width:616px; margin:0 auto; background:#222; color:#fff;
+           border:2px solid #fff; border-radius:14px; padding:.5rem .8rem; display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; z-index:50; }
+  #toast.show { display:flex; }
+  #toast button { background:#fff; color:#111; border:none; border-radius:12px; padding:0 1rem; min-height:2.8rem; font-weight:700; }
+  footer { text-align:center; font-size:.85rem; color:var(--sub); margin-top:1.5rem; }
+  details > summary { cursor:pointer; font-weight:700; min-height:2.6rem; padding:.3rem 0; }
+  .alert { border-color:var(--accent); background:var(--soft); }
+  .pub-name { font-weight:700; font-size:1.05rem; }
+  .pub-num { font-size:2rem; font-weight:800; letter-spacing:.05em; }
+  a.btn { text-decoration:none; text-align:center; display:flex; align-items:center; justify-content:center; }
+  .src { font-size:.8rem; word-break:break-all; }
+  .fam { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .fam .who { flex:1 1 8rem; min-width:0; }
+  .fam .who b { display:block; font-size:1.1rem; }
+  .fam .who span { color:var(--sub); }
+  .fam a.btn { flex:1 1 7rem; }
+  .kinds-pick { display:flex; flex-wrap:wrap; gap:8px; }
+  .kinds-pick button { flex:1 1 6.5em; }
+  .kinds-pick button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .checkrow { display:flex; align-items:center; gap:.6rem; font-weight:700; margin:1rem 0; min-height:3rem; }
+  .checkrow input { width:1.6rem; height:1.6rem; min-height:0; flex:none; }
+  .log .when { font-weight:700; }
+  .log .what { white-space:pre-wrap; margin-top:.2rem; }
+  .kind h3 { margin:0 0 .3rem; font-size:1.1rem; }
+  .kind p { margin:0; }
+
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn" type="button">更新する</button></div>
+  <header>
+    <h1>📞 あやしい電話の相談メモ</h1>
+    <button class="btn small" id="open-settings" type="button">⚙️ 設定</button>
+  </header>
+  <div class="fsrow">文字の大きさ
+    <button type="button" data-fs="0" aria-label="文字を標準に">あ</button>
+    <button type="button" data-fs="1" aria-label="文字を大きく">あ</button>
+    <button type="button" data-fs="2" aria-label="文字をとても大きく">あ</button>
+  </div>
+  <div class="card alert"><b>「詐欺かも」と思ったら、その場でひとりで決めずに、家族や相談先に話しましょう。</b></div>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="t-call" aria-selected="true">相談先</button>
+    <button type="button" role="tab" data-tab="t-log" aria-selected="false">記録</button>
+    <button type="button" role="tab" data-tab="t-kind" aria-selected="false">手口</button>
+  </div>
+
+  <section id="t-call" class="tabpane">
+    <h2>家族・知り合い</h2>
+    <p class="help">すぐ相談できる人の電話番号を書いておきます。押すと電話がかかります。</p>
+    <div id="fam"></div>
+    <button class="btn big" id="fam-add" type="button">＋ 相談する人を書く</button>
+
+    <h2>公的な相談先</h2>
+    <div class="card">
+      <div class="pub-name">警察相談専用電話</div>
+      <div class="pub-num">＃9110</div>
+      <p class="help">警察庁の特殊詐欺のページに、相談先として載っています。</p>
+      <a class="btn primary big telbtn" href="tel:%239110">＃9110 に電話する</a>
+      <p class="help">つながらないときは、電話のアプリで「＃9110」と押してください。</p>
+    </div>
+    <div class="card">
+      <div class="pub-name">消費者ホットライン</div>
+      <div class="pub-num">188</div>
+      <p class="help">近くの市区町村や都道府県の消費生活センターなどの相談窓口を案内します。相談は無料ですが、窓口につながった時点から通話料がかかります（消費者庁の案内より）。</p>
+      <a class="btn primary big telbtn" href="tel:188">188 に電話する</a>
+    </div>
+    <p class="help src">出典：警察庁「特殊詐欺対策ページ 手口と対策」https://www.npa.go.jp/bureau/safetylife/sos47/case/ ／ 消費者庁「消費者ホットライン」https://www.caa.go.jp/policies/policy/local_cooperation/local_consumer_administration/hotline/ （2026年11月28日に確認）</p>
+  </section>
+
+  <section id="t-log" class="tabpane" hidden>
+    <p class="help">あやしい電話や訪問があったら、日時と言われたことを書いておきます。家族や相談先に話すときに役立ちます。</p>
+    <button class="btn primary big" id="log-add" type="button">＋ あったことを書く</button>
+    <div id="logs"></div>
+  </section>
+
+  <section id="t-kind" class="tabpane" hidden>
+    <p class="help">警察庁のページに載っている手口の説明です（文章はそのまま載せています）。</p>
+    <div id="kinds"></div>
+    <p class="help src">出典：警察庁「特殊詐欺対策ページ 手口と対策」https://www.npa.go.jp/bureau/safetylife/sos47/case/ （2026年11月28日に確認。手口は変わることがあるので、最新の情報は警察庁のページで確かめてください）</p>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+<!-- 相談する人 -->
+<div class="sheet" id="fam-edit">
+  <div class="inner">
+    <h2 id="fam-title">相談する人を書く</h2>
+    <div class="warn">ここに書いた名前と番号は、このiPhoneの中だけに保存されます。</div>
+    <label class="f" for="f-name">呼び名</label>
+    <input id="f-name" maxlength="30" placeholder="例：長男、娘、お隣さん">
+    <label class="f" for="f-tel">電話番号</label>
+    <input id="f-tel" type="tel" inputmode="tel" maxlength="20" placeholder="例：090-0000-0000">
+    <div class="actions">
+      <button class="btn primary" id="f-save" type="button">保存する</button>
+      <button class="btn" id="f-cancel" type="button">やめる</button>
+      <button class="btn danger" id="f-del" type="button" hidden>消す</button>
+    </div>
+  </div>
+</div>
+<!-- あったことの記録 -->
+<div class="sheet" id="log-edit">
+  <div class="inner">
+    <h2 id="log-title">あったことを書く</h2>
+    <div class="warn">ご自分の口座番号・暗証番号・カードの番号は、絶対に書かないでください。</div>
+    <div class="row" style="flex-wrap:wrap">
+      <div style="flex:1 1 9rem"><label class="f" for="l-date">日にち</label><input id="l-date" type="date"></div>
+      <div style="flex:1 1 6rem"><label class="f" for="l-time">時間</label><input id="l-time" type="time"></div>
+    </div>
+    <label class="f">どんなふうに</label>
+    <div class="kinds-pick" id="l-kind"></div>
+    <label class="f" for="l-who">相手が名乗った名前</label>
+    <input id="l-who" maxlength="60" placeholder="例：〇〇警察署の者、市役所の者">
+    <label class="f" for="l-what">言われたこと</label>
+    <textarea id="l-what" maxlength="3000" placeholder="例：還付金があるのでATMに行ってほしいと言われた"></textarea>
+    <label class="checkrow"><input type="checkbox" id="l-told"> 家族や相談先に話した</label>
+    <div class="actions">
+      <button class="btn primary" id="l-save" type="button">保存する</button>
+      <button class="btn" id="l-cancel" type="button">やめる</button>
+      <button class="btn danger" id="l-del" type="button" hidden>この記録を消す</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <p class="help">相談する人と記録は、このiPhoneの中だけに保存されます。外へ送ることはありません。</p>
+
+    <h2>バックアップ（控え）</h2>
+    <p class="help">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき「書き出す」を押して、「ファイル」アプリなどに控えを保存してください。</p>
+    <div class="actions">
+      <button class="btn" id="export" type="button">書き出す（保存）</button>
+      <button class="btn" id="import-btn" type="button">控えを読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="btn primary" id="s-close" type="button">閉じる</button></div>
+  </div>
+</div>
+<div id="toast" role="status"><span id="toast-msg"></span><button id="toast-undo" type="button">元に戻す</button></div>
+<script>
+
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP = 's-sagi';
+const APP_VERSION = '1.0.0';
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+// 保存のキーは必ず「アプリ名:」で始める（ほかのアプリと混ざらないように）
+function load(k, fb) { try { const t = localStorage.getItem(APP + ':' + k); return t ? JSON.parse(t) : fb; } catch (e) { return fb; } }
+function save(k, v) {
+  try { localStorage.setItem(APP + ':' + k, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dayStr(d) { d = d || new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function parseDay(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function jpDay(s) { const d = parseDay(s); return d ? (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）' : ''; }
+function jpDayY(s) { const d = parseDay(s); return d ? d.getFullYear() + '年' + jpDay(s) : ''; }
+function addDays(s, n) { const d = parseDay(s); d.setDate(d.getDate() + n); return dayStr(d); }
+function daysBetween(a, b) { return Math.round((parseDay(b) - parseDay(a)) / 86400000); }
+function nowHM() { const d = new Date(); return p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function uid() { return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function btn(text, cls, fn) { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; if (fn) b.onclick = fn; return b; }
+const str = (v, max) => (typeof v === 'string' ? v : '').slice(0, max || 2000);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+// ===== 文字の大きさ（3段階・このiPhoneに覚える） =====
+let fs = load('fs', 0); if (![0, 1, 2].includes(fs)) fs = 0;
+function applyFs() {
+  document.documentElement.dataset.fs = fs;
+  document.querySelectorAll('.fsrow button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.fs === fs)));
+}
+document.querySelectorAll('.fsrow button').forEach((b) => { b.onclick = () => { fs = +b.dataset.fs; save('fs', fs); applyFs(); }; });
+applyFs();
+
+// ===== 全面の画面を開く・閉じる =====
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+function closeSheet(id) { $(id).classList.remove('open'); }
+
+// ===== 「元に戻す」つきのお知らせ =====
+let toastTimer = null, undoFn = null;
+function toast(msg, undo) {
+  $('toast-msg').textContent = msg; undoFn = undo || null; $('toast-undo').hidden = !undo;
+  $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, undo ? 12000 : 3500);
+}
+function hideToast() { $('toast').classList.remove('show'); undoFn = null; }
+$('toast-undo').onclick = () => { const f = undoFn; hideToast(); if (f) f(); };
+
+// ===== 連打で2回動かないようにする =====
+function guard(b, fn) {
+  b.onclick = async () => { if (b.dataset.busy) return; b.dataset.busy = '1'; b.disabled = true;
+    try { await fn(); } finally { setTimeout(() => { delete b.dataset.busy; b.disabled = false; }, 600); } };
+}
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null を返して入れ直しを求める）
+function wholeNum(text, max) {
+  const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t); return n <= (max || 99999) ? n : null;
+}
+// ===== あやしい電話の相談メモ =====
+// fam：[{ id, name, tel }]　logs：[{ id, date, time, kind, who, what, told, createdAt }]
+const KINDS = ['電話', '家に来た', 'メール・SMS', '手紙・はがき', 'その他'];
+// 警察庁「特殊詐欺対策ページ 手口と対策」に載っている説明（2026年11月28日確認・原文のまま）
+const TRICKS = [
+  ['ニセ警察詐欺', '警察官等をかたり、捜査（優先調査）名目で現金等をだまし取る手口です。'],
+  ['オレオレ詐欺', '親族、警察官、弁護士等を装い、親族が起こした事件・事故に対する示談金等を名目に金銭等をだまし取る（脅し取る）手口です。'],
+  ['預貯金詐欺', '親族、警察官、銀行協会職員等を装い、あなたの口座が犯罪に利用されており、「キャッシュカードの交換手続きが必要である」などの名目で、キャッシュカード、クレジットカード、預貯金通帳等をだまし取る（脅し取る）手口です。'],
+  ['キャッシュカード詐欺盗', '警察官や銀行協会、大手百貨店等の職員を装って被害者に電話をかけ、「キャッシュカードが不正に利用されている」などの名目により、キャッシュカードを準備させた上で、隙を見るなどし、キャッシュカード等を窃取する手口です。'],
+  ['架空料金請求詐欺', '未払いの料金があるなど架空の事実を口実とし金銭等をだまし取る（脅し取る）手口です。'],
+  ['還付金詐欺', '税金還付等に必要な手続きを装って被害者にATMを操作させ、口座間送金により財産上の不法の利益を得る手口です。'],
+  ['SNS型投資詐欺', '投資をすれば利益が得られるものと誤信させて、投資アプリ等に誘導し、虚偽の利益を表示する方法などで心理的安心感を与え、架空の投資を継続させながら、投資金名目などで金銭等をだまし取る詐欺です。'],
+  ['SNS型ロマンス詐欺', '恋愛感情や親近感を抱かせながら投資に誘導して、投資金名目などで金銭等をだまし取る詐欺です。（このほか、恋愛感情や親近感を抱かせながら架空の事実を口実として、交際の継続等を前提とした各種名目で金銭等をだまし取るものもあります。）'],
+];
+
+let fam = load('fam', []); if (!Array.isArray(fam)) fam = [];
+let logs = load('logs', []); if (!Array.isArray(logs)) logs = [];
+const TEL_RE = /^\+?[0-9０-９\-－ ()（）#＃*]{3,20}$/;
+function normFam(f) {
+  if (!f || typeof f !== 'object' || typeof f.name !== 'string' || !f.name.trim()) return null;
+  const tel = typeof f.tel === 'string' && TEL_RE.test(f.tel.trim()) ? f.tel.trim() : '';
+  return { id: typeof f.id === 'string' && f.id ? f.id.slice(0, 40) : uid(), name: f.name.trim().slice(0, 30), tel };
+}
+function normLog(l) {
+  if (!l || typeof l !== 'object') return null;
+  const n = { id: typeof l.id === 'string' && l.id ? l.id.slice(0, 40) : uid(), date: parseDay(l.date) ? l.date : '',
+    time: /^\d{2}:\d{2}$/.test(l.time || '') ? l.time : '', kind: KINDS.includes(l.kind) ? l.kind : 'その他',
+    who: str(l.who, 60), what: str(l.what, 3000), told: l.told === true, createdAt: Number.isFinite(l.createdAt) ? l.createdAt : Date.now() };
+  return n.date || n.who || n.what ? n : null;
+}
+fam = fam.map(normFam).filter(Boolean);
+logs = logs.map(normLog).filter(Boolean);
+const telHref = (t) => 'tel:' + t.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[＃#]/g, '%23').replace(/[^0-9+*%]/g, '');
+
+// ===== タブの切り替え =====
+let tab = load('tab', 't-call');
+function showTab(t) {
+  if (!['t-call', 't-log', 't-kind'].includes(t)) t = 't-call';
+  tab = t; save('tab', t);
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('.tabpane').forEach((p) => { p.hidden = p.id !== t; });
+}
+document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+
+function renderAll() {
+  showTab(tab);
+  // 家族・知り合い
+  const fb = $('fam'); fb.innerHTML = '';
+  if (!fam.length) fb.append(el('p', 'empty', 'まだ書いていません。'));
+  fam.forEach((f) => {
+    const c = el('div', 'card fam');
+    const w = el('div', 'who'); w.append(el('b', '', f.name), el('span', '', f.tel || '番号なし'));
+    c.append(w);
+    if (f.tel) { const a = el('a', 'btn primary', '📞 電話する'); a.href = telHref(f.tel); c.append(a); }
+    c.append(btn('直す', 'small', () => openFam(f)));
+    fb.append(c);
+  });
+  // 記録
+  const lb = $('logs'); lb.innerHTML = '';
+  const sorted = logs.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.createdAt - a.createdAt);
+  if (!sorted.length) lb.append(el('p', 'empty', 'まだ記録はありません。'));
+  sorted.forEach((l) => {
+    const c = el('button', 'card tap log'); c.type = 'button';
+    c.append(el('div', 'when', (l.date ? jpDayY(l.date) : '日にちなし') + (l.time ? ' ' + l.time : '')));
+    const m = el('div'); m.append(el('span', 'tag', l.kind));
+    m.append(el('span', 'tag', l.told ? '相談した' : 'まだ相談していない'));
+    c.append(m);
+    if (l.who) c.append(el('div', '', '名乗った名前：' + l.who));
+    if (l.what) c.append(el('div', 'what', l.what.length > 80 ? l.what.slice(0, 80) + '…' : l.what));
+    c.onclick = () => openLog(l);
+    lb.append(c);
+  });
+  // 手口
+  const kb = $('kinds'); kb.innerHTML = '';
+  TRICKS.forEach(([h, t]) => { const c = el('div', 'card kind'); c.append(el('h3', '', h), el('p', '', t)); kb.append(c); });
+}
+
+// ===== 相談する人を書く・直す =====
+let famEditing = null;
+function openFam(f) {
+  famEditing = f || null;
+  $('fam-title').textContent = f ? '相談する人を直す' : '相談する人を書く';
+  $('f-name').value = f ? f.name : ''; $('f-tel').value = f ? f.tel : '';
+  $('f-del').hidden = !f;
+  openSheet('fam-edit');
+}
+$('fam-add').onclick = () => openFam(null);
+$('f-cancel').onclick = () => closeSheet('fam-edit');
+guard($('f-save'), () => {
+  const name = $('f-name').value.trim(), tel = $('f-tel').value.trim();
+  if (!name) { alert('呼び名を書いてください。'); return; }
+  if (tel && !TEL_RE.test(tel)) { alert('電話番号は、数字とハイフン（-）で書いてください。'); return; }
+  const item = { id: famEditing ? famEditing.id : uid(), name: name.slice(0, 30), tel };
+  const i = fam.findIndex((x) => x.id === item.id);
+  if (i >= 0) fam[i] = item; else fam.push(item);
+  famEditing = item;
+  save('fam', fam); closeSheet('fam-edit'); renderAll(); toast('保存しました');
+});
+$('f-del').onclick = () => {
+  if (!famEditing || !confirm('「' + famEditing.name + '」を消します。よろしいですか？')) return;
+  const i = fam.findIndex((x) => x.id === famEditing.id); if (i < 0) return;
+  const removed = fam.splice(i, 1)[0];
+  save('fam', fam); closeSheet('fam-edit'); renderAll();
+  toast('「' + removed.name + '」を消しました', () => { fam.splice(i, 0, removed); save('fam', fam); renderAll(); });
+};
+
+// ===== あったことを書く・直す =====
+let logEditing = null, pickKind = '電話';
+function renderKindPick() {
+  const box = $('l-kind'); box.innerHTML = '';
+  KINDS.forEach((k) => { const b = btn(k, 'small', () => { pickKind = k; renderKindPick(); }); b.setAttribute('aria-pressed', String(k === pickKind)); box.append(b); });
+}
+function openLog(l) {
+  logEditing = l || null;
+  $('log-title').textContent = l ? '記録を直す' : 'あったことを書く';
+  $('l-date').value = l ? l.date : dayStr(); $('l-time').value = l ? l.time : nowHM();
+  pickKind = l ? l.kind : '電話'; renderKindPick();
+  $('l-who').value = l ? l.who : ''; $('l-what').value = l ? l.what : ''; $('l-told').checked = l ? l.told : false;
+  $('l-del').hidden = !l;
+  openSheet('log-edit');
+}
+$('log-add').onclick = () => openLog(null);
+$('l-cancel').onclick = () => {
+  const typed = $('l-who').value.trim() || $('l-what').value.trim();
+  if (!logEditing && typed && !confirm('書いた内容を保存せずに閉じます。よろしいですか？')) return;
+  closeSheet('log-edit');
+};
+guard($('l-save'), () => {
+  const n = normLog({ id: logEditing ? logEditing.id : uid(), date: $('l-date').value, time: $('l-time').value, kind: pickKind,
+    who: $('l-who').value.trim(), what: $('l-what').value, told: $('l-told').checked, createdAt: logEditing ? logEditing.createdAt : Date.now() });
+  if (!n || (!n.who && !n.what.trim())) { alert('相手が名乗った名前か、言われたことを書いてください。'); return; }
+  const i = logs.findIndex((x) => x.id === n.id);
+  if (i >= 0) logs[i] = n; else logs.push(n);
+  logEditing = n;
+  save('logs', logs); closeSheet('log-edit'); renderAll(); toast('保存しました');
+});
+$('l-del').onclick = () => {
+  if (!logEditing || !confirm('この記録を消します。よろしいですか？')) return;
+  const i = logs.findIndex((x) => x.id === logEditing.id); if (i < 0) return;
+  const removed = logs.splice(i, 1)[0];
+  save('logs', logs); closeSheet('log-edit'); renderAll();
+  toast('記録を消しました', () => { logs.splice(i, 0, removed); save('logs', logs); renderAll(); });
+};
+
+// ===== バックアップ =====
+function backupData() { return { fam, logs }; }
+function restorePreview(d) {
+  const a = (Array.isArray(d.fam) ? d.fam : []).map(normFam).filter(Boolean).length;
+  const b = (Array.isArray(d.logs) ? d.logs : []).map(normLog).filter(Boolean).length;
+  return a + b ? '相談する人 ' + a + '人、記録 ' + b + '件を読み込みます。' : '';
+}
+function restoreData(d) {
+  const merge = (list, add) => add.forEach((x) => { const i = list.findIndex((y) => y.id === x.id); if (i >= 0) list[i] = x; else list.push(x); });
+  merge(fam, (Array.isArray(d.fam) ? d.fam : []).map(normFam).filter(Boolean));
+  merge(logs, (Array.isArray(d.logs) ? d.logs : []).map(normLog).filter(Boolean));
+  save('fam', fam); save('logs', logs);
+}
+
+// ===== 設定とバックアップ =====
+$('open-settings').onclick = () => { if (typeof buildSettings === 'function') buildSettings(); openSheet('settings'); };
+$('s-close').onclick = () => closeSheet('settings');
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = APP + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app: APP, version: APP_VERSION, exportedAt: d.toISOString(), data: backupData() }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let file;
+  try { file = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!file || file.app !== APP || !file.data || typeof file.data !== 'object') { alert('このアプリのバックアップファイルではありません。'); return; }
+  const msg = restorePreview(file.data);
+  if (!msg) { alert('読み込める記録が入っていませんでした。'); return; }
+  if (!confirm(msg + '\n同じ記録はファイルの内容で上書きします（ほかの記録は消えません）。読み込みますか？')) return;
+  restoreData(file.data);
+  closeSheet('settings');
+  renderAll();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || document.querySelector('.sheet.open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+renderAll();
+
+</script>
+</body>
+</html>

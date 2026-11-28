@@ -1,0 +1,480 @@
+<!doctype html>
+<!-- このファイルは「順番決め・くじ引き」の本体です。家族の呼び名を登録して、くじ引き（1人を選ぶ）・順番決め・ルーレットができ、結果を読み上げます。 -->
+<!-- 呼び名や結果はiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>順番決め・くじ引き</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="くじ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#8a3fb8">
+<style>
+  :root { --bg:#f7f3fa; --card:#fff; --text:#251b2c; --sub:#655a6e; --accent:#8a3fb8; --accent-soft:#efe2f7; --line:#e4dbea; --danger:#c8372d; --hit:#f7b538; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16121a; --card:#221c28; --text:#f1e9f6; --sub:#ad9fb8; --accent:#c286ec; --accent-soft:#35243f; --line:#372d3f; --danger:#ef6b61; --hit:#f7b538; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; -webkit-user-select:none; user-select:none; }
+  main { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.15rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; -webkit-user-select:text; user-select:text; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  .iconbtn.off { opacity:.55; }
+  .hbtns { display:flex; gap:6px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
+  .tabs button { background:var(--card); border:2px solid var(--line); border-radius:12px; padding:8px 2px; font-weight:700; font-size:.9rem; white-space:nowrap; display:flex; flex-direction:column; align-items:center; line-height:1.3; }
+  .tabs button span { font-size:1.4rem; }
+  .tabs button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .panel { display:none; }
+  .panel.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .hint { font-size:.85rem; color:var(--sub); margin:0 0 8px; }
+
+  /* 参加する人 */
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { background:var(--bg); border:2px solid var(--line); border-radius:99px; padding:8px 14px; font-weight:700; min-height:44px; transition:transform .08s; }
+  .chip.in { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .chip.out { opacity:.45; text-decoration:line-through; }
+  .chip.lit { background:var(--hit); border-color:var(--hit); color:#2b1d00; transform:scale(1.12); }
+
+  .result { min-height:3.4em; display:flex; align-items:center; justify-content:center; text-align:center; font-size:2rem; font-weight:800; word-break:break-all; line-height:1.2; }
+  .result.win { color:var(--accent); animation:pop .5s ease-out; }
+  @keyframes pop { 0% { transform:scale(.5); } 70% { transform:scale(1.15); } 100% { transform:scale(1); } }
+  .go { display:block; width:100%; background:var(--accent); color:#fff; border-radius:16px; padding:16px; font-size:1.3rem; font-weight:800; }
+  .go:disabled { opacity:.5; }
+
+  /* 順番 */
+  ol.order { list-style:none; padding:0; margin:0; }
+  ol.order li { display:flex; align-items:center; gap:12px; padding:8px 4px; border-bottom:1px solid var(--line); font-size:1.25rem; font-weight:700; animation:slide .35s ease-out both; word-break:break-all; }
+  ol.order li:last-child { border-bottom:none; }
+  ol.order li b { flex:0 0 auto; min-width:4em; padding:4px 10px; white-space:nowrap; border-radius:99px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1rem; }
+  @keyframes slide { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:none; } }
+
+  /* ルーレット */
+  .rtitle { font-weight:700; font-size:1.1rem; text-align:center; margin:0 0 6px; word-break:break-all; }
+  .wheelbox { position:relative; width:min(78vw, 320px); aspect-ratio:1; margin:6px auto 10px; }
+  .wheelbox canvas { width:100%; height:100%; border-radius:50%; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+  .pointer { position:absolute; left:50%; top:-6px; transform:translateX(-50%); width:0; height:0; border-left:14px solid transparent; border-right:14px solid transparent; border-top:26px solid var(--text); z-index:2; }
+  .ritems .row { display:flex; gap:6px; margin-bottom:6px; }
+  .ritems .row button { flex:0 0 auto; }
+
+  /* 履歴 */
+  .hist { list-style:none; padding:0; margin:0; font-size:.88rem; }
+  .hist li { padding:6px 0; border-bottom:1px solid var(--line); word-break:break-all; }
+  .hist li:last-child { border-bottom:none; }
+  .hist small { color:var(--sub); margin-right:6px; }
+  .empty { color:var(--sub); text-align:center; margin:6px 0; font-size:.9rem; }
+
+  /* 設定（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .mrow { display:flex; gap:6px; margin-bottom:6px; }
+  .mrow button { flex:0 0 auto; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+  @media (prefers-reduced-motion: reduce) { .result.win, ol.order li { animation:none; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🎲 順番決め・くじ引き</h1>
+    <div class="hbtns">
+      <button class="iconbtn" id="voice" aria-label="読み上げ">🔊</button>
+      <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <button data-t="kuji"><span>🎯</span>くじ引き</button>
+    <button data-t="order"><span>🔢</span>順番決め</button>
+    <button data-t="roul"><span>🎡</span>ルーレット</button>
+  </div>
+
+  <!-- くじ引き -->
+  <section class="panel" id="p-kuji">
+    <div class="card">
+      <p class="hint">参加する人（タップで外す・戻す）</p>
+      <div class="chips" id="k-chips"></div>
+    </div>
+    <div class="card">
+      <div class="result" id="k-result">だれかな？</div>
+      <button class="go" id="k-go">くじを引く</button>
+    </div>
+  </section>
+
+  <!-- 順番決め -->
+  <section class="panel" id="p-order">
+    <div class="card">
+      <p class="hint">参加する人（タップで外す・戻す）</p>
+      <div class="chips" id="o-chips"></div>
+    </div>
+    <div class="card">
+      <ol class="order" id="o-list"></ol>
+      <p class="empty" id="o-empty">ボタンを押すと、順番をきめます</p>
+      <button class="go" id="o-go" style="margin-top:10px">順番をきめる</button>
+    </div>
+  </section>
+
+  <!-- ルーレット -->
+  <section class="panel" id="p-roul">
+    <div class="card">
+      <p class="rtitle" id="r-title"></p>
+      <div class="wheelbox"><div class="pointer"></div><canvas id="wheel" width="640" height="640"></canvas></div>
+      <div class="result" id="r-result" style="min-height:2.2em; font-size:1.7rem">？</div>
+      <button class="go" id="r-go">ルーレットを回す</button>
+    </div>
+    <div class="card">
+      <p class="hint">ルーレットの名前と項目（2〜12こ）</p>
+      <input id="r-name" maxlength="20" placeholder="例：今日のおやつ">
+      <div class="ritems" id="r-items" style="margin-top:8px"></div>
+      <div class="actions" style="margin-top:6px">
+        <button class="plain" id="r-add">＋ 項目を追加</button>
+        <button class="primary" id="r-save">項目を保存</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="card">
+    <p class="hint" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 4px">
+      <span>🕘 さいきんの結果</span><button class="iconbtn" id="h-clear" style="padding:4px 10px;font-size:.8rem">消す</button>
+    </p>
+    <ul class="hist" id="hist"></ul>
+  </div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 家族の呼び名</h2>
+    <div class="warn">本名など、個人を特定できる情報は書かないでください（例：「パパ」「長女」「おにいちゃん」など）。</div>
+    <div id="m-edit"></div>
+    <button class="plain" id="m-add">＋ 人を追加</button>
+    <p class="note">2人から20人まで登録できます。</p>
+    <div class="actions">
+      <button class="primary" id="m-save">保存する</button>
+      <button class="plain" id="s-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_MEMBERS = 'kuji:members';   // 家族の呼び名
+const KEY_OUT = 'kuji:out';           // 参加しない人（呼び名）
+const KEY_ROUL = 'kuji:roulette';     // ルーレットの名前と項目
+const KEY_HIST = 'kuji:history';      // さいきんの結果
+const KEY_VOICE = 'kuji:voice';       // 読み上げのオン・オフ
+const KEY_TAB = 'kuji:tab';           // 最後に開いたタブ
+const MAX_MEMBERS = 20, MAX_ITEMS = 12, MAX_HIST = 30;
+const DEFAULT_MEMBERS = ['子ども1', '子ども2', '子ども3', '子ども4'];
+const DEFAULT_ROUL = { name: '今日のおやつ', items: ['クッキー', 'おせんべい', 'くだもの', 'ゼリー', 'ヨーグルト', 'アイス'] };
+const COLORS = ['#f2545b', '#f7b538', '#4cc38a', '#3d9be9', '#a25ddc', '#ff8fc7', '#2bb5b0', '#f08a3c', '#7d8cf0', '#9bc53d', '#e2557e', '#58a4b0'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { return false; } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function cleanList(v, max, len) {
+  if (!Array.isArray(v)) return null;
+  const out = [...new Set(v.filter((s) => typeof s === 'string').map((s) => s.trim().slice(0, len)).filter(Boolean))].slice(0, max);
+  return out;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ===== 偏りのない乱数（crypto.getRandomValues を使う） =====
+// 0 〜 n-1 の整数を、どの数も同じ確率で選ぶ（はみ出した値は引き直す）
+function randInt(n) {
+  const limit = Math.floor(0x100000000 / n) * n;
+  const buf = new Uint32Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+  return buf[0] % n;
+}
+// 全員の並びを、どの順番も同じ確率になるように混ぜる（フィッシャー–イェーツ法）
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+// ===== データ =====
+let members = cleanList(load(KEY_MEMBERS, null), MAX_MEMBERS, 12) || [];
+if (members.length < 2) members = DEFAULT_MEMBERS.slice();
+let out = cleanList(load(KEY_OUT, []), MAX_MEMBERS, 12) || [];
+let roul = load(KEY_ROUL, null);
+roul = { name: (roul && typeof roul.name === 'string' ? roul.name.slice(0, 20) : DEFAULT_ROUL.name), items: (roul && cleanList(roul.items, MAX_ITEMS, 16)) || [] };
+if (roul.items.length < 2) roul = { name: roul.name, items: DEFAULT_ROUL.items.slice() };
+let hist = (Array.isArray(load(KEY_HIST, [])) ? load(KEY_HIST, []) : []).filter((h) => h && typeof h.text === 'string' && Number.isFinite(h.at)).slice(0, MAX_HIST);
+let voiceOn = load(KEY_VOICE, true) !== false;
+let busy = false;
+const joined = () => members.filter((m) => !out.includes(m));
+
+// ===== 読み上げ（speechSynthesis） =====
+let voiceReady = false;
+function primeVoice() {
+  // iPhoneは、最初にタップしたときに一度音を出す準備をしないと読み上げられないことがある
+  if (voiceReady || !('speechSynthesis' in window)) return;
+  voiceReady = true;
+  try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'ja-JP'; speechSynthesis.speak(u); } catch (e) {}
+}
+document.addEventListener('pointerdown', primeVoice, { once: true });
+function speak(text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP'; u.rate = 0.95;
+    const v = speechSynthesis.getVoices().find((x) => /^ja/i.test(x.lang));
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function showVoice() { $('voice').textContent = voiceOn ? '🔊' : '🔇'; $('voice').classList.toggle('off', !voiceOn); $('voice').setAttribute('aria-label', voiceOn ? '読み上げ オン' : '読み上げ オフ'); }
+$('voice').onclick = () => { primeVoice(); voiceOn = !voiceOn; save(KEY_VOICE, voiceOn); showVoice(); if (voiceOn) speak('読み上げを オンにしました'); };
+
+// ===== タブ =====
+let tab = load(KEY_TAB, 'kuji');
+function showTab() {
+  if (!['kuji', 'order', 'roul'].includes(tab)) tab = 'kuji';
+  $('tabs').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.t === tab));
+  ['kuji', 'order', 'roul'].forEach((t) => $('p-' + t).classList.toggle('on', t === tab));
+  if (tab === 'roul') drawWheel();
+}
+$('tabs').querySelectorAll('button').forEach((b) => { b.onclick = () => { if (busy) return; tab = b.dataset.t; save(KEY_TAB, tab); showTab(); }; });
+
+// ===== 参加する人のボタン =====
+function buildChips() {
+  ['k-chips', 'o-chips'].forEach((id) => {
+    const box = $(id); box.innerHTML = '';
+    members.forEach((m) => {
+      const c = el('button', 'chip ' + (out.includes(m) ? 'out' : 'in'), m);
+      c.dataset.name = m;
+      c.onclick = () => {
+        if (busy) return;
+        if (out.includes(m)) out = out.filter((x) => x !== m); else out.push(m);
+        save(KEY_OUT, out); buildChips();
+      };
+      box.append(c);
+    });
+  });
+}
+
+// ===== 履歴 =====
+function addHist(kind, text) {
+  hist.unshift({ kind, text, at: Date.now() });
+  hist = hist.slice(0, MAX_HIST); save(KEY_HIST, hist); renderHist();
+}
+function renderHist() {
+  const ul = $('hist'); ul.innerHTML = '';
+  if (!hist.length) { ul.append(el('li', 'empty', 'まだ結果はありません')); return; }
+  hist.slice(0, 10).forEach((h) => {
+    const d = new Date(h.at);
+    const li = el('li');
+    li.append(el('small', '', (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + (h.kind || '')), document.createTextNode(h.text));
+    ul.append(li);
+  });
+}
+$('h-clear').onclick = () => { if (!hist.length || !confirm('さいきんの結果を消します。よろしいですか？')) return; hist = []; save(KEY_HIST, hist); renderHist(); };
+function setBusy(b) { busy = b; ['k-go', 'o-go', 'r-go'].forEach((id) => { $(id).disabled = b; }); }
+
+// ===== ① くじ引き：光が回って1人に止まる =====
+$('k-go').onclick = async () => {
+  if (busy) return;
+  primeVoice();
+  const list = joined();
+  if (list.length < 2) { alert('参加する人を2人以上にしてください。'); return; }
+  setBusy(true);
+  const winner = randInt(list.length);           // 先に公平に決めておく
+  const chips = [...$('k-chips').querySelectorAll('.chip.in')];
+  const res = $('k-result'); res.classList.remove('win');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const steps = reduce ? 1 : list.length * 3 + winner + 1;  // 3周以上回ってから止まる
+  let pos = 0;
+  for (let s = 0; s < steps; s++) {
+    pos = reduce ? winner : s % list.length;
+    chips.forEach((c, i) => c.classList.toggle('lit', i === pos));
+    res.textContent = list[pos];
+    const t = s / steps;
+    await sleep(reduce ? 0 : 50 + 260 * t * t * t);  // だんだんゆっくり
+  }
+  res.textContent = '🎉 ' + list[winner] + ' 🎉';
+  res.classList.add('win');
+  speak(list[winner] + '、に決まりました');
+  addHist('くじ', list[winner]);
+  await sleep(400);
+  setBusy(false);
+};
+
+// ===== ② 順番決め：全員の順番をランダムに並べる =====
+$('o-go').onclick = async () => {
+  if (busy) return;
+  primeVoice();
+  const list = joined();
+  if (list.length < 2) { alert('参加する人を2人以上にしてください。'); return; }
+  setBusy(true);
+  const order = shuffle(list);
+  const ol = $('o-list'); ol.innerHTML = ''; $('o-empty').hidden = true;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (let i = 0; i < order.length; i++) {
+    const li = el('li'); li.append(el('b', '', (i + 1) + 'ばん'), document.createTextNode(order[i]));
+    ol.append(li);
+    if (!reduce) await sleep(250);
+  }
+  speak(order.map((n, i) => (i + 1) + 'ばん、' + n).join('。'));
+  addHist('順番', order.map((n, i) => (i + 1) + '.' + n).join(' '));
+  setBusy(false);
+};
+
+// ===== ③ ルーレット =====
+let wheelAngle = 0;   // いまの回転（度）
+function drawWheel() {
+  const cv = $('wheel'); const ctx = cv.getContext('2d');
+  const W = cv.width, c = W / 2, r = c - 6, n = roul.items.length;
+  ctx.clearRect(0, 0, W, W);
+  for (let i = 0; i < n; i++) {
+    // 0番目の項目が真上（-90度）から時計回りに並ぶ
+    const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2, a1 = a0 + Math.PI * 2 / n;
+    ctx.beginPath(); ctx.moveTo(c, c); ctx.arc(c, c, r, a0, a1); ctx.closePath();
+    ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.save(); ctx.translate(c, c); ctx.rotate((a0 + a1) / 2);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    let fs = n > 8 ? 30 : 36; ctx.font = 'bold ' + fs + 'px -apple-system, "Hiragino Sans", sans-serif';
+    const label = roul.items[i];
+    while (fs > 16 && ctx.measureText(label).width > r - 70) { fs -= 2; ctx.font = 'bold ' + fs + 'px -apple-system, "Hiragino Sans", sans-serif'; }
+    let txt = label; while (txt.length > 1 && ctx.measureText(txt).width > r - 70) txt = txt.slice(0, -1);
+    if (txt !== label) txt = txt.slice(0, -1) + '…';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.strokeText(txt, r - 22, 0);
+    ctx.fillText(txt, r - 22, 0);
+    ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(c, c, 26, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+  $('r-title').textContent = '🎡 ' + (roul.name || 'ルーレット');
+}
+$('r-go').onclick = async () => {
+  if (busy) return;
+  primeVoice();
+  const n = roul.items.length;
+  if (n < 2) { alert('項目を2つ以上にしてください。'); return; }
+  setBusy(true);
+  const pick = randInt(n);                       // 先に公平に決めておく
+  const seg = 360 / n;
+  // 選んだ項目の真ん中が、上の三角（真上）に来る角度。少しだけ位置をずらして自然に見せる
+  const jitter = (randInt(1000) / 1000 - 0.5) * seg * 0.6;
+  const target = 360 - (pick * seg + seg / 2 + jitter);
+  const base = wheelAngle - (((wheelAngle % 360) + 360) % 360);
+  wheelAngle = base + 360 * 5 + target;
+  const cv = $('wheel');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  cv.style.transition = reduce ? 'none' : 'transform 4.2s cubic-bezier(.12,.75,.2,1)';
+  cv.style.transform = 'rotate(' + wheelAngle + 'deg)';
+  $('r-result').classList.remove('win'); $('r-result').textContent = '…';
+  await sleep(reduce ? 50 : 4300);
+  $('r-result').textContent = roul.items[pick];
+  $('r-result').classList.add('win');
+  speak((roul.name ? roul.name + 'は、' : '') + roul.items[pick] + '、です');
+  addHist('ルーレット', (roul.name ? roul.name + '：' : '') + roul.items[pick]);
+  setBusy(false);
+};
+function buildItemEdit() {
+  $('r-name').value = roul.name;
+  const box = $('r-items'); box.innerHTML = '';
+  roul.items.forEach((t) => addItemRow(t));
+}
+function addItemRow(t) {
+  const row = el('div', 'row');
+  const inp = el('input'); inp.value = t; inp.maxLength = 16; inp.placeholder = '項目';
+  const del = el('button', 'plain danger', '削除');
+  del.onclick = () => row.remove();
+  row.append(inp, del); $('r-items').append(row);
+  return inp;
+}
+$('r-add').onclick = () => {
+  if ($('r-items').children.length >= MAX_ITEMS) { alert(MAX_ITEMS + 'こまでです。'); return; }
+  addItemRow('').focus();
+};
+$('r-save').onclick = () => {
+  if (busy) return;
+  const items = cleanList([...$('r-items').querySelectorAll('input')].map((i) => i.value), MAX_ITEMS, 16);
+  if (items.length < 2) { alert('項目を2つ以上入れてください（同じ項目は1つにまとめます）。'); return; }
+  roul = { name: $('r-name').value.trim().slice(0, 20), items };
+  save(KEY_ROUL, roul);
+  buildItemEdit(); drawWheel();
+  $('r-result').textContent = '？'; $('r-result').classList.remove('win');
+  alert('項目を保存しました。');
+};
+
+// ===== 設定：家族の呼び名 =====
+function buildMemberEdit() { $('m-edit').innerHTML = ''; members.forEach((m) => addMemberRow(m)); }
+function addMemberRow(name) {
+  const row = el('div', 'mrow');
+  const inp = el('input'); inp.value = name; inp.maxLength = 12; inp.placeholder = '呼び名';
+  const del = el('button', 'plain danger', '削除');
+  del.onclick = () => row.remove();
+  row.append(inp, del); $('m-edit').append(row);
+  return inp;
+}
+$('m-add').onclick = () => {
+  if ($('m-edit').children.length >= MAX_MEMBERS) { alert(MAX_MEMBERS + '人までです。'); return; }
+  addMemberRow('').focus();
+};
+$('m-save').onclick = () => {
+  const list = cleanList([...$('m-edit').querySelectorAll('input')].map((i) => i.value), MAX_MEMBERS, 12);
+  if (list.length < 2) { alert('2人以上入れてください（同じ呼び名は1つにまとめます）。'); return; }
+  members = list; out = out.filter((m) => members.includes(m));
+  save(KEY_MEMBERS, members); save(KEY_OUT, out);
+  buildMemberEdit(); buildChips();
+  alert('保存しました。');
+};
+$('open-settings').onclick = () => { if (busy) return; buildMemberEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || busy || $('settings').classList.contains('open')) return; // 操作中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+showVoice(); buildChips(); buildItemEdit(); renderHist(); showTab(); drawWheel();
+</script>
+</body>
+</html>

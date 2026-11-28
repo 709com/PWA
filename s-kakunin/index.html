@@ -1,0 +1,442 @@
+<!doctype html>
+<!-- このファイルは「出かける前の確認メモ」の本体です。鍵やガスなどを確かめたら押して時刻を残し、「さっき確かめたかな」を見返せます。物をしまった場所も書いておけます。 -->
+<!-- 入力した内容はこのiPhoneの中（localStorage＝ブラウザの小さな保存場所）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>出かける前の確認メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="確認メモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#5b3f8c">
+<style>
+
+  /* ===== 色（ダークモードは下で切り替え） ===== */
+  :root { --bg:#f7f5ef; --card:#ffffff; --text:#111111; --sub:#3d3d3d; --accent:#5b3f8c; --on-accent:#ffffff;
+          --soft:#e9e1f6; --line:#7d7d7d; --danger:#b3261e; --ok:#1b6b37; --ok-soft:#dff2e5; --warn-bg:#fff1cc; --warn-text:#4a3500; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d0e10; --card:#1b1d21; --text:#f5f5f5; --sub:#cfcfcf; --accent:#c9b3ff; --on-accent:#0d0e10;
+            --soft:#2e2443; --line:#80858d; --danger:#ff8a80; --ok:#86e0a3; --ok-soft:#17331f; --warn-bg:#3a2f10; --warn-text:#ffe7a8; }
+  }
+  /* ===== 文字の大きさ（3段階） ===== */
+  html { font-size:19px; }
+  html[data-fs="1"] { font-size:23px; }
+  html[data-fs="2"] { font-size:27px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+         line-height:1.6; -webkit-text-size-adjust:100%; overflow-wrap:anywhere; }
+  main { max-width:640px; margin:0 auto; padding:calc(10px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+  header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 6px; }
+  h1 { font-size:1.15rem; margin:0; line-height:1.3; }
+  h2 { font-size:1.1rem; margin:1.2rem 0 .5rem; }
+  button { font:inherit; color:inherit; cursor:pointer; touch-action:manipulation; }
+  .btn { min-height:3rem; border:2px solid var(--line); background:var(--card); color:var(--text); border-radius:14px; padding:.45rem 1rem; font-weight:700; }
+  .btn:active { transform:scale(.97); }
+  .btn:disabled { opacity:.5; }
+  .primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .danger { color:var(--danger); border-color:var(--danger); }
+  .big { display:block; width:100%; min-height:3.6rem; font-size:1.1rem; margin:.4rem 0; }
+  .small { min-height:2.6rem; padding:.2rem .8rem; font-size:.95rem; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:2px solid var(--line); border-radius:12px;
+          padding:.5rem .7rem; width:100%; min-height:3rem; }
+  textarea { min-height:6em; resize:vertical; }
+  input:focus, select:focus, textarea:focus, .btn:focus-visible { outline:3px solid var(--accent); outline-offset:1px; }
+  label.f { display:block; font-weight:700; margin:1rem 0 .3rem; }
+  .help { color:var(--sub); font-size:.92rem; margin:.3rem 0 .8rem; }
+  .warn { background:var(--warn-bg); color:var(--warn-text); border-radius:12px; padding:.6rem .8rem; font-size:.92rem; margin:.5rem 0; }
+  .card { background:var(--card); border:2px solid var(--line); border-radius:14px; padding:.8rem 1rem; margin-bottom:.7rem; }
+  .tap { cursor:pointer; display:block; width:100%; text-align:left; }
+  .tag { display:inline-block; font-size:.85rem; border-radius:99px; padding:0 .6rem; margin:.15rem .3rem 0 0; background:var(--soft); color:var(--text); border:1px solid var(--line); }
+  .empty { color:var(--sub); text-align:center; padding:1.5rem 0; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:1.2rem; }
+  .actions .btn { flex:1 1 8rem; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > input { flex:1; min-width:0; }
+  .tabs { display:flex; gap:6px; margin:.4rem 0 .8rem; flex-wrap:wrap; }
+  .tabs button { flex:1 1 0; min-width:0; min-height:3.2rem; border:2px solid var(--line); background:var(--card); border-radius:14px; font-weight:700; padding:.2rem .4rem; }
+  .tabs button[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  /* 文字の大きさボタンは、どの大きさでも同じ大きさのまま（押しやすさを保つ） */
+  .fsrow { display:flex; align-items:center; gap:8px; margin:4px 0 10px; flex-wrap:wrap; color:var(--sub); font-size:17px; }
+  .fsrow button { width:52px; height:52px; border:2px solid var(--line); border-radius:12px; background:var(--card); color:var(--text); font-weight:700; padding:0; }
+  .fsrow button[data-fs="0"] { font-size:17px; } .fsrow button[data-fs="1"] { font-size:22px; } .fsrow button[data-fs="2"] { font-size:28px; }
+  .fsrow button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  #update { display:none; background:var(--accent); color:var(--on-accent); border-radius:12px; padding:.5rem .8rem; margin-bottom:.6rem; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  #update button { background:var(--card); color:var(--text); border:none; border-radius:99px; padding:.3rem 1rem; font-weight:700; min-height:2.6rem; }
+  /* 全面の画面（入力・設定など） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; -webkit-overflow-scrolling:touch; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom)); }
+  .sheet h2 { margin-top:.3rem; }
+  /* 取り消しのお知らせ */
+  #toast { position:fixed; left:12px; right:12px; bottom:calc(14px + env(safe-area-inset-bottom)); max-width:616px; margin:0 auto; background:#222; color:#fff;
+           border:2px solid #fff; border-radius:14px; padding:.5rem .8rem; display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; z-index:50; }
+  #toast.show { display:flex; }
+  #toast button { background:#fff; color:#111; border:none; border-radius:12px; padding:0 1rem; min-height:2.8rem; font-weight:700; }
+  footer { text-align:center; font-size:.85rem; color:var(--sub); margin-top:1.5rem; }
+  details > summary { cursor:pointer; font-weight:700; min-height:2.6rem; padding:.3rem 0; }
+  .daylabel { font-weight:800; font-size:1.1rem; margin:.2rem 0 .5rem; }
+  .ck { display:flex; align-items:center; gap:.6rem; width:100%; min-height:4rem; text-align:left; border:3px solid var(--line); background:var(--card);
+        border-radius:16px; padding:.5rem .9rem; margin-bottom:.6rem; font-size:1.15rem; font-weight:700; }
+  .ck .box { flex:none; width:2.2rem; height:2.2rem; border:3px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; }
+  .ck .nm { flex:1; min-width:0; }
+  .ck .tm { flex:none; font-size:.9rem; font-weight:700; color:var(--ok); }
+  .ck.on { background:var(--ok-soft); border-color:var(--ok); }
+  .ck.on .box { background:var(--ok); border-color:var(--ok); color:var(--bg); }
+  .done-msg { background:var(--ok-soft); border-color:var(--ok); color:var(--ok); font-weight:800; text-align:center; font-size:1.15rem; }
+  .hday { margin:.6rem 0; }
+  .hday b { display:block; }
+  .pl .thing { font-weight:800; font-size:1.1rem; }
+  .pl .where { font-size:1.05rem; }
+  .pl .meta { color:var(--sub); font-size:.85rem; }
+  .pl .actions { margin-top:.5rem; }
+  .ckrow { margin-bottom:.5rem; }
+
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn" type="button">更新する</button></div>
+  <header>
+    <h1>🔑 出かける前の確認メモ</h1>
+    <button class="btn small" id="open-settings" type="button">⚙️ 設定</button>
+  </header>
+  <div class="fsrow">文字の大きさ
+    <button type="button" data-fs="0" aria-label="文字を標準に">あ</button>
+    <button type="button" data-fs="1" aria-label="文字を大きく">あ</button>
+    <button type="button" data-fs="2" aria-label="文字をとても大きく">あ</button>
+  </div>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="t-check" aria-selected="true">出かける前</button>
+    <button type="button" role="tab" data-tab="t-place" aria-selected="false">しまった場所</button>
+  </div>
+
+  <section id="t-check" class="tabpane">
+    <p class="help">確かめたら押します。押した時刻が残るので、「さっき確かめたかな」と思ったときに見返せます。</p>
+    <div class="daylabel" id="today-label"></div>
+    <div id="checks"></div>
+    <div id="alldone" class="card done-msg" hidden>✔ 全部確かめました</div>
+    <button class="btn big" id="reset" type="button">今日の印を全部消す</button>
+    <details id="hist-box"><summary>これまでの記録（7日分）</summary><div id="hist"></div></details>
+  </section>
+
+  <section id="t-place" class="tabpane" hidden>
+    <p class="help">物をしまった場所を書いておきます。</p>
+    <div class="warn">暗証番号や通帳・カードの番号は書かないでください。「どこにしまったか」だけを書きます。</div>
+    <div class="card">
+      <label class="f" for="p-thing" style="margin-top:0">何を</label>
+      <input id="p-thing" maxlength="40" placeholder="例：冬の手袋">
+      <label class="f" for="p-where">どこに</label>
+      <input id="p-where" maxlength="80" placeholder="例：押し入れの上の段、青い箱">
+      <div class="actions"><button class="btn primary" id="p-save" type="button">書いておく</button><button class="btn" id="p-clear" type="button" hidden>直すのをやめる</button></div>
+    </div>
+    <input id="p-q" type="search" placeholder="🔍 探す（例：手袋）" aria-label="しまった場所を探す">
+    <div id="places" style="margin-top:.6rem"></div>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <h2>確かめる項目</h2>
+    <p class="help">名前を変えたり、足したりできます。名前を空にして保存すると、その項目は外れます。</p>
+    <div id="ck-edit"></div>
+    <button class="btn" id="ck-add" type="button">＋ 項目を足す</button>
+    <div class="actions"><button class="btn primary" id="ck-save" type="button">項目を保存する</button></div>
+
+    <h2>バックアップ（控え）</h2>
+    <p class="help">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき「書き出す」を押して、「ファイル」アプリなどに控えを保存してください。</p>
+    <div class="actions">
+      <button class="btn" id="export" type="button">書き出す（保存）</button>
+      <button class="btn" id="import-btn" type="button">控えを読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="btn primary" id="s-close" type="button">閉じる</button></div>
+  </div>
+</div>
+<div id="toast" role="status"><span id="toast-msg"></span><button id="toast-undo" type="button">元に戻す</button></div>
+<script>
+
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP = 's-kakunin';
+const APP_VERSION = '1.0.0';
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+// 保存のキーは必ず「アプリ名:」で始める（ほかのアプリと混ざらないように）
+function load(k, fb) { try { const t = localStorage.getItem(APP + ':' + k); return t ? JSON.parse(t) : fb; } catch (e) { return fb; } }
+function save(k, v) {
+  try { localStorage.setItem(APP + ':' + k, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dayStr(d) { d = d || new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function parseDay(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function jpDay(s) { const d = parseDay(s); return d ? (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）' : ''; }
+function jpDayY(s) { const d = parseDay(s); return d ? d.getFullYear() + '年' + jpDay(s) : ''; }
+function addDays(s, n) { const d = parseDay(s); d.setDate(d.getDate() + n); return dayStr(d); }
+function daysBetween(a, b) { return Math.round((parseDay(b) - parseDay(a)) / 86400000); }
+function nowHM() { const d = new Date(); return p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function uid() { return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function btn(text, cls, fn) { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; if (fn) b.onclick = fn; return b; }
+const str = (v, max) => (typeof v === 'string' ? v : '').slice(0, max || 2000);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+// ===== 文字の大きさ（3段階・このiPhoneに覚える） =====
+let fs = load('fs', 0); if (![0, 1, 2].includes(fs)) fs = 0;
+function applyFs() {
+  document.documentElement.dataset.fs = fs;
+  document.querySelectorAll('.fsrow button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.fs === fs)));
+}
+document.querySelectorAll('.fsrow button').forEach((b) => { b.onclick = () => { fs = +b.dataset.fs; save('fs', fs); applyFs(); }; });
+applyFs();
+
+// ===== 全面の画面を開く・閉じる =====
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+function closeSheet(id) { $(id).classList.remove('open'); }
+
+// ===== 「元に戻す」つきのお知らせ =====
+let toastTimer = null, undoFn = null;
+function toast(msg, undo) {
+  $('toast-msg').textContent = msg; undoFn = undo || null; $('toast-undo').hidden = !undo;
+  $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, undo ? 12000 : 3500);
+}
+function hideToast() { $('toast').classList.remove('show'); undoFn = null; }
+$('toast-undo').onclick = () => { const f = undoFn; hideToast(); if (f) f(); };
+
+// ===== 連打で2回動かないようにする =====
+function guard(b, fn) {
+  b.onclick = async () => { if (b.dataset.busy) return; b.dataset.busy = '1'; b.disabled = true;
+    try { await fn(); } finally { setTimeout(() => { delete b.dataset.busy; b.disabled = false; }, 600); } };
+}
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null を返して入れ直しを求める）
+function wholeNum(text, max) {
+  const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t); return n <= (max || 99999) ? n : null;
+}
+// ===== 出かける前の確認メモ =====
+// checks：[{ id, name }]　log：{ 'YYYY-MM-DD': { 項目id: 'HH:MM' } }（14日分だけ残す）　places：[{ id, thing, where, updatedAt }]
+const DEFAULT_CHECKS = ['玄関の鍵', 'ガスの火', '窓の鍵', '電気・暖房', '財布', 'スマホ', '家の鍵を持った'].map((n, i) => ({ id: 'c' + i, name: n }));
+function normCheck(c) { return c && typeof c.name === 'string' && c.name.trim() ? { id: typeof c.id === 'string' && c.id ? c.id.slice(0, 40) : uid(), name: c.name.trim().slice(0, 20) } : null; }
+function normLog(l) {
+  const out = {};
+  if (!l || typeof l !== 'object') return out;
+  Object.keys(l).forEach((d) => {
+    if (!parseDay(d) || !l[d] || typeof l[d] !== 'object') return;
+    const day = {}; Object.keys(l[d]).forEach((k) => { if (/^\d{2}:\d{2}$/.test(l[d][k])) day[k.slice(0, 40)] = l[d][k]; });
+    if (Object.keys(day).length) out[d] = day;
+  });
+  return out;
+}
+function normPlace(p) {
+  if (!p || typeof p !== 'object' || typeof p.thing !== 'string' || !p.thing.trim()) return null;
+  return { id: typeof p.id === 'string' && p.id ? p.id.slice(0, 40) : uid(), thing: p.thing.trim().slice(0, 40), where: str(p.where, 80).trim(), updatedAt: Number.isFinite(p.updatedAt) ? p.updatedAt : Date.now() };
+}
+let checks = load('checks', null);
+checks = Array.isArray(checks) ? checks.map(normCheck).filter(Boolean) : DEFAULT_CHECKS.map((x) => ({ ...x }));
+let log = normLog(load('log', {}));
+let places = load('places', []); places = Array.isArray(places) ? places.map(normPlace).filter(Boolean) : [];
+
+function saveLog() {
+  const keep = addDays(dayStr(), -13);
+  Object.keys(log).forEach((d) => { if (d < keep) delete log[d]; });
+  save('log', log);
+}
+
+// ===== タブ =====
+let tab = load('tab', 't-check');
+function showTab(t) {
+  if (!['t-check', 't-place'].includes(t)) t = 't-check';
+  tab = t; save('tab', t);
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('.tabpane').forEach((p) => { p.hidden = p.id !== t; });
+}
+document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+
+function renderAll() { showTab(tab); renderChecks(); renderPlaces(); }
+
+// ===== 出かける前 =====
+function renderChecks() {
+  const today = dayStr(), t = log[today] || {};
+  $('today-label').textContent = '今日 ' + jpDay(today);
+  const box = $('checks'); box.innerHTML = '';
+  if (!checks.length) box.append(el('p', 'empty', '項目がありません。「⚙️ 設定」で足してください。'));
+  checks.forEach((c) => {
+    const on = !!t[c.id];
+    const b = el('button', 'ck' + (on ? ' on' : '')); b.type = 'button';
+    b.setAttribute('aria-pressed', String(on));
+    b.append(el('span', 'box', on ? '✔' : ''), el('span', 'nm', c.name), el('span', 'tm', on ? t[c.id] + ' 確認' : ''));
+    b.onclick = () => {
+      if (!log[today]) log[today] = {};
+      if (on) {
+        const was = log[today][c.id]; delete log[today][c.id]; saveLog(); renderChecks();
+        toast('「' + c.name + '」の印を消しました', () => { if (!log[today]) log[today] = {}; log[today][c.id] = was; saveLog(); renderChecks(); });
+      } else { log[today][c.id] = nowHM(); saveLog(); renderChecks(); }
+    };
+    box.append(b);
+  });
+  $('alldone').hidden = !(checks.length && checks.every((c) => t[c.id]));
+  $('reset').disabled = !Object.keys(t).length;
+  // これまでの記録
+  const h = $('hist'); h.innerHTML = '';
+  let any = false;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(today, -i), L = log[d]; if (!L) continue;
+    const names = checks.filter((c) => L[c.id]).sort((a, b) => L[a.id].localeCompare(L[b.id])).map((c) => L[c.id] + ' ' + c.name);
+    if (!names.length) continue;
+    any = true;
+    const div = el('div', 'card hday'); div.append(el('b', '', (i === 0 ? '今日 ' : '') + jpDay(d)), el('div', '', names.join('、')));
+    h.append(div);
+  }
+  if (!any) h.append(el('p', 'empty', 'まだ記録はありません。'));
+}
+$('reset').onclick = () => {
+  const today = dayStr();
+  if (!log[today] || !confirm('今日の印を全部消して、最初から確かめ直します。よろしいですか？')) return;
+  const was = log[today]; delete log[today]; saveLog(); renderChecks();
+  toast('今日の印を全部消しました', () => { log[today] = was; saveLog(); renderChecks(); });
+};
+
+// ===== しまった場所 =====
+let placeEditing = null;
+function renderPlaces() {
+  const q = $('p-q').value.trim().toLowerCase();
+  const box = $('places'); box.innerHTML = '';
+  const shown = places.filter((p) => !q || (p.thing + ' ' + p.where).toLowerCase().includes(q)).sort((a, b) => b.updatedAt - a.updatedAt);
+  if (!shown.length) box.append(el('p', 'empty', places.length ? '見つかりませんでした。' : 'まだ書いていません。'));
+  shown.forEach((p) => {
+    const c = el('div', 'card pl');
+    c.append(el('div', 'thing', p.thing), el('div', 'where', '→ ' + (p.where || '（場所なし）')));
+    const d = new Date(p.updatedAt);
+    c.append(el('div', 'meta', d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日に書いた'));
+    const a = el('div', 'actions');
+    a.append(btn('直す', 'small', () => {
+      placeEditing = p; $('p-thing').value = p.thing; $('p-where').value = p.where;
+      $('p-save').textContent = '直して保存'; $('p-clear').hidden = false; $('p-thing').scrollIntoView({ block: 'center' });
+    }), btn('消す', 'small danger', () => {
+      if (!confirm('「' + p.thing + '」を消します。よろしいですか？')) return;
+      const i = places.findIndex((x) => x.id === p.id); if (i < 0) return;
+      const removed = places.splice(i, 1)[0]; save('places', places); if (placeEditing && placeEditing.id === p.id) clearPlaceForm(); renderPlaces();
+      toast('「' + removed.thing + '」を消しました', () => { places.splice(i, 0, removed); save('places', places); renderPlaces(); });
+    }));
+    c.append(a);
+    box.append(c);
+  });
+}
+function clearPlaceForm() { placeEditing = null; $('p-thing').value = ''; $('p-where').value = ''; $('p-save').textContent = '書いておく'; $('p-clear').hidden = true; }
+$('p-clear').onclick = clearPlaceForm;
+$('p-q').addEventListener('input', renderPlaces);
+guard($('p-save'), () => {
+  const thing = $('p-thing').value.trim(), where = $('p-where').value.trim();
+  if (!thing) { alert('「何を」を書いてください。'); $('p-thing').focus(); return; }
+  if (!where) { alert('「どこに」を書いてください。'); $('p-where').focus(); return; }
+  const item = { id: placeEditing ? placeEditing.id : uid(), thing: thing.slice(0, 40), where: where.slice(0, 80), updatedAt: Date.now() };
+  const i = places.findIndex((x) => x.id === item.id);
+  if (i >= 0) places[i] = item; else places.push(item);
+  save('places', places); clearPlaceForm(); $('p-q').value = ''; renderPlaces(); toast('書いておきました');
+});
+
+// ===== 設定：確かめる項目 =====
+function buildSettings() { const b = $('ck-edit'); b.innerHTML = ''; checks.forEach((c) => addCkRow(c)); }
+function addCkRow(c) {
+  const r = el('div', 'ckrow'); r.dataset.id = c ? c.id : uid();
+  const i = el('input'); i.value = c ? c.name : ''; i.maxLength = 20; i.placeholder = '例：エアコン'; i.setAttribute('aria-label', '項目の名前');
+  r.append(i); $('ck-edit').append(r); return i;
+}
+$('ck-add').onclick = () => addCkRow(null).focus();
+$('ck-save').onclick = () => {
+  const out = [...$('ck-edit').querySelectorAll('.ckrow')].map((r) => ({ id: r.dataset.id, name: r.querySelector('input').value.trim().slice(0, 20) })).filter((c) => c.name);
+  const removed = checks.filter((c) => !out.some((o) => o.id === c.id));
+  if (removed.length && !confirm(removed.map((x) => '「' + x.name + '」').join('') + 'を外します。よろしいですか？')) return;
+  const before = checks;
+  checks = out; save('checks', checks); buildSettings(); renderAll();
+  toast('項目を保存しました', () => { checks = before; save('checks', checks); buildSettings(); renderAll(); });
+};
+
+// ===== バックアップ =====
+function backupData() { return { checks, log, places }; }
+function restorePreview(d) {
+  const a = (Array.isArray(d.checks) ? d.checks : []).map(normCheck).filter(Boolean).length;
+  const b = (Array.isArray(d.places) ? d.places : []).map(normPlace).filter(Boolean).length;
+  return a + b ? '確かめる項目 ' + a + '個、しまった場所 ' + b + '件を読み込みます。' : '';
+}
+function restoreData(d) {
+  const merge = (list, add) => add.forEach((x) => { const i = list.findIndex((y) => y.id === x.id); if (i >= 0) list[i] = x; else list.push(x); });
+  merge(checks, (Array.isArray(d.checks) ? d.checks : []).map(normCheck).filter(Boolean));
+  merge(places, (Array.isArray(d.places) ? d.places : []).map(normPlace).filter(Boolean));
+  const l = normLog(d.log); Object.keys(l).forEach((k) => { log[k] = { ...(log[k] || {}), ...l[k] }; });
+  save('checks', checks); save('places', places); saveLog();
+}
+
+// 日にちが変わったときのために、画面に戻るたびに描き直す
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('.sheet.open')) renderAll(); });
+
+// ===== 設定とバックアップ =====
+$('open-settings').onclick = () => { if (typeof buildSettings === 'function') buildSettings(); openSheet('settings'); };
+$('s-close').onclick = () => closeSheet('settings');
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = APP + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app: APP, version: APP_VERSION, exportedAt: d.toISOString(), data: backupData() }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let file;
+  try { file = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!file || file.app !== APP || !file.data || typeof file.data !== 'object') { alert('このアプリのバックアップファイルではありません。'); return; }
+  const msg = restorePreview(file.data);
+  if (!msg) { alert('読み込める記録が入っていませんでした。'); return; }
+  if (!confirm(msg + '\n同じ記録はファイルの内容で上書きします（ほかの記録は消えません）。読み込みますか？')) return;
+  restoreData(file.data);
+  closeSheet('settings');
+  renderAll();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || document.querySelector('.sheet.open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+renderAll();
+
+</script>
+</body>
+</html>

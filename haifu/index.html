@@ -1,0 +1,513 @@
+<!doctype html>
+<!-- このファイルは「チラシ配布記録」の本体です。区政報告チラシなどを、いつ・何を・どの町で・どう配ったか・何部配ったかを記録し、配布物ごと・町名ごとの合計や、まだ配っていない町名を確かめられます。 -->
+<!-- 記録はiPhoneの中（IndexedDB、町名の一覧はlocalStorage）だけに保存し、外部へは一切送信しません。町名の一覧はアプリに書き込まず、使う人が登録します。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>チラシ配布記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="配布記録">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2f7f8f">
+<style>
+  :root { --bg:#f2f7f8; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#2f7f8f; --accent-soft:#dff0f3; --line:#d9e4e7; --danger:#c8372d; --on:#fff; --done:#2f9e6b; --done-soft:#dcf3e7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#10171a; --card:#1a2428; --text:#e8f0f2; --sub:#98a8ad; --accent:#6cc4d4; --accent-soft:#1b3940; --line:#2a383d; --danger:#ef6b61; --on:#0c2328; --done:#5fcf93; --done-soft:#173a2a; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.2rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:var(--on); border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:#2f7f8f; border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .tabs { display:grid; grid-template-columns:1fr 1fr 1fr; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:3px; margin-bottom:10px; }
+  .tabs button { background:none; border-radius:9px; padding:9px 0; font-weight:700; color:var(--sub); }
+  .tabs button.on { background:var(--accent); color:var(--on); }
+  .filters { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+  .filters select { min-width:0; padding:7px 6px; font-size:.88rem; }
+  .counts { font-size:.82rem; color:var(--sub); margin:6px 0 10px; }
+
+  h3.group { font-size:.92rem; margin:14px 0 6px; color:var(--sub); display:flex; justify-content:space-between; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:8px; cursor:pointer; display:grid; grid-template-columns:1fr auto; gap:2px 10px; align-items:center; }
+  .card .t { font-weight:700; word-break:break-word; }
+  .card .n { font-weight:800; font-size:1.15rem; color:var(--accent); white-space:nowrap; grid-row:span 2; }
+  .card .m { font-size:.82rem; color:var(--sub); word-break:break-word; }
+  .tag { display:inline-block; font-size:.75rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .empty { color:var(--sub); text-align:center; padding:26px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:var(--on); font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+  .panel h2 { font-size:1rem; margin:0 0 6px; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; table-layout:fixed; }
+  th, td { padding:7px 4px; border-bottom:1px solid var(--line); text-align:right; font-variant-numeric:tabular-nums; }
+  th { color:var(--sub); font-weight:400; font-size:.78rem; }
+  th:first-child, td:first-child { text-align:left; word-break:break-word; }
+  td.w, th.w { width:5.2em; }
+
+  .towns { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; }
+  .town { border-radius:10px; padding:8px 10px; border:1px solid var(--line); background:var(--card); word-break:break-word; }
+  .town b { display:block; font-size:.92rem; }
+  .town small { color:var(--sub); font-size:.76rem; }
+  .town.done { background:var(--done-soft); border-color:var(--done); }
+  .town.done small { color:var(--done); font-weight:700; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row2 > div { min-width:0; }
+  .methods { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .methods button { background:var(--card); border:2px solid var(--line); border-radius:10px; padding:9px 0; font-weight:700; }
+  .methods button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:var(--on); border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  .err { color:var(--danger); font-size:.82rem; margin-top:4px; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📮 チラシ配布記録</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="tabs">
+    <button id="tab-rec" class="on">記録</button>
+    <button id="tab-sum">合計</button>
+    <button id="tab-town">町名</button>
+  </div>
+
+  <!-- 記録の一覧 -->
+  <section id="v-rec">
+    <input id="q" type="search" placeholder="🔍 文字で検索（配布物・町名・メモ）">
+    <div class="filters">
+      <select id="f-item" aria-label="配布物で絞り込み"></select>
+      <select id="f-method" aria-label="配布方法で絞り込み"></select>
+    </div>
+    <div class="counts" id="counts"></div>
+    <div id="list"></div>
+  </section>
+
+  <!-- 合計 -->
+  <section id="v-sum" hidden>
+    <div class="panel"><h2>配布物ごとの合計</h2><div id="sum-item"></div></div>
+    <div class="panel">
+      <h2>町名ごとの合計</h2>
+      <select id="sum-filter" aria-label="配布物を選ぶ" style="margin-bottom:6px"></select>
+      <div id="sum-town"></div>
+    </div>
+    <div class="panel"><h2>配布方法ごとの合計</h2><div id="sum-method"></div></div>
+  </section>
+
+  <!-- 町名 -->
+  <section id="v-town" hidden>
+    <div class="panel">
+      <h2>配る予定の町名</h2>
+      <p class="note" style="margin-top:0">登録した町名のうち、配った町に色が付きます。下で配布物を選ぶと、その配布物で配ったかどうかを表示します。</p>
+      <select id="town-filter" aria-label="配布物を選ぶ" style="margin:8px 0"></select>
+      <div class="counts" id="town-count"></div>
+      <div class="towns" id="towns"></div>
+      <div id="town-extra"></div>
+    </div>
+    <div class="panel">
+      <h2>町名の一覧を登録する</h2>
+      <p class="note" style="margin-top:0">1行に1つ、町名を書いてください（例：○○1丁目）。番地は書かないでください。記録の「町名」と同じ書き方にすると、配布済みに色が付きます。</p>
+      <textarea id="town-edit" style="min-height:9em;margin-top:6px" placeholder="1行に1つずつ"></textarea>
+      <div class="actions"><button class="primary" id="town-save">町名の一覧を保存</button></div>
+    </div>
+  </section>
+
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="配布を記録">＋</button>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">配布を記録</h2>
+    <div class="warn">町名までにしてください。番地や、区民の方の個人名など、個人を特定できる情報は書かないでください。</div>
+    <div class="row2">
+      <div><label class="f" for="e-date">日付</label><input id="e-date" type="date"></div>
+      <div><label class="f" for="e-count">部数</label><input id="e-count" inputmode="numeric" maxlength="7" placeholder="例：200"></div>
+    </div>
+    <div class="err" id="e-count-err" hidden></div>
+    <label class="f" for="e-item">配布物の名前</label>
+    <input id="e-item" list="item-list" maxlength="40" placeholder="例：区政報告 2026年秋号">
+    <datalist id="item-list"></datalist>
+    <label class="f" for="e-town">町名</label>
+    <input id="e-town" list="town-list" maxlength="30" placeholder="例：○○1丁目">
+    <datalist id="town-list"></datalist>
+    <label class="f">配布方法</label>
+    <div class="methods" id="e-method"></div>
+    <label class="f" for="e-memo">メモ</label>
+    <textarea id="e-memo" maxlength="500" placeholder="例：雨のため早めに終了"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+    <p class="note" id="e-meta"></p>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">表計算ソフト用に書き出す（CSV）</label>
+    <div class="actions" style="margin-top:0"><button class="plain" id="csv">記録をCSVで書き出す</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください（町名の一覧も入ります）。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="primary" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_TOWNS = 'haifu:towns';     // 配る予定の町名（使う人が登録）
+const KEY_LAST = 'haifu:last';       // 最後に入れた配布物・方法（次の入力を楽にする）
+const METHODS = ['ポスティング', '駅頭', '手渡し', 'その他'];
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const MAX_COUNT = 1000000;
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('haifu', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('items', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('items', mode);
+    const r = fn(tx.objectStore('items'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbPutMany = (arr) => dbDo('readwrite', (s) => { arr.forEach((it) => s.put(it)); });
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function ymd(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function dayLabel(k) { if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return '日付なし'; const [y, m, d] = k.split('-').map(Number); return y + '年' + m + '月' + d + '日（' + WEEK[new Date(y, m - 1, d).getDay()] + '）'; }
+function fmtStamp(ms) { const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function fillSelect(sel, values, firstLabel) { sel.innerHTML = ''; if (firstLabel) sel.add(new Option(firstLabel, '')); values.forEach((v) => sel.add(new Option(v, v))); }
+const fmtN = (n) => n.toLocaleString('ja-JP');
+// 町名を比べるときの形（全角・半角や空白の違いをならす）
+const townKey = (s) => String(s || '').normalize('NFKC').replace(/\s+/g, '');
+const toHalf = (s) => String(s).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+
+let items = [];
+let towns = load(KEY_TOWNS, []);
+if (!Array.isArray(towns)) towns = [];
+towns = towns.filter((t) => typeof t === 'string' && t.trim());
+let last = load(KEY_LAST, {});
+if (!last || typeof last !== 'object') last = {};
+
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const str = (v, n) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : '')).trim().slice(0, n);
+  const now = Date.now();
+  const count = Number.isInteger(raw.count) && raw.count > 0 && raw.count <= MAX_COUNT ? raw.count : 0;
+  const it = {
+    id: str(raw.id, 60) || ('h' + now + Math.random().toString(36).slice(2, 8)),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : '',
+    item: str(raw.item, 40),
+    town: str(raw.town, 30),
+    method: METHODS.includes(raw.method) ? raw.method : 'その他',
+    count,
+    memo: typeof raw.memo === 'string' ? raw.memo.slice(0, 500) : '',
+    createdAt: Number.isFinite(raw.createdAt) ? raw.createdAt : now,
+    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+  };
+  if (!it.item && !it.town && !it.count) return null;
+  return it;
+}
+const itemNames = () => { const c = {}; items.forEach((i) => { if (i.item) c[i.item] = Math.max(c[i.item] || '', i.date || '0'); }); return Object.keys(c).sort((a, b) => (c[b] > c[a] ? 1 : c[b] < c[a] ? -1 : a.localeCompare(b, 'ja'))); };
+
+// ===== 記録の一覧 =====
+function buildFilters() {
+  const names = itemNames();
+  [['f-item', '配布物：全部'], ['sum-filter', '配布物：全部'], ['town-filter', '配布物：全部']].forEach(([id, label]) => {
+    const v = $(id).value; fillSelect($(id), names, label); $(id).value = names.includes(v) ? v : '';
+  });
+  const mv = $('f-method').value; fillSelect($('f-method'), METHODS, '配布方法：全部'); $('f-method').value = mv;
+  const dl = $('item-list'); dl.innerHTML = ''; names.forEach((n) => dl.append(new Option(n)));
+  const tl = $('town-list'); tl.innerHTML = '';
+  [...new Set([...towns, ...items.map((i) => i.town).filter(Boolean)])].forEach((t) => tl.append(new Option(t)));
+}
+function renderList() {
+  const q = $('q').value.trim().toLowerCase();
+  const fi = $('f-item').value, fm = $('f-method').value;
+  const shown = items.filter((i) => (!fi || i.item === fi) && (!fm || i.method === fm) && (!q || [i.item, i.town, i.memo, i.method].join('\n').toLowerCase().includes(q)))
+    .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0) || b.createdAt - a.createdAt);
+  const total = shown.reduce((s, i) => s + i.count, 0);
+  $('counts').textContent = (shown.length === items.length ? '全' : '表示中 ') + shown.length + '件・合計 ' + fmtN(total) + '部';
+  const list = $('list'); list.innerHTML = '';
+  if (!shown.length) { list.append(el('p', 'empty', items.length ? '条件に合う記録はありません' : 'まだ記録はありません。右下の「＋」から、配った記録を入れてください。')); return; }
+  let cur = null, head = null, sum = 0;
+  for (const it of shown) {
+    if (it.date !== cur) {
+      cur = it.date; sum = 0;
+      head = el('h3', 'group'); head.append(el('span', '', dayLabel(it.date)), el('span', '', ''));
+      list.append(head);
+    }
+    sum += it.count; head.lastChild.textContent = fmtN(sum) + '部';
+    const c = el('div', 'card');
+    c.append(el('div', 't', it.item || '（配布物の名前なし）'), el('div', 'n', fmtN(it.count) + '部'));
+    const m = el('div', 'm');
+    m.append(el('span', 'tag', it.method), document.createTextNode(it.town || '（町名なし）'));
+    if (it.memo) m.append(document.createTextNode(' ・ ' + it.memo.slice(0, 40)));
+    c.append(m);
+    c.onclick = () => openEdit(it);
+    list.append(c);
+  }
+}
+['q', 'f-item', 'f-method'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', renderList));
+
+// ===== 合計 =====
+function table(head, rows, emptyText) {
+  if (!rows.length) return el('p', 'note', emptyText);
+  const t = el('table');
+  const hr = el('tr'); head.forEach((h, i) => hr.append(el('th', i ? 'w' : '', h))); t.append(hr);
+  rows.forEach((r) => { const tr = el('tr'); r.forEach((v, i) => tr.append(el('td', i ? 'w' : '', v))); t.append(tr); });
+  return t;
+}
+function group(list, keyFn) {
+  const g = new Map();
+  list.forEach((i) => { const k = keyFn(i); const o = g.get(k) || { n: 0, count: 0, last: '' }; o.n++; o.count += i.count; if (i.date > o.last) o.last = i.date; g.set(k, o); });
+  return [...g.entries()].sort((a, b) => b[1].count - a[1].count);
+}
+const shortDay = (k) => (/^\d{4}-\d{2}-\d{2}$/.test(k) ? +k.slice(5, 7) + '/' + +k.slice(8) : '−');
+function renderSum() {
+  $('sum-item').innerHTML = '';
+  $('sum-item').append(table(['配布物', '回数', '部数'], group(items, (i) => i.item || '（名前なし）').map(([k, o]) => [k, o.n + '回', fmtN(o.count)]), 'まだ記録がありません。'));
+  const f = $('sum-filter').value;
+  const sel = items.filter((i) => !f || i.item === f);
+  $('sum-town').innerHTML = '';
+  $('sum-town').append(table(['町名', '最後', '部数'], group(sel, (i) => i.town || '（町名なし）').map(([k, o]) => [k, shortDay(o.last), fmtN(o.count)]), 'まだ記録がありません。'));
+  $('sum-method').innerHTML = '';
+  $('sum-method').append(table(['配布方法', '回数', '部数'], group(items, (i) => i.method).map(([k, o]) => [k, o.n + '回', fmtN(o.count)]), 'まだ記録がありません。'));
+}
+$('sum-filter').addEventListener('change', renderSum);
+
+// ===== 町名 =====
+function renderTowns() {
+  const f = $('town-filter').value;
+  const sel = items.filter((i) => (!f || i.item === f) && i.town);
+  const per = new Map();
+  sel.forEach((i) => { const k = townKey(i.town); const o = per.get(k) || { count: 0, last: '' }; o.count += i.count; if (i.date > o.last) o.last = i.date; per.set(k, o); });
+  const box = $('towns'); box.innerHTML = '';
+  const extra = $('town-extra'); extra.innerHTML = '';
+  if (!towns.length) { $('town-count').textContent = ''; box.append(el('p', 'note', 'まだ町名が登録されていません。下の「町名の一覧を登録する」に、配る予定の町名を入れてください。')); return; }
+  let done = 0;
+  towns.forEach((t) => {
+    const o = per.get(townKey(t));
+    const d = el('div', 'town' + (o ? ' done' : ''));
+    d.append(el('b', '', t), el('small', '', o ? '配布済み ' + fmtN(o.count) + '部（' + shortDay(o.last) + '）' : 'まだ'));
+    if (o) done++;
+    box.append(d);
+  });
+  $('town-count').textContent = '配布済み ' + done + '町 ／ ' + towns.length + '町（まだ ' + (towns.length - done) + '町）';
+  const planned = new Set(towns.map(townKey));
+  const others = [...new Set(sel.map((i) => i.town).filter((t) => !planned.has(townKey(t))))];
+  if (others.length) extra.append(el('p', 'note', '一覧にない町名で配った記録：' + others.join('、')));
+}
+$('town-filter').addEventListener('change', renderTowns);
+$('town-save').onclick = () => {
+  const list = $('town-edit').value.split(/\n/).map((t) => t.trim().slice(0, 30)).filter(Boolean);
+  const seen = new Set(); towns = list.filter((t) => { const k = townKey(t); if (seen.has(k)) return false; seen.add(k); return true; });
+  save(KEY_TOWNS, towns);
+  $('town-edit').value = towns.join('\n');
+  buildFilters(); renderTowns();
+  alert('町名の一覧を保存しました（' + towns.length + '町）。');
+};
+
+// ===== タブ =====
+let tab = 'rec';
+function showTab(t) {
+  tab = t;
+  ['rec', 'sum', 'town'].forEach((k) => { $('tab-' + k).classList.toggle('on', k === t); $('v-' + k).hidden = k !== t; });
+  if (t === 'sum') renderSum();
+  if (t === 'town') { $('town-edit').value = towns.join('\n'); renderTowns(); }
+}
+$('tab-rec').onclick = () => showTab('rec');
+$('tab-sum').onclick = () => showTab('sum');
+$('tab-town').onclick = () => showTab('town');
+
+async function reload() {
+  try { items = (await dbAll()).map(normalize).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  buildFilters(); renderList();
+  if (tab === 'sum') renderSum();
+  if (tab === 'town') renderTowns();
+}
+
+// ===== 入力・編集 =====
+let editing = null, method = METHODS[0], saving = false;
+function buildMethods() {
+  const box = $('e-method'); box.innerHTML = '';
+  METHODS.forEach((m) => { const b = el('button', m === method ? 'on' : '', m); b.type = 'button'; b.onclick = () => { method = m; buildMethods(); }; box.append(b); });
+}
+function openEdit(it) {
+  editing = it || null;
+  $('edit-title').textContent = it ? '記録を直す' : '配布を記録';
+  $('e-date').value = it ? it.date : ymd(new Date());
+  $('e-count').value = it ? String(it.count || '') : '';
+  $('e-item').value = it ? it.item : (last.item || '');
+  $('e-town').value = it ? it.town : '';
+  $('e-memo').value = it ? it.memo : '';
+  method = it ? it.method : (METHODS.includes(last.method) ? last.method : METHODS[0]);
+  buildMethods();
+  $('e-count-err').hidden = true;
+  $('e-del').hidden = !it;
+  $('e-meta').textContent = it ? '作成 ' + fmtStamp(it.createdAt) + ' ／ 更新 ' + fmtStamp(it.updatedAt) : '';
+  $('edit').classList.add('open'); $('edit').scrollTop = 0;
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = async () => {
+  if (saving) return;
+  const raw = toHalf($('e-count').value).replace(/,/g, '');
+  const err = $('e-count-err');
+  if (!/^\d+$/.test(raw) || +raw < 1 || +raw > MAX_COUNT) {
+    err.hidden = false;
+    err.textContent = '部数は1以上の整数で入れてください（小数やマイナスは使えません）。';
+    $('e-count').focus(); return;
+  }
+  err.hidden = true;
+  const now = Date.now();
+  const it = editing ? { ...editing } : { id: 'h' + now + Math.random().toString(36).slice(2, 8), createdAt: now };
+  it.date = /^\d{4}-\d{2}-\d{2}$/.test($('e-date').value) ? $('e-date').value : ymd(new Date());
+  it.count = parseInt(raw, 10);
+  it.item = $('e-item').value.trim().slice(0, 40);
+  it.town = $('e-town').value.trim().slice(0, 30);
+  it.method = method;
+  it.memo = $('e-memo').value.slice(0, 500);
+  it.updatedAt = now;
+  if (!it.item) { alert('配布物の名前を入れてください。'); return; }
+  saving = true; $('e-save').disabled = true;
+  try { await dbPut(it); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); saving = false; $('e-save').disabled = false; return; }
+  last = { item: it.item, method: it.method }; save(KEY_LAST, last);
+  closeSheet('edit');
+  await reload();
+  saving = false; $('e-save').disabled = false;
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('この記録（' + editing.item + '・' + fmtN(editing.count) + '部）を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  closeSheet('edit');
+  reload();
+};
+
+// ===== 書き出し・バックアップ =====
+async function giveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+const stamp = () => { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); };
+const csvCell = (v) => { let s = String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+$('csv').onclick = () => {
+  if (!items.length) { alert('まだ記録がありません。'); return; }
+  const rows = [['日付', '配布物', '町名', '配布方法', '部数', 'メモ']];
+  [...items].sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : a.createdAt - b.createdAt)).forEach((i) => rows.push([i.date, i.item, i.town, i.method, i.count, i.memo]));
+  giveFile('haifu-' + stamp() + '.csv', '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n', 'text/csv');
+};
+$('export').onclick = () => {
+  giveFile('haifu-backup-' + stamp() + '.json', JSON.stringify({ app: 'haifu', version: APP_VERSION, exportedAt: new Date().toISOString(), towns, items }, null, 1), 'application/json');
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!data || data.app !== 'haifu' || !Array.isArray(data.items)) { alert('このアプリ（配布記録）のバックアップファイルではありません。'); return; }
+  const good = data.items.map(normalize).filter(Boolean);
+  const newTowns = Array.isArray(data.towns) ? data.towns.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 30)) : [];
+  if (!good.length && !newTowns.length) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm(good.length + '件の記録' + (newTowns.length ? 'と町名' + newTowns.length + '件' : '') + 'を読み込みます。同じ記録は上書きし、ほかの記録は消えません。よろしいですか？')) return;
+  try { await dbPutMany(good); } catch (err) { alert('読み込みの途中で保存できませんでした。'); return; }
+  if (newTowns.length) { const seen = new Set(towns.map(townKey)); newTowns.forEach((t) => { if (!seen.has(townKey(t))) { seen.add(townKey(t)); towns.push(t); } }); save(KEY_TOWNS, towns); $('town-edit').value = towns.join('\n'); }
+  await reload();
+  const skipped = data.items.length - good.length;
+  const zero = good.filter((i) => !i.count).length;
+  alert(good.length + '件を読み込みました。' + (skipped > 0 ? '（読めなかった ' + skipped + '件は飛ばしました）' : '') + (zero ? '（部数が読めない ' + zero + '件は0部として取り込みました。必要なら直してください）' : ''));
+};
+$('open-settings').onclick = () => { $('settings').classList.add('open'); $('settings').scrollTop = 0; };
+$('s-close').onclick = () => closeSheet('settings');
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

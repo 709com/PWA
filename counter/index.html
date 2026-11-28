@@ -1,0 +1,460 @@
+<!doctype html>
+<!-- このファイルは「配布・来場カウンター」の本体です。駅頭でのチラシ配布数や報告会の来場者数などを、大きなボタンのタップで数え、日ごとの合計と30分ごとの棒グラフで振り返れます。 -->
+<!-- 数えた記録はiPhoneの中（カウンターの名前はlocalStorage、タップの時刻はIndexedDB）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>配布・来場カウンター</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="カウンター">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#d0532b">
+<style>
+  :root { --bg:#faf5f2; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#d0532b; --accent-soft:#f8e4dc; --line:#e8dfda; --danger:#c8372d; --on:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17130f; --card:#231d19; --text:#f0ebe7; --sub:#aaa097; --accent:#f08a62; --accent-soft:#41291e; --line:#3a302a; --danger:#ef6b61; --on:#2a140b; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.2rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:var(--on); border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:#d0532b; border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .chips button { border-radius:99px; padding:7px 14px; background:var(--card); border:2px solid var(--line); font-weight:700; font-size:.9rem; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chips button.on { color:#fff; }
+  .chips button small { font-weight:400; margin-left:4px; }
+
+  .now { text-align:center; }
+  .now .name { font-weight:700; font-size:1.05rem; word-break:break-word; }
+  .now .day { color:var(--sub); font-size:.85rem; }
+  .now .num { font-size:4.2rem; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; margin:2px 0 8px; }
+  .now .num.bump { animation:bump .15s ease-out; }
+  @keyframes bump { 50% { transform:scale(1.12); } }
+  #plus { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:min(38vh, 300px); min-height:170px; border-radius:24px; color:#fff;
+          font-size:5rem; font-weight:800; line-height:1; box-shadow:0 6px 16px rgba(0,0,0,.2); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  #plus small { font-size:1rem; font-weight:700; margin-top:6px; opacity:.9; }
+  #plus:active { transform:scale(.98); filter:brightness(.92); }
+  .sub { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  .sub button { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 0; font-size:1.1rem; font-weight:700; -webkit-user-select:none; user-select:none; }
+  .sub #reset { color:var(--danger); }
+
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:16px; }
+  .panel h2 { font-size:1rem; margin:0 0 4px; }
+  .panel canvas { display:block; width:100%; }
+  .days { margin-top:6px; }
+  .days button { display:grid; grid-template-columns:auto 1fr 4em; align-items:center; gap:8px; width:100%; background:none; padding:6px 4px; border-bottom:1px solid var(--line); text-align:left; font-variant-numeric:tabular-nums; }
+  .days button.on { background:var(--accent-soft); border-radius:8px; }
+  .days span { white-space:nowrap; }
+  .days .bar { height:10px; border-radius:5px; min-width:2px; }
+  .days b { text-align:right; }
+  .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  .empty { color:var(--sub); text-align:center; padding:14px 0; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:14px 0 4px; }
+  .crow { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:8px; }
+  .swatches { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .swatches button { width:34px; height:34px; border-radius:50%; border:3px solid transparent; }
+  .swatches button.on { border-color:var(--text); }
+  .crow .del { margin-top:8px; color:var(--danger); background:none; padding:4px 0; font-size:.88rem; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .primary { background:var(--accent); color:var(--on); border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🔢 配布・来場カウンター</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="now">
+    <div class="name" id="name"></div>
+    <div class="day" id="day"></div>
+    <div class="num" id="num">0</div>
+  </div>
+  <button id="plus" aria-label="1つ数える">＋<small>押すたびに1つ数えます</small></button>
+  <div class="sub">
+    <button id="minus" aria-label="1つ減らす">−1 減らす</button>
+    <button id="reset">リセット</button>
+  </div>
+
+  <div class="panel">
+    <h2 id="chart-title">時間帯別（30分ごと）</h2>
+    <canvas id="chart"></canvas>
+  </div>
+  <div class="panel">
+    <h2>日ごとの合計</h2>
+    <p class="note" style="margin-top:0">日付を押すと、上のグラフがその日に切り替わります。日付が変わると、新しい日として0から数えます。</p>
+    <div class="days" id="days"></div>
+  </div>
+
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" style="margin-top:0">カウンター（名前と色。名前を変えると、すぐに反映されます）</label>
+    <div id="clist"></div>
+    <button class="plain" id="c-add">＋ カウンターを追加</button>
+
+    <label class="f" style="margin-top:22px">表計算ソフト用に書き出す（CSV）</label>
+    <div class="actions" style="margin-top:0">
+      <button class="plain" id="csv-day">日ごとの合計</button>
+      <button class="plain" id="csv-slot">30分ごとの数</button>
+    </div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（共有・保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="primary" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_COUNTERS = 'counter:counters';  // カウンターの名前と色
+const KEY_CUR = 'counter:current';        // いま選んでいるカウンター
+const COLORS = ['#d0532b', '#2f7f8f', '#3b5bab', '#2e8b57', '#8a5cd0', '#c8507a', '#a87a12', '#555f6d'];
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB）：タップの時刻 =====
+let dbp = null;
+function openDB() {
+  if (dbp) return dbp;
+  dbp = new Promise((resolve, reject) => {
+    const req = indexedDB.open('counter', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('taps', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => { dbp = null; reject(req.error); };
+  });
+  return dbp;
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('taps', mode);
+    const r = fn(tx.objectStore('taps'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPutMany = (arr) => dbDo('readwrite', (s) => { arr.forEach((x) => s.put(x)); });
+const dbDelMany = (ids) => dbDo('readwrite', (s) => { ids.forEach((id) => s.delete(id)); });
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
+const p2 = (n) => String(n).padStart(2, '0');
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function dayKey(ms) { const d = new Date(ms); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function dayLabel(k) { const [y, m, d] = k.split('-').map(Number); return m + '/' + d + '（' + WEEK[new Date(y, m - 1, d).getDay()] + '）'; }
+function dayLong(k) { const [y, m, d] = k.split('-').map(Number); return y + '年' + m + '月' + d + '日（' + WEEK[new Date(y, m - 1, d).getDay()] + '）'; }
+function slotOf(ms) { const d = new Date(ms); return d.getHours() * 2 + (d.getMinutes() >= 30 ? 1 : 0); }
+function slotLabel(s) { return p2(Math.floor(s / 2)) + ':' + (s % 2 ? '30' : '00'); }
+function cssVar(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+const newId = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// ===== データ =====
+function normCounter(c) {
+  if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id) return null;
+  return { id: c.id.slice(0, 40), name: (typeof c.name === 'string' && c.name.trim() ? c.name.trim() : 'カウンター').slice(0, 20), color: COLORS.includes(c.color) ? c.color : COLORS[0], createdAt: Number.isFinite(c.createdAt) ? c.createdAt : Date.now() };
+}
+function normTap(t) {
+  if (!t || typeof t !== 'object' || typeof t.cid !== 'string' || !Number.isFinite(t.t) || t.t <= 0) return null;
+  return { id: typeof t.id === 'string' && t.id ? t.id.slice(0, 40) : newId('t'), cid: t.cid, t: t.t };
+}
+let counters = (Array.isArray(load(KEY_COUNTERS, null)) ? load(KEY_COUNTERS, []) : []).map(normCounter).filter(Boolean);
+if (!counters.length) { counters = [{ id: newId('c'), name: 'カウンター1', color: COLORS[0], createdAt: Date.now() }]; save(KEY_COUNTERS, counters); }
+let curId = load(KEY_CUR, '');
+let taps = [];
+let viewDay = dayKey(Date.now());   // グラフで見ている日
+let today = dayKey(Date.now());
+function cur() { let c = counters.find((x) => x.id === curId); if (!c) { c = counters[0]; curId = c.id; } return c; }
+const tapsOf = (cid) => taps.filter((t) => t.cid === cid);
+const todayTaps = (cid) => taps.filter((t) => t.cid === cid && dayKey(t.t) === today);
+
+// ===== 画面 =====
+function renderChips() {
+  const box = $('chips'); box.innerHTML = '';
+  if (counters.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  counters.forEach((c) => {
+    const b = el('button', c.id === curId ? 'on' : '');
+    b.append(document.createTextNode(c.name), el('small', '', String(todayTaps(c.id).length)));
+    b.style.borderColor = c.color;
+    if (c.id === curId) b.style.background = c.color; else b.style.color = '';
+    b.onclick = () => { curId = c.id; save(KEY_CUR, curId); viewDay = today; renderAll(); };
+    box.append(b);
+  });
+}
+function renderNow(bump) {
+  const c = cur();
+  $('name').textContent = c.name;
+  $('day').textContent = '今日 ' + dayLong(today) + ' の数';
+  $('num').textContent = todayTaps(c.id).length.toLocaleString('ja-JP');
+  $('num').style.color = c.color;
+  $('plus').style.background = c.color;
+  $('minus').disabled = todayTaps(c.id).length === 0;
+  $('reset').disabled = todayTaps(c.id).length === 0;
+  if (bump) { const n = $('num'); n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); }
+}
+function renderDays() {
+  const c = cur();
+  const per = {};
+  tapsOf(c.id).forEach((t) => { const k = dayKey(t.t); per[k] = (per[k] || 0) + 1; });
+  if (!per[today]) per[today] = 0;
+  const keys = Object.keys(per).sort().reverse();
+  const max = Math.max(1, ...Object.values(per));
+  const box = $('days'); box.innerHTML = '';
+  keys.slice(0, 60).forEach((k) => {
+    const b = el('button', k === viewDay ? 'on' : '');
+    const bar = el('div', 'bar'); bar.style.width = (per[k] / max * 100) + '%'; bar.style.background = c.color;
+    const wrap = el('div'); wrap.append(bar);
+    b.append(el('span', '', dayLabel(k) + (k === today ? ' 今日' : '')), wrap, el('b', '', per[k].toLocaleString('ja-JP')));
+    b.onclick = () => { viewDay = k; renderDays(); drawChart(); };
+    box.append(b);
+  });
+  const total = tapsOf(c.id).length;
+  box.append(el('p', 'note', 'いままでの合計：' + total.toLocaleString('ja-JP') + (keys.length > 60 ? '（日ごとの表示は新しい60日ぶん）' : '')));
+}
+// 30分ごとの棒グラフ
+function drawChart() {
+  const c = cur();
+  $('chart-title').textContent = '時間帯別（30分ごと）：' + dayLabel(viewDay) + (viewDay === today ? ' 今日' : '');
+  const cv = $('chart');
+  const counts = new Array(48).fill(0);
+  tapsOf(c.id).forEach((t) => { if (dayKey(t.t) === viewDay) counts[slotOf(t.t)]++; });
+  const used = counts.map((n, i) => (n ? i : -1)).filter((i) => i >= 0);
+  const w = cv.parentElement.clientWidth - 28, h = 190;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px';
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  g.font = '11px -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif';
+  if (!used.length) { g.fillStyle = cssVar('--sub'); g.textBaseline = 'middle'; g.font = '13px -apple-system,"Hiragino Sans",sans-serif'; g.fillText('この日の記録はまだありません', 0, h / 2); return; }
+  // 記録のある時間帯の前後1時間を表示する（最低3時間）
+  let a = Math.max(0, used[0] - 2), b = Math.min(47, used[used.length - 1] + 2);
+  while (b - a + 1 < 6) { if (a > 0) a--; if (b - a + 1 < 6 && b < 47) b++; if (a === 0 && b === 47) break; }
+  const n = b - a + 1, top = 34, bottom = 20;
+  const bw = w / n, max = Math.max(...counts);
+  const labelEvery = bw * 2 >= 34 ? 2 : bw * 4 >= 34 ? 4 : 8;
+  g.strokeStyle = cssVar('--line'); g.beginPath(); g.moveTo(0, h - bottom + .5); g.lineTo(w, h - bottom + .5); g.stroke();
+  for (let i = 0; i < n; i++) {
+    const s = a + i, v = counts[s];
+    const bh = v ? Math.max(2, (h - top - bottom) * v / max) : 0;
+    const x = i * bw;
+    g.fillStyle = c.color;
+    g.fillRect(x + bw * 0.12, h - bottom - bh, bw * 0.76, bh);
+    if (v && bw >= 14) { g.fillStyle = cssVar('--text'); g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(String(v), x + bw / 2, h - bottom - bh - 1); }
+    if (s % labelEvery === 0) { g.fillStyle = cssVar('--sub'); g.textAlign = s === a ? 'left' : 'center'; g.textBaseline = 'top'; g.fillText(String(Math.floor(s / 2)) + ':' + (s % 2 ? '30' : '00'), s === a ? x : x, h - bottom + 4); }
+  }
+  g.textAlign = 'left'; g.textBaseline = 'top'; g.fillStyle = cssVar('--sub');
+  g.fillText('いちばん多い30分：' + max, 0, 0);
+}
+function renderAll() { renderChips(); renderNow(); renderDays(); drawChart(); }
+
+// ===== 数える =====
+async function persistTaps(add, del) {
+  try {
+    if (add.length) await dbPutMany(add);
+    if (del.length) await dbDelMany(del);
+  } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); }
+}
+function checkDay() {
+  const k = dayKey(Date.now());
+  if (k !== today) { if (viewDay === today) viewDay = k; today = k; renderAll(); }
+}
+$('plus').addEventListener('click', () => {
+  checkDay();
+  const t = { id: newId('t'), cid: cur().id, t: Date.now() };
+  taps.push(t);
+  if (navigator.vibrate) navigator.vibrate(8);
+  renderNow(true); renderChips();
+  persistTaps([t], []);
+  clearTimeout(window._rd); window._rd = setTimeout(() => { if (viewDay === today) drawChart(); renderDays(); }, 400);
+});
+$('minus').onclick = () => {
+  checkDay();
+  const list = todayTaps(cur().id);
+  if (!list.length) return;
+  const last = list.reduce((m, x) => (x.t > m.t ? x : m));
+  taps = taps.filter((x) => x !== last);
+  persistTaps([], [last.id]);
+  renderAll();
+};
+$('reset').onclick = () => {
+  checkDay();
+  const list = todayTaps(cur().id);
+  if (!list.length) return;
+  if (!confirm('「' + cur().name + '」の今日の数（' + list.length + '）を0に戻します。今日の記録は消え、元に戻せません。よろしいですか？\n（前の日までの記録は残ります）')) return;
+  const ids = new Set(list.map((x) => x.id));
+  taps = taps.filter((x) => !ids.has(x.id));
+  persistTaps([], [...ids]);
+  renderAll();
+};
+setInterval(checkDay, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
+let rt = null;
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawChart, 150); });
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawChart);
+
+// ===== 設定：カウンター =====
+function saveCounters() { save(KEY_COUNTERS, counters); }
+function buildCList() {
+  const box = $('clist'); box.innerHTML = '';
+  counters.forEach((c) => {
+    const row = el('div', 'crow');
+    const inp = el('input'); inp.value = c.name; inp.maxLength = 20; inp.placeholder = '例：駅頭チラシ';
+    inp.addEventListener('input', () => { const v = inp.value.trim(); if (v) { c.name = v.slice(0, 20); saveCounters(); renderAll(); } });
+    inp.addEventListener('blur', () => { if (!inp.value.trim()) inp.value = c.name; });
+    const sw = el('div', 'swatches');
+    COLORS.forEach((col) => {
+      const b = el('button', col === c.color ? 'on' : ''); b.style.background = col; b.setAttribute('aria-label', '色');
+      b.onclick = () => { c.color = col; saveCounters(); buildCList(); renderAll(); };
+      sw.append(b);
+    });
+    row.append(inp, sw);
+    if (counters.length > 1) {
+      const d = el('button', 'del', '🗑 このカウンターを削除');
+      d.onclick = async () => {
+        const n = tapsOf(c.id).length;
+        if (!confirm('「' + c.name + '」を削除します。これまでの記録（' + n + '）も消え、元に戻せません。よろしいですか？')) return;
+        const ids = tapsOf(c.id).map((x) => x.id);
+        taps = taps.filter((x) => x.cid !== c.id);
+        counters = counters.filter((x) => x.id !== c.id);
+        saveCounters(); await persistTaps([], ids);
+        buildCList(); renderAll();
+      };
+      row.append(d);
+    }
+    box.append(row);
+  });
+}
+$('c-add').onclick = () => {
+  if (counters.length >= 12) { alert('カウンターは12個までです。'); return; }
+  const used = counters.map((c) => c.color);
+  const c = { id: newId('c'), name: 'カウンター' + (counters.length + 1), color: COLORS.find((x) => !used.includes(x)) || COLORS[counters.length % COLORS.length], createdAt: Date.now() };
+  counters.push(c); curId = c.id; save(KEY_CUR, curId); saveCounters();
+  buildCList(); renderAll();
+  const inputs = $('clist').querySelectorAll('input'); const last = inputs[inputs.length - 1]; last.focus(); last.select();
+};
+$('open-settings').onclick = () => { buildCList(); $('settings').classList.add('open'); $('settings').scrollTop = 0; };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+
+// ===== 書き出し =====
+async function giveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+const stamp = () => { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); };
+const csvCell = (v) => { const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function csvText(rows) { return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
+function nameOf(cid) { const c = counters.find((x) => x.id === cid); return c ? c.name : '（削除したカウンター）'; }
+$('csv-day').onclick = () => {
+  const per = {};
+  taps.forEach((t) => { const k = dayKey(t.t) + '\t' + t.cid; per[k] = (per[k] || 0) + 1; });
+  const rows = Object.keys(per).sort().map((k) => { const [d, cid] = k.split('\t'); return [d, nameOf(cid), per[k]]; });
+  if (!rows.length) { alert('まだ記録がありません。'); return; }
+  giveFile('counter-days-' + stamp() + '.csv', csvText([['日付', 'カウンター', '合計'], ...rows]), 'text/csv');
+};
+$('csv-slot').onclick = () => {
+  const per = {};
+  taps.forEach((t) => { const k = dayKey(t.t) + '\t' + p2(slotOf(t.t)) + '\t' + t.cid; per[k] = (per[k] || 0) + 1; });
+  const rows = Object.keys(per).sort().map((k) => { const [d, s, cid] = k.split('\t'); return [d, nameOf(cid), slotLabel(+s) + '〜' + slotLabel(+s + 1 === 48 ? 0 : +s + 1), per[k]]; });
+  if (!rows.length) { alert('まだ記録がありません。'); return; }
+  giveFile('counter-30min-' + stamp() + '.csv', csvText([['日付', 'カウンター', '時間帯', '数'], ...rows]), 'text/csv');
+};
+$('export').onclick = () => {
+  const data = JSON.stringify({ app: 'counter', version: APP_VERSION, exportedAt: new Date().toISOString(), counters, taps });
+  giveFile('counter-backup-' + stamp() + '.json', data, 'application/json');
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!data || data.app !== 'counter' || !Array.isArray(data.counters) || !Array.isArray(data.taps)) { alert('このアプリ（カウンター）のバックアップファイルではありません。'); return; }
+  const cs = data.counters.map(normCounter).filter(Boolean);
+  const ids = new Set([...counters.map((c) => c.id), ...cs.map((c) => c.id)]);
+  const ts = data.taps.map(normTap).filter((t) => t && ids.has(t.cid));
+  if (!cs.length && !ts.length) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm('カウンター' + cs.length + '個・記録' + ts.length + '件を読み込みます。同じ記録は上書きし、ほかの記録は消えません。よろしいですか？')) return;
+  cs.forEach((c) => { const i = counters.findIndex((x) => x.id === c.id); if (i >= 0) counters[i] = c; else counters.push(c); });
+  saveCounters();
+  try { await dbPutMany(ts); } catch (err) { alert('読み込みの途中で保存できませんでした。'); }
+  await loadTaps();
+  buildCList(); renderAll();
+  alert('読み込みました。');
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+async function loadTaps() {
+  const mem = taps; // 読み込み中に押された分も残す
+  try { taps = (await dbAll()).map(normTap).filter(Boolean); } catch (e) { taps = []; alert('データベースを開けませんでした。'); }
+  const have = new Set(taps.map((t) => t.id));
+  mem.forEach((t) => { if (!have.has(t.id)) taps.push(t); });
+}
+$('ver').textContent = APP_VERSION;
+cur();
+renderAll();
+loadTaps().then(renderAll);
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>

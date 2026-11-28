@@ -1,0 +1,506 @@
+<!doctype html>
+<!-- このファイルは「じぶん単語帳」の本体です。英単語やことばを自分でカードに登録して、めくって覚えるれんしゅうができます。 -->
+<!-- 入力したことはこの端末の中（localStorage）だけに保存し、外部へは一切送信しません。広告・課金・アカウント登録もありません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>じぶん単語帳</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="単語帳">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#d9691a">
+<style>
+  :root { --bg:#fff8f0; --card:#fff; --text:#2b2118; --sub:#76665a; --accent:#d9691a; --accent-soft:#fde8d6; --line:#efdfd0; --danger:#c8372d; --ok:#2f9e6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1a1511; --card:#262019; --text:#f3ebe3; --sub:#b3a598; --accent:#f08c45; --accent-soft:#3e2a1b; --line:#3a3027; --danger:#ef6b61; --ok:#4cc48b; } }
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
+  main { max-width:640px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
+  h1 { font-size:clamp(1.02rem, 5vw, 1.25rem); margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:100%; }
+  textarea { min-height:6em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:14px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .empty { color:var(--sub); text-align:center; padding:28px 8px; }
+  .fab { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:64px; height:64px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5; }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.88rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:14px; padding:13px 20px; font-weight:700; min-height:48px; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 16px; min-height:48px; }
+  .wide { width:100%; }
+  .danger { color:var(--danger); }
+  .note { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:12px; padding:8px 12px; font-size:.86rem; margin-bottom:6px; }
+  .tag { display:inline-block; font-size:.76rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; min-height:40px; }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .seg { display:grid; gap:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:auto; padding-top:18px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+
+
+  .bigstart { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; font-size:1.15rem; padding:16px; border-radius:16px; }
+  .filters { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:10px 0 6px; }
+  .counts { font-size:.85rem; color:var(--sub); margin:6px 0 10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--accent); border-radius:14px; padding:10px 14px; margin-bottom:8px; cursor:pointer; }
+  .card.known { border-left-color:var(--ok); }
+  .card .t { font-weight:700; font-size:1.05rem; word-break:break-word; }
+  .card .b { color:var(--sub); word-break:break-word; white-space:pre-wrap; }
+  .card .m { font-size:.78rem; color:var(--sub); margin-top:2px; }
+  .okmark { color:var(--ok); font-weight:700; }
+  /* れんしゅう */
+  .flash { background:var(--card); border:2px solid var(--line); border-radius:20px; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center; margin:10px 0; }
+  .flash .q { font-size:1.9rem; font-weight:700; word-break:break-word; }
+  .flash .a { font-size:1.4rem; color:var(--accent); margin-top:14px; word-break:break-word; white-space:pre-wrap; }
+  .flash .hint { font-size:.85rem; color:var(--sub); margin-top:14px; }
+  .prog { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:.9rem; color:var(--sub); }
+  .judge { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
+  .judge button { font-size:1.1rem; padding:16px 8px; border-radius:16px; font-weight:700; min-height:60px; }
+  .again { background:var(--card); border:2px solid var(--danger) !important; color:var(--danger); }
+  .got { background:var(--ok); color:#fff; }
+  .result { text-align:center; padding:20px 0; }
+  .result .big { font-size:2.4rem; }
+
+</style>
+</head>
+<body>
+
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📒 じぶん単語帳</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <button class="primary bigstart" id="go-practice">▶ れんしゅうする</button>
+  <div class="filters">
+    <select id="f-group" aria-label="グループ"></select>
+    <select id="f-known" aria-label="覚えたかどうか">
+      <option value="">ぜんぶ</option><option value="no">まだ覚えていない</option><option value="yes">覚えた</option>
+    </select>
+  </div>
+  <input id="q" type="search" placeholder="🔍 さがす">
+  <div class="counts" id="counts"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこの端末の中だけに保存されます（外には送りません）</footer>
+</main>
+<button class="fab" id="add" aria-label="カードを追加">＋</button>
+
+<!-- カードの追加・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">カードを追加</h2>
+    <div class="warn">名前や学校名は書かないでね（自分や友だちの名前・学校名・住所など）。</div>
+    <label class="f" for="e-front">おもて（問題）</label>
+    <input id="e-front" maxlength="100" placeholder="例：apple" autocapitalize="off" autocomplete="off">
+    <label class="f" for="e-back">うら（こたえ）</label>
+    <textarea id="e-back" maxlength="200" style="min-height:4em" placeholder="例：りんご"></textarea>
+    <label class="f" for="e-group">グループ（なくてもOK）</label>
+    <input id="e-group" maxlength="30" list="group-list" placeholder="例：英語 Unit1、理科のことば">
+    <datalist id="group-list"></datalist>
+    <p class="note">教科書やワークを見ながら、自分で正しく書いてね。</p>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-save-next">保存して次のカード</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>このカードを消す</button>
+    </div>
+  </div>
+</div>
+
+<!-- れんしゅう -->
+<div class="sheet" id="practice">
+  <div class="inner">
+    <div id="p-setup">
+      <h2>▶ れんしゅうの準備</h2>
+      <label class="f" for="p-group">グループ</label>
+      <select id="p-group"></select>
+      <label class="f">出すカード</label>
+      <div class="chips" id="p-range">
+        <button class="chip on" data-v="no">まだ覚えていないものだけ</button>
+        <button class="chip" data-v="all">ぜんぶ</button>
+      </div>
+      <label class="f">向き</label>
+      <div class="chips" id="p-dir">
+        <button class="chip on" data-v="fb">おもて → うら</button>
+        <button class="chip" data-v="bf">うら → おもて</button>
+      </div>
+      <p class="note" id="p-count"></p>
+      <div class="actions">
+        <button class="primary" id="p-start">スタート</button>
+        <button class="plain" id="p-close">もどる</button>
+      </div>
+    </div>
+    <div id="p-play" hidden>
+      <div class="prog"><span id="p-prog"></span><button class="iconbtn" id="p-quit">やめる</button></div>
+      <div class="flash" id="p-card">
+        <div class="q" id="p-q"></div>
+        <div class="a" id="p-a" hidden></div>
+        <div class="hint" id="p-hint">タップでこたえを見る</div>
+      </div>
+      <div class="actions" style="margin-top:0">
+        <button class="plain wide" id="p-show">こたえを見る</button>
+        <button class="plain" id="p-speak" hidden>🔊 英語で読み上げ</button>
+      </div>
+      <div class="judge" id="p-judge" hidden>
+        <button class="again" id="p-again">✗ もう一回</button>
+        <button class="got" id="p-got">◯ 覚えた</button>
+      </div>
+    </div>
+    <div id="p-end" hidden>
+      <div class="result">
+        <div class="big">🎉</div>
+        <h2 id="p-end-title">おつかれさま！</h2>
+        <p id="p-end-text"></p>
+      </div>
+      <div class="actions">
+        <button class="primary" id="p-retry">もう一回</button>
+        <button class="plain" id="p-done">一覧にもどる</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" for="bulk">まとめて登録（1行に1枚。「おもて,うら」のように「,」で区切る）</label>
+    <div class="warn">名前や学校名は書かないでね（自分や友だちの名前・学校名・住所など）。</div>
+    <textarea id="bulk" placeholder="例：&#10;apple,りんご&#10;dog,犬"></textarea>
+    <label class="f" for="bulk-group">グループ（なくてもOK）</label>
+    <input id="bulk-group" maxlength="30" list="group-list">
+    <div class="actions"><button class="primary" id="bulk-add">まとめて追加</button></div>
+
+    <label class="f" style="margin-top:22px">覚えた印</label>
+    <div class="actions" style="margin-top:0"><button class="plain" id="reset-known">ぜんぶ「まだ」にもどす</button></div>
+    
+    <label class="f" style="margin-top:22px">バックアップ（データの保存）</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、データもすべて消えます。ときどき「書き出す」で「ファイル」アプリなどに保存しておくと安心です。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+
+// ===== 小さな道具（どのページでも使う） =====
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) {
+  try { localStorage.setItem(key, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。スマホの空き容量を確認してね。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dstr(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function todayStr() { return dstr(new Date()); }
+function parseD(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (isNaN(d) || d.getMonth() !== +m[2] - 1) ? null : d;
+}
+function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+function daysUntil(s) { const d = parseD(s); if (!d) return null; return Math.round((d - parseD(todayStr())) / 86400000); }
+function fmtD(s) { const d = parseD(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ')' : ''; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function str(v, max) { return (typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : '')).slice(0, max); }
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+let closedAt = 0;
+function closeSheet(id) { $(id).classList.remove('open'); closedAt = Date.now(); }
+// 画面を閉じた直後の2回目のタップ（連打）で、下にある一覧の項目が開かないようにする
+document.addEventListener('click', (e) => {
+  if (Date.now() - closedAt < 350 && !e.target.closest('.sheet.open')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+function anySheetOpen() { return !!document.querySelector('.sheet.open'); }
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null）
+function wholeNum(text) { const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); return /^\d{1,5}$/.test(t) ? parseInt(t, 10) : null; }
+
+// ===== バックアップ（書き出し・読み込み） =====
+async function exportBackup(app, data) {
+  const d = new Date();
+  const name = app + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app, version: APP_VERSION, exportedAt: d.toISOString(), ...data }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// apply(data) は取り込んだ件数のメッセージを返す。ふさわしくないファイルなら null を返す
+function setupImport(btnId, inputId, app, check, apply) {
+  $(btnId).onclick = () => $(inputId).click();
+  $(inputId).onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。こわれているかもしれません。'); return; }
+    if (!data || typeof data !== 'object' || data.app !== app || !check(data)) { alert('このアプリのバックアップファイルではありません。'); return; }
+    const msg = apply(data, true);
+    if (!msg || !confirm(msg + '\n同じものはファイルの内容で上書きします（ほかのデータは消えません）。よろしいですか？')) return;
+    apply(data, false);
+    alert('読み込みました。');
+  };
+}
+
+// ===== 電波がなくても使えるようにする仕組みと、更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || anySheetOpen()) return; // 入力中・れんしゅう中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+
+const KEY_CARDS = 'c-tango:cards';
+const KEY_VIEW = 'c-tango:view';
+let cards = load(KEY_CARDS, []);
+if (!Array.isArray(cards)) cards = [];
+let view = load(KEY_VIEW, { group: '', known: '', range: 'no', dir: 'fb' });
+
+function persist() { return save(KEY_CARDS, cards); }
+function groups() { return [...new Set(cards.map((c) => c.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja')); }
+function fillGroups(sel, cur) {
+  sel.innerHTML = '';
+  sel.add(new Option('全グループ', ''));
+  groups().forEach((g) => sel.add(new Option(g, g)));
+  sel.value = groups().includes(cur) ? cur : '';
+}
+
+// ===== 一覧 =====
+function render() {
+  fillGroups($('f-group'), view.group);
+  $('f-known').value = view.known || '';
+  const dl = $('group-list'); dl.innerHTML = ''; groups().forEach((g) => dl.append(new Option(g)));
+  const q = $('q').value.trim().toLowerCase();
+  const inGroup = cards.filter((c) => !view.group || c.group === view.group);
+  const shown = inGroup.filter((c) => (!view.known || (view.known === 'yes') === c.known) && (!q || (c.front + '\n' + c.back).toLowerCase().includes(q)));
+  shown.sort((a, b) => a.createdAt - b.createdAt);
+  const k = inGroup.filter((c) => c.known).length;
+  $('counts').textContent = cards.length ? ('全' + inGroup.length + '枚（覚えた ' + k + '・まだ ' + (inGroup.length - k) + '）' + (shown.length !== inGroup.length ? '　表示中 ' + shown.length + '枚' : '')) : '';
+  $('go-practice').disabled = !cards.length;
+  const list = $('list'); list.innerHTML = '';
+  if (!shown.length) {
+    list.append(el('p', 'empty', cards.length ? '条件に合うカードはありません' : 'まだカードがありません。右下の「＋」から、覚えたい単語やことばを登録しよう。'));
+    return;
+  }
+  for (const c of shown) {
+    const d = el('div', 'card' + (c.known ? ' known' : ''));
+    d.append(el('div', 't', c.front), el('div', 'b', c.back));
+    const m = el('div', 'm');
+    if (c.group) m.append(el('span', 'tag', c.group));
+    if (c.known) m.append(el('span', 'okmark', '✓ 覚えた'));
+    if (c.right || c.wrong) m.append(document.createTextNode('　◯' + c.right + ' ✗' + c.wrong));
+    if (m.childNodes.length) d.append(m);
+    d.onclick = () => openEdit(c);
+    list.append(d);
+  }
+}
+$('f-group').onchange = () => { view.group = $('f-group').value; save(KEY_VIEW, view); render(); };
+$('f-known').onchange = () => { view.known = $('f-known').value; save(KEY_VIEW, view); render(); };
+$('q').oninput = render;
+
+// ===== 追加・編集 =====
+let editing = null, busy = false;
+function openEdit(c) {
+  editing = c || null;
+  $('edit-title').textContent = c ? 'カードを直す' : 'カードを追加';
+  $('e-front').value = c ? c.front : '';
+  $('e-back').value = c ? c.back : '';
+  $('e-group').value = c ? c.group : (view.group || '');
+  $('e-del').hidden = !c;
+  $('e-save-next').hidden = !!c;
+  openSheet('edit');
+  if (!c) setTimeout(() => $('e-front').focus(), 50);
+}
+function saveCard(next) {
+  if (busy) return;
+  const front = $('e-front').value.trim().slice(0, 100), back = $('e-back').value.trim().slice(0, 200), group = $('e-group').value.trim().slice(0, 30);
+  if (!front || !back) { alert('おもてとうらの両方を入れてね。'); return; }
+  busy = true;
+  const now = Date.now();
+  if (editing) {
+    Object.assign(editing, { front, back, group, updatedAt: now });
+  } else {
+    cards.push({ id: uid(), front, back, group, known: false, right: 0, wrong: 0, createdAt: now, updatedAt: now });
+  }
+  persist();
+  if (next && !editing) {
+    $('e-front').value = ''; $('e-back').value = ''; $('e-front').focus();
+    render();
+  } else { closeSheet('edit'); render(); }
+  setTimeout(() => { busy = false; }, 400);
+}
+$('add').onclick = () => openEdit(null);
+$('e-save').onclick = () => saveCard(false);
+$('e-save-next').onclick = () => saveCard(true);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.front + '」のカードを消します。元にもどせません。いい？')) return;
+  cards = cards.filter((c) => c.id !== editing.id);
+  persist(); closeSheet('edit'); render();
+};
+
+// ===== れんしゅう =====
+function setChips(box, v) { box.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); }
+function pool() { return cards.filter((c) => (!view.pgroup || c.group === view.pgroup) && (view.range === 'all' || !c.known)); }
+function updateCount() {
+  const n = pool().length;
+  $('p-count').textContent = n ? n + '枚のカードが出ます。' : (view.range === 'no' ? 'このグループは、ぜんぶ覚えた印がついています。「ぜんぶ」を選ぶと復習できます。' : 'カードがありません。');
+  $('p-start').disabled = !n;
+}
+$('go-practice').onclick = () => {
+  fillGroups($('p-group'), view.group);
+  view.pgroup = $('p-group').value;
+  setChips($('p-range'), view.range); setChips($('p-dir'), view.dir);
+  $('p-setup').hidden = false; $('p-play').hidden = true; $('p-end').hidden = true;
+  updateCount(); openSheet('practice');
+};
+$('p-group').onchange = () => { view.pgroup = $('p-group').value; updateCount(); };
+['p-range', 'p-dir'].forEach((id) => $(id).addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  view[id === 'p-range' ? 'range' : 'dir'] = b.dataset.v; save(KEY_VIEW, view);
+  setChips($(id), b.dataset.v); updateCount();
+}));
+$('p-close').onclick = () => closeSheet('practice');
+
+let queue = [], cur = null, firstOk = 0, retried = new Set(), total = 0;
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function startPractice() {
+  queue = shuffle(pool().map((c) => c.id)); total = queue.length; firstOk = 0; retried = new Set();
+  if (!total) return;
+  $('p-setup').hidden = true; $('p-end').hidden = true; $('p-play').hidden = false;
+  nextCard();
+}
+$('p-start').onclick = startPractice;
+$('p-retry').onclick = () => { $('p-end').hidden = true; $('p-setup').hidden = false; updateCount(); };
+function nextCard() {
+  cur = null;
+  while (queue.length && !cur) { const id = queue.shift(); cur = cards.find((c) => c.id === id) || null; }
+  if (!cur) { endPractice(); return; }
+  const fb = view.dir !== 'bf';
+  $('p-q').textContent = fb ? cur.front : cur.back;
+  $('p-a').textContent = fb ? cur.back : cur.front;
+  $('p-a').hidden = true; $('p-hint').hidden = false;
+  $('p-show').hidden = false; $('p-judge').hidden = true;
+  $('p-speak').hidden = !canSpeak(cur.front);
+  $('p-prog').textContent = 'のこり ' + (queue.length + 1) + '枚';
+}
+function showAnswer() { if (!cur) return; $('p-a').hidden = false; $('p-hint').hidden = true; $('p-show').hidden = true; $('p-judge').hidden = false; }
+$('p-card').onclick = showAnswer;
+$('p-show').onclick = showAnswer;
+let judging = false;
+function judge(ok) {
+  if (!cur || judging) return;
+  judging = true; setTimeout(() => { judging = false; }, 250);
+  if (ok) { cur.right = (cur.right || 0) + 1; cur.known = true; if (!retried.has(cur.id)) firstOk++; }
+  else { cur.wrong = (cur.wrong || 0) + 1; cur.known = false; retried.add(cur.id); queue.push(cur.id); }
+  cur.updatedAt = Date.now();
+  persist();
+  nextCard();
+}
+$('p-got').onclick = () => judge(true);
+$('p-again').onclick = () => judge(false);
+$('p-quit').onclick = () => { if (window.speechSynthesis) speechSynthesis.cancel(); closeSheet('practice'); render(); };
+$('p-done').onclick = () => { closeSheet('practice'); render(); };
+function endPractice() {
+  $('p-play').hidden = true; $('p-end').hidden = false;
+  $('p-end-title').textContent = firstOk === total ? 'パーフェクト！' : 'ぜんぶ終わり！';
+  $('p-end-text').textContent = total + '枚のうち、1回目で覚えた ' + firstOk + '枚・もう一回した ' + retried.size + '枚';
+}
+// 英語（半角の英字）のときだけ、端末の読み上げ機能で読む
+function canSpeak(t) { return !!window.speechSynthesis && /[A-Za-z]/.test(t) && !/[ぁ-んァ-ヶ一-龠]/.test(t); }
+$('p-speak').onclick = (e) => {
+  e.stopPropagation();
+  if (!cur || !canSpeak(cur.front)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(cur.front); u.lang = 'en-US'; u.rate = 0.85;
+  speechSynthesis.speak(u);
+};
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { openSheet('settings'); };
+$('s-close').onclick = () => { closeSheet('settings'); render(); };
+let bulkBusy = false;
+$('bulk-add').onclick = () => {
+  if (bulkBusy) return;
+  const lines = $('bulk').value.split('\n').map((l) => l.trim()).filter(Boolean);
+  const group = $('bulk-group').value.trim().slice(0, 30);
+  const ok = [], bad = [];
+  lines.forEach((l, i) => {
+    const m = /^(.+?)\s*[,，\t]\s*(.+)$/.exec(l);
+    if (m && m[1].trim() && m[2].trim()) ok.push([m[1].trim().slice(0, 100), m[2].trim().slice(0, 200)]); else bad.push(i + 1);
+  });
+  if (!lines.length) { alert('登録したい単語を入れてね。'); return; }
+  if (bad.length) { alert(bad.join('・') + '行目に区切りの「,」がありません。「おもて,うら」の形に直してね。'); return; }
+  bulkBusy = true;
+  const now = Date.now();
+  ok.forEach(([front, back], i) => cards.push({ id: uid(), front, back, group, known: false, right: 0, wrong: 0, createdAt: now + i, updatedAt: now }));
+  persist();
+  $('bulk').value = '';
+  alert(ok.length + '枚追加しました。');
+  render();
+  setTimeout(() => { bulkBusy = false; }, 400);
+};
+$('reset-known').onclick = () => {
+  if (!cards.length || !confirm('すべてのカードの「覚えた」印を外します。いい？')) return;
+  cards.forEach((c) => { c.known = false; }); persist(); render(); alert('もどしました。');
+};
+$('export').onclick = () => exportBackup('c-tango', { cards });
+setupImport('import-btn', 'import', 'c-tango', (d) => Array.isArray(d.cards), (d, dry) => {
+  const list = d.cards.filter((c) => c && typeof c === 'object' && str(c.front, 100).trim() && str(c.back, 200).trim()).map((c) => ({
+    id: str(c.id, 40) || uid(), front: str(c.front, 100).trim(), back: str(c.back, 200).trim(), group: str(c.group, 30).trim(),
+    known: c.known === true,
+    right: Number.isInteger(c.right) && c.right >= 0 ? c.right : 0, wrong: Number.isInteger(c.wrong) && c.wrong >= 0 ? c.wrong : 0,
+    createdAt: Number.isFinite(c.createdAt) ? c.createdAt : Date.now(), updatedAt: Number.isFinite(c.updatedAt) ? c.updatedAt : Date.now(),
+  }));
+  if (dry) return list.length ? list.length + '枚のカードを読み込みます。' : (alert('読み込めるカードがありませんでした。'), null);
+  list.forEach((c) => { const i = cards.findIndex((x) => x.id === c.id); if (i >= 0) cards[i] = c; else cards.push(c); });
+  persist(); render();
+  return 'ok';
+});
+
+$('ver').textContent = APP_VERSION;
+render();
+
+</script>
+</body>
+</html>

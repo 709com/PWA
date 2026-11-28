@@ -1,0 +1,507 @@
+<!doctype html>
+<!-- このファイルは「読み聞かせ・読書の記録」の本体です。子どもごとに読んだ本（題名・日付・読み方・感想スタンプ・メモ）を本棚のように並べ、冊数を数えて10冊ごとにお祝いします。 -->
+<!-- 記録はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>読み聞かせ・読書の記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="読書記録">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c2572b">
+<style>
+  :root { --bg:#fbf6f1; --card:#fff; --text:#2b1f18; --sub:#6e5d52; --accent:#c2572b; --accent-soft:#f8e4d8; --line:#eadfd5; --danger:#c8372d;
+          --wood:#b07a4a; --wood-dark:#8a5a32; --shelf:#f3e6d8; --sl:78%; --sd:22%; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17120f; --card:#221b16; --text:#f3e9e1; --sub:#b3a194; --accent:#ee8a5c; --accent-soft:#3a2419; --line:#3a2e25; --danger:#ef6b61;
+            --wood:#6e4a2c; --wood-dark:#4d321c; --shelf:#2a201a; --sl:34%; --sd:92%; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.15rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:5em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .kids { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px; }
+  .kids button { flex:0 0 auto; background:var(--card); border:2px solid var(--line); border-radius:99px; padding:9px 16px; font-weight:700; min-height:44px; }
+  .kids button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* 冊数 */
+  .stats { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .big { display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+  .big b { font-size:2.4rem; line-height:1.1; color:var(--accent); }
+  .big span { color:var(--sub); }
+  .sub { font-size:.88rem; color:var(--sub); margin-top:4px; }
+  .next { margin-top:8px; font-weight:700; }
+  .medals { font-size:1.3rem; letter-spacing:2px; word-break:break-all; }
+  .months { margin-top:10px; }
+  .mrow { display:flex; align-items:center; gap:8px; font-size:.85rem; margin:3px 0; }
+  .mrow .ml { width:6.6em; white-space:nowrap; flex:0 0 auto; color:var(--sub); }
+  .mrow .bar { flex:1; height:14px; background:var(--accent-soft); border-radius:99px; overflow:hidden; }
+  .mrow .bar div { height:100%; background:var(--accent); border-radius:99px; }
+  .mrow .mc { width:3em; text-align:right; flex:0 0 auto; }
+  details summary { cursor:pointer; color:var(--accent); font-size:.9rem; margin-top:8px; }
+
+  /* 本棚 */
+  .shelfhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:6px 0; }
+  .shelfhead h2 { font-size:1.05rem; margin:0; }
+  #q { margin-bottom:8px; }
+  .shelf { background:var(--shelf); border:6px solid var(--wood); border-radius:10px; padding:0 6px;
+           display:flex; flex-wrap:wrap; align-content:flex-start;
+           background-image:linear-gradient(to top, var(--wood) 0, var(--wood) 8px, transparent 8px); background-size:100% 190px; }
+  .book { width:44px; height:170px; margin:12px 3px 8px; border-radius:4px 4px 2px 2px; padding:6px 2px 4px; display:flex; flex-direction:column; align-items:center; gap:2px;
+          background:hsl(var(--h) 55% var(--sl)); color:hsl(var(--h) 50% var(--sd)); box-shadow:inset -4px 0 0 rgba(0,0,0,.12), inset 3px 0 0 rgba(255,255,255,.25); overflow:hidden; }
+  .book .st { font-size:1.05rem; line-height:1; }
+  .book .tt { writing-mode:vertical-rl; font-size:.82rem; font-weight:700; overflow:hidden; flex:1; line-height:1.15; white-space:nowrap; text-overflow:ellipsis; }
+  .book .dt { font-size:.6rem; line-height:1; }
+  .book.self { border-top:5px solid hsl(var(--h) 60% 40%); }
+  .legend { font-size:.78rem; color:var(--sub); margin:6px 0 0; }
+  .empty { color:var(--sub); text-align:center; padding:26px 8px; margin:0; width:100%; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); height:60px; padding:0 20px; border-radius:99px;
+         background:var(--accent); color:#fff; font-size:1.1rem; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+
+  /* 入力・設定の画面（全面） */
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .seg { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .seg button, .stamps button { background:var(--card); border:2px solid var(--line); border-radius:12px; padding:10px 4px; font-weight:700; }
+  .seg button.on, .stamps button.on { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .stamps { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .stamps button { display:flex; flex-direction:column; align-items:center; font-size:.8rem; }
+  .stamps button span { font-size:1.8rem; line-height:1.2; }
+  .krow { display:flex; gap:6px; margin-bottom:6px; }
+  .krow button { flex:0 0 auto; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .primary:disabled { opacity:.6; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+
+  /* お祝い */
+  #party { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.35); overflow:hidden; }
+  #party.open { display:flex; }
+  #party .msg { position:relative; z-index:2; background:var(--card); border-radius:20px; padding:24px 20px; text-align:center; width:min(86vw,360px); box-shadow:0 10px 30px rgba(0,0,0,.3); animation:pop .5s ease-out; }
+  #party .msg .em { font-size:3.4rem; line-height:1.1; }
+  #party .msg h3 { font-size:1.5rem; margin:6px 0; color:var(--accent); }
+  #party .msg p { margin:0 0 14px; }
+  .conf { position:absolute; top:-20px; width:10px; height:16px; border-radius:2px; z-index:1; animation:fall linear forwards; }
+  @keyframes fall { to { transform:translateY(110vh) rotate(720deg); } }
+  @keyframes pop { 0% { transform:scale(.6); opacity:0; } 70% { transform:scale(1.05); opacity:1; } 100% { transform:scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .conf { display:none; } #party .msg { animation:none; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📖 読み聞かせ・読書の記録</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div class="kids" id="kids"></div>
+  <div class="stats" id="stats"></div>
+  <div class="shelfhead"><h2 id="shelf-title">📚 本棚</h2></div>
+  <input id="q" type="search" placeholder="🔍 題名・メモでさがす">
+  <div class="shelf" id="shelf"></div>
+  <p class="legend">本の上の色の帯＝自分で読んだ本 ／ 帯なし＝読み聞かせ。本をタップすると見る・直すことができます。</p>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add">＋ 本を記録</button>
+
+<!-- 入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">本を記録</h2>
+    <div class="warn">メモに、お子さんの本名・学校名など、個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-title">本の題名</label>
+    <input id="e-title" maxlength="60" placeholder="例：ぐりとぐら" list="title-list">
+    <datalist id="title-list"></datalist>
+    <label class="f" for="e-date">読んだ日</label>
+    <input id="e-date" type="date">
+    <label class="f">読み方</label>
+    <div class="seg" id="e-how">
+      <button data-v="kikase">👪 読み聞かせ</button>
+      <button data-v="self">🧒 自分で読んだ</button>
+    </div>
+    <label class="f">感想のスタンプ</label>
+    <div class="stamps" id="e-stamp"></div>
+    <label class="f" for="e-memo">メモ（好きな場面、ひとことなど）</label>
+    <textarea id="e-memo" maxlength="500"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">子どもの呼び名</label>
+    <div class="warn">本名など、個人を特定できる情報は書かないでください（例：「長女」「おにいちゃん」など）。</div>
+    <div id="kid-edit"></div>
+    <button class="plain" id="kid-add">＋ 子どもを追加</button>
+    <div class="actions"><button class="primary" id="kid-save">呼び名を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。月に1回ほど書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note" id="usage"></p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<!-- お祝い -->
+<div id="party" role="dialog" aria-modal="true">
+  <div class="msg">
+    <div class="em">🎉📚🎉</div>
+    <h3 id="party-title"></h3>
+    <p id="party-text"></p>
+    <button class="primary" id="party-close">やったね！</button>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KIDS = 'ehon:kids';   // 子どもの呼び名
+const KEY_CUR = 'ehon:cur';     // いま選んでいる子ども
+const MAX_KIDS = 8;
+const STAMPS = [
+  { v: 'fun', e: '😆', t: 'たのしい' }, { v: 'ok', e: '🙂', t: 'ふつう' }, { v: 'hard', e: '🤔', t: 'むずかしい' },
+  { v: 'sad', e: '😢', t: 'かなしい' }, { v: 'wow', e: '😲', t: 'びっくり' }, { v: 'love', e: '😍', t: 'だいすき' },
+];
+const HOWS = ['kikase', 'self'];
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('ehon', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('books', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', mode);
+    const r = fn(tx.objectStore('books'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (b) => dbDo('readwrite', (s) => s.put(b));
+const dbPutMany = (list) => dbDo('readwrite', (s) => { list.forEach((b) => s.put(b)); });
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { alert('保存できませんでした。'); return false; } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const str = (v, max) => (typeof v === 'string' ? v : '').slice(0, max);
+const p2 = (n) => String(n).padStart(2, '0');
+function newId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function ymd(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function validDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00'); return !isNaN(d) && ymd(d) === s;
+}
+function hueOf(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0; return (h % 12) * 30 + 10; }
+function stampOf(v) { return STAMPS.find((s) => s.v === v); }
+
+// 子どもの一覧と本の記録を、欠けや壊れがない形に整える
+function cleanKids(list) {
+  const out = []; const seen = new Set();
+  (Array.isArray(list) ? list : []).slice(0, MAX_KIDS).forEach((k, i) => {
+    if (!k || typeof k !== 'object') return;
+    let id = str(k.id, 40); if (!id || seen.has(id)) id = newId('k'); seen.add(id);
+    out.push({ id, name: str(k.name, 12).trim() || ('子ども' + (i + 1)) });
+  });
+  return out.length ? out : [1, 2, 3, 4].map((n) => ({ id: 'kid' + n, name: '子ども' + n }));
+}
+function cleanBook(b) {
+  if (!b || typeof b !== 'object') return null;
+  const title = str(b.title, 60).trim();
+  if (!title) return null;
+  const now = Date.now();
+  const createdAt = Number.isFinite(b.createdAt) ? b.createdAt : now;
+  return {
+    id: str(b.id, 60) || newId('b'), kid: str(b.kid, 40), title,
+    date: validDate(b.date) ? b.date : ymd(new Date(createdAt)),
+    how: HOWS.includes(b.how) ? b.how : 'kikase',
+    stamp: stampOf(b.stamp) ? b.stamp : '',
+    memo: str(b.memo, 500), createdAt,
+    updatedAt: Number.isFinite(b.updatedAt) ? b.updatedAt : createdAt,
+  };
+}
+
+let kids = cleanKids(load(KEY_KIDS, null));
+let curId = load(KEY_CUR, '');
+let books = [];
+function curKid() { return kids.find((k) => k.id === curId) || kids[0]; }
+const kidBooks = () => books.filter((b) => b.kid === curKid().id);
+
+// ===== 画面の表示 =====
+function render() {
+  const kid = curKid(); curId = kid.id;
+  const kb = $('kids'); kb.innerHTML = '';
+  kids.forEach((k) => {
+    const b = el('button', k.id === kid.id ? 'on' : '', k.name);
+    b.onclick = () => { curId = k.id; save(KEY_CUR, curId); $('q').value = ''; render(); };
+    kb.append(b);
+  });
+  const mine = kidBooks();
+  // 冊数
+  const st = $('stats'); st.innerHTML = '';
+  const total = mine.length;
+  const thisMonth = ymd(new Date()).slice(0, 7);
+  const big = el('div', 'big'); big.append(el('span', '', kid.name + 'の累計'), el('b', '', String(total)), el('span', '', '冊'));
+  st.append(big);
+  const kik = mine.filter((b) => b.how === 'kikase').length;
+  st.append(el('div', 'sub', '今月 ' + mine.filter((b) => b.date.slice(0, 7) === thisMonth).length + '冊 ／ 読み聞かせ ' + kik + '冊・自分で読んだ ' + (total - kik) + '冊'));
+  const medals = Math.floor(total / 10);
+  if (medals) st.append(el('div', 'medals', '🏅'.repeat(Math.min(medals, 30)) + (medals > 30 ? ' ×' + medals : '')));
+  st.append(el('div', 'next', total === 0 ? '📖 1冊目を記録してみましょう！' : '🎯 あと' + (10 - total % 10) + '冊で' + (medals + 1) * 10 + '冊！'));
+  // 月ごとの冊数（新しい月から）
+  if (total) {
+    const byMonth = {};
+    mine.forEach((b) => { const m = b.date.slice(0, 7); byMonth[m] = (byMonth[m] || 0) + 1; });
+    const months = Object.keys(byMonth).sort().reverse();
+    const max = Math.max(...Object.values(byMonth));
+    const det = el('details'); det.open = months.length <= 6;
+    det.append(el('summary', '', '月ごとの冊数（' + months.length + 'か月分）'));
+    const box = el('div', 'months');
+    months.forEach((m) => {
+      const r = el('div', 'mrow');
+      const bar = el('div', 'bar'); const fill = el('div'); fill.style.width = Math.round(byMonth[m] / max * 100) + '%'; bar.append(fill);
+      r.append(el('span', 'ml', m.slice(0, 4) + '年' + Number(m.slice(5)) + '月'), bar, el('span', 'mc', byMonth[m] + '冊'));
+      box.append(r);
+    });
+    det.append(box); st.append(det);
+  }
+  // 本棚（新しく読んだ順）
+  $('shelf-title').textContent = '📚 ' + kid.name + 'の本棚';
+  const q = $('q').value.trim().toLowerCase();
+  const shown = mine.filter((b) => !q || (b.title + '\n' + b.memo).toLowerCase().includes(q))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  const shelf = $('shelf'); shelf.innerHTML = '';
+  if (!shown.length) {
+    shelf.append(el('p', 'empty', total ? 'さがしている本は見つかりませんでした' : 'まだ本がありません。右下の「＋ 本を記録」から記録してください。'));
+  }
+  shown.forEach((b) => {
+    const s = stampOf(b.stamp);
+    const bk = el('button', 'book' + (b.how === 'self' ? ' self' : ''));
+    bk.style.setProperty('--h', hueOf(b.title));
+    bk.setAttribute('aria-label', b.title);
+    bk.append(el('span', 'st', s ? s.e : '・'), el('span', 'tt', b.title), el('span', 'dt', Number(b.date.slice(5, 7)) + '/' + Number(b.date.slice(8))));
+    bk.onclick = () => openEdit(b);
+    shelf.append(bk);
+  });
+}
+$('q').addEventListener('input', render);
+
+async function reload() {
+  try { books = (await dbAll()).map(cleanBook).filter(Boolean); } catch (e) { books = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+
+// ===== 入力・編集 =====
+let editing = null, how = 'kikase', stamp = '', saving = false;
+function setSeg() {
+  $('e-how').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === how));
+  $('e-stamp').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === stamp));
+}
+$('e-how').querySelectorAll('button').forEach((b) => { b.onclick = () => { how = b.dataset.v; setSeg(); }; });
+STAMPS.forEach((s) => {
+  const b = el('button'); b.dataset.v = s.v; b.append(el('span', '', s.e), document.createTextNode(s.t));
+  b.onclick = () => { stamp = stamp === s.v ? '' : s.v; setSeg(); };
+  $('e-stamp').append(b);
+});
+function openEdit(b) {
+  editing = b || null;
+  $('edit-title').textContent = b ? '記録を見る・直す' : curKid().name + 'の本を記録';
+  $('e-title').value = b ? b.title : '';
+  $('e-date').value = b ? b.date : ymd(new Date());
+  $('e-memo').value = b ? b.memo : '';
+  how = b ? b.how : 'kikase'; stamp = b ? b.stamp : '';
+  setSeg();
+  $('e-del').hidden = !b;
+  // 題名の候補（これまでに記録した本。2回目の読み聞かせを入れやすく）
+  const dl = $('title-list'); dl.innerHTML = '';
+  [...new Set(books.map((x) => x.title))].slice(0, 200).forEach((t) => dl.append(new Option(t)));
+  saving = false; $('e-save').disabled = false;
+  $('edit').classList.add('open'); window.scrollTo(0, 0);
+}
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => $('edit').classList.remove('open');
+$('e-save').onclick = async () => {
+  if (saving) return; // 連打で2冊できないように
+  const title = $('e-title').value.trim().slice(0, 60);
+  const date = $('e-date').value;
+  if (!title) { alert('本の題名を入れてください。'); return; }
+  if (!validDate(date)) { alert('読んだ日を正しく入れてください。'); return; }
+  saving = true; $('e-save').disabled = true;
+  const now = Date.now();
+  const b = editing ? { ...editing } : { id: newId('b'), kid: curKid().id, createdAt: now };
+  Object.assign(b, { title, date, how, stamp, memo: $('e-memo').value.slice(0, 500), updatedAt: now });
+  const before = kidBooks().length;
+  try { await dbPut(b); } catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); saving = false; $('e-save').disabled = false; return; }
+  $('edit').classList.remove('open');
+  await reload();
+  const after = kidBooks().length;
+  if (!editing && after > before && after % 10 === 0) celebrate(curKid().name, after);
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm('「' + editing.title + '」の記録を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id);
+  $('edit').classList.remove('open');
+  reload();
+};
+
+// ===== お祝い（10冊ごと） =====
+function celebrate(name, n) {
+  $('party-title').textContent = n + '冊 達成！';
+  $('party-text').textContent = name + '、' + n + '冊 おめでとう！ たくさん読んだね。';
+  const p = $('party');
+  p.querySelectorAll('.conf').forEach((c) => c.remove());
+  const colors = ['#f2545b', '#f7b538', '#4cc38a', '#3d9be9', '#a25ddc', '#ff8fc7'];
+  for (let i = 0; i < 70; i++) {
+    const c = el('div', 'conf');
+    c.style.left = (Math.random() * 100) + 'vw';
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = (2.2 + Math.random() * 2.2) + 's';
+    c.style.animationDelay = (Math.random() * 0.8) + 's';
+    p.append(c);
+  }
+  p.classList.add('open');
+}
+$('party-close').onclick = () => { $('party').classList.remove('open'); $('party').querySelectorAll('.conf').forEach((c) => c.remove()); };
+
+// ===== 設定：子どもの呼び名 =====
+function buildKidEdit() { $('kid-edit').innerHTML = ''; kids.forEach((k) => addKidRow(k.id, k.name)); }
+function addKidRow(id, name) {
+  const row = el('div', 'krow'); row.dataset.id = id;
+  const inp = el('input'); inp.value = name; inp.maxLength = 12; inp.placeholder = '呼び名';
+  const del = el('button', 'plain danger', '削除');
+  del.onclick = () => {
+    if ($('kid-edit').children.length <= 1) { alert('1人は残してください。'); return; }
+    const n = books.filter((b) => b.kid === id).length;
+    if (n) { alert('この子の本が' + n + '冊記録されているので、削除できません。呼び名を変えて使ってください。'); return; }
+    row.remove();
+  };
+  row.append(inp, del); $('kid-edit').append(row);
+  return inp;
+}
+$('kid-add').onclick = () => {
+  if ($('kid-edit').children.length >= MAX_KIDS) { alert(MAX_KIDS + '人までです。'); return; }
+  addKidRow(newId('k'), '').focus();
+};
+$('kid-save').onclick = () => {
+  const rows = [...$('kid-edit').children];
+  if (rows.some((r) => !r.querySelector('input').value.trim())) { alert('呼び名が空の欄があります。入れてください。'); return; }
+  kids = cleanKids(rows.map((r) => ({ id: r.dataset.id, name: r.querySelector('input').value.trim() })));
+  if (!save(KEY_KIDS, kids)) return;
+  buildKidEdit(); render();
+  alert('呼び名を保存しました。');
+};
+$('open-settings').onclick = () => { buildKidEdit(); showUsage(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+
+// ===== 設定：バックアップ =====
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'ehon-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app: 'ehon', version: APP_VERSION, exportedAt: d.toISOString(), kids, books }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let d;
+  try { d = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!d || d.app !== 'ehon' || !Array.isArray(d.books)) { alert('このアプリ（読書記録）のバックアップファイルではありません。'); return; }
+  const list = d.books.map(cleanBook).filter(Boolean);
+  if (!confirm(list.length + '冊の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  // 子どもの呼び名：ファイルにある子を足す。どの子か分からない記録は、いま選んでいる子に入れる
+  const fileKids = cleanKids(d.kids);
+  if (Array.isArray(d.kids) && d.kids.length) {
+    fileKids.forEach((fk) => {
+      const mine = kids.find((k) => k.id === fk.id);
+      if (mine) mine.name = fk.name; else if (kids.length < MAX_KIDS) kids.push(fk);
+    });
+  }
+  list.forEach((b) => { if (!kids.some((k) => k.id === b.kid)) b.kid = curKid().id; });
+  save(KEY_KIDS, kids);
+  try { await dbPutMany(list); } catch (err) { alert('保存できませんでした。'); return; }
+  buildKidEdit();
+  await reload();
+  alert('読み込みました。');
+};
+async function showUsage() {
+  if (!navigator.storage || !navigator.storage.estimate) { $('usage').textContent = ''; return; }
+  const { usage } = await navigator.storage.estimate();
+  $('usage').textContent = '使用量：約' + Math.max(0.1, (usage || 0) / 1024 / 1024).toFixed(1) + 'MB';
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open') || $('settings').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

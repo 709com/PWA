@@ -1,0 +1,358 @@
+<!doctype html>
+<!-- このファイルは「宿題・提出物メモ」の本体です。宿題や提出物をしめきりの近い順に並べ、終わったらチェックできます。 -->
+<!-- 入力したことはこの端末の中（localStorage）だけに保存し、外部へは一切送信しません。広告・課金・アカウント登録もありません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>宿題・提出物メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="提出物">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#26895a">
+<style>
+  :root { --bg:#f1f8f3; --card:#fff; --text:#16281d; --sub:#5a6e61; --accent:#26895a; --accent-soft:#dcf1e5; --line:#d6e6dc; --danger:#c8372d; --late:#d0452f; --soon:#d98a00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1712; --card:#18231c; --text:#e6f2ea; --sub:#9cb3a5; --accent:#4cc48b; --accent-soft:#1b3326; --line:#283a2f; --danger:#ef6b61; --late:#ff7a66; --soon:#f2b84b; } }
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
+  main { max-width:640px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
+  h1 { font-size:clamp(1.02rem, 5vw, 1.25rem); margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:100%; }
+  textarea { min-height:6em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:14px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .empty { color:var(--sub); text-align:center; padding:28px 8px; }
+  .fab { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:64px; height:64px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5; }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.88rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:14px; padding:13px 20px; font-weight:700; min-height:48px; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 16px; min-height:48px; }
+  .wide { width:100%; }
+  .danger { color:var(--danger); }
+  .note { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:12px; padding:8px 12px; font-size:.86rem; margin-bottom:6px; }
+  .tag { display:inline-block; font-size:.76rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; min-height:40px; }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .seg { display:grid; gap:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:auto; padding-top:18px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+
+
+  .summary { background:var(--accent-soft); border-radius:16px; padding:12px 14px; margin-bottom:6px; font-size:.98rem; }
+  .summary b { font-size:1.3rem; }
+  .secttl { font-size:.92rem; font-weight:700; margin:16px 0 6px; color:var(--sub); }
+  .secttl.late { color:var(--late); }
+  .secttl.soon { color:var(--soon); }
+  .item { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:8px 10px; margin-bottom:8px; }
+  .item .ck { width:40px; height:40px; flex:none; border-radius:50%; border:2px solid var(--line); background:var(--card); font-size:1.2rem; color:#fff; }
+  .item.done .ck { background:var(--accent); border-color:var(--accent); }
+  .item .body { flex:1; min-width:0; cursor:pointer; padding:2px 0; }
+  .item .t { font-weight:700; word-break:break-word; }
+  .item.done .t { text-decoration:line-through; color:var(--sub); font-weight:400; }
+  .item .m { font-size:.8rem; color:var(--sub); }
+  .item .m .late { color:var(--late); font-weight:700; }
+  .item .m .soon { color:var(--soon); font-weight:700; }
+  .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .more { background:none; color:var(--accent); padding:8px; width:100%; }
+
+</style>
+</head>
+<body>
+
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>✏️ 宿題・提出物メモ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div class="summary" id="summary"></div>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこの端末の中だけに保存されます（外には送りません）</footer>
+</main>
+<button class="fab" id="add" aria-label="宿題を追加">＋</button>
+
+<!-- 追加・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">宿題・提出物を追加</h2>
+    <div class="warn">名前や学校名は書かないでね（自分や友だちの名前・学校名・住所など）。</div>
+    <label class="f" for="e-text">なにをする？</label>
+    <input id="e-text" maxlength="60" placeholder="例：数学ワーク p.20〜25">
+    <label class="f" for="e-subj">教科</label>
+    <select id="e-subj"></select>
+    <label class="f" for="e-due">しめきり</label>
+    <input id="e-due" type="date">
+    <div class="quick">
+      <button class="chip" data-d="0">今日</button>
+      <button class="chip" data-d="1">明日</button>
+      <button class="chip" data-d="2">あさって</button>
+      <button class="chip" data-d="7">1週間後</button>
+      <button class="chip" data-d="">決まっていない</button>
+    </div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>消す</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f" for="subj-edit">教科のリスト（1行に1つ）</label>
+    <textarea id="subj-edit" style="min-height:11em"></textarea>
+    <div class="actions"><button class="primary" id="subj-save">教科を保存</button></div>
+    <label class="f" style="margin-top:22px">おわったもの</label>
+    <div class="actions" style="margin-top:0"><button class="plain" id="clear-done">おわったものをまとめて消す</button></div>
+    
+    <label class="f" style="margin-top:22px">バックアップ（データの保存）</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、データもすべて消えます。ときどき「書き出す」で「ファイル」アプリなどに保存しておくと安心です。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+
+// ===== 小さな道具（どのページでも使う） =====
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) {
+  try { localStorage.setItem(key, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。スマホの空き容量を確認してね。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dstr(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function todayStr() { return dstr(new Date()); }
+function parseD(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (isNaN(d) || d.getMonth() !== +m[2] - 1) ? null : d;
+}
+function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+function daysUntil(s) { const d = parseD(s); if (!d) return null; return Math.round((d - parseD(todayStr())) / 86400000); }
+function fmtD(s) { const d = parseD(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ')' : ''; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function str(v, max) { return (typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : '')).slice(0, max); }
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+let closedAt = 0;
+function closeSheet(id) { $(id).classList.remove('open'); closedAt = Date.now(); }
+// 画面を閉じた直後の2回目のタップ（連打）で、下にある一覧の項目が開かないようにする
+document.addEventListener('click', (e) => {
+  if (Date.now() - closedAt < 350 && !e.target.closest('.sheet.open')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+function anySheetOpen() { return !!document.querySelector('.sheet.open'); }
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null）
+function wholeNum(text) { const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); return /^\d{1,5}$/.test(t) ? parseInt(t, 10) : null; }
+
+// ===== バックアップ（書き出し・読み込み） =====
+async function exportBackup(app, data) {
+  const d = new Date();
+  const name = app + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app, version: APP_VERSION, exportedAt: d.toISOString(), ...data }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// apply(data) は取り込んだ件数のメッセージを返す。ふさわしくないファイルなら null を返す
+function setupImport(btnId, inputId, app, check, apply) {
+  $(btnId).onclick = () => $(inputId).click();
+  $(inputId).onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。こわれているかもしれません。'); return; }
+    if (!data || typeof data !== 'object' || data.app !== app || !check(data)) { alert('このアプリのバックアップファイルではありません。'); return; }
+    const msg = apply(data, true);
+    if (!msg || !confirm(msg + '\n同じものはファイルの内容で上書きします（ほかのデータは消えません）。よろしいですか？')) return;
+    apply(data, false);
+    alert('読み込みました。');
+  };
+}
+
+// ===== 電波がなくても使えるようにする仕組みと、更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || anySheetOpen()) return; // 入力中・れんしゅう中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+
+const KEY = 'c-shukudai:items';
+const KEY_SUBJ = 'c-shukudai:subjects';
+const DEFAULT_SUBJ = ['国語', '数学', '英語', '理科', '社会', '音楽', '美術', '保健体育', '技術・家庭', '学活・その他'];
+let items = load(KEY, []); if (!Array.isArray(items)) items = [];
+let subjects = load(KEY_SUBJ, DEFAULT_SUBJ); if (!Array.isArray(subjects) || !subjects.length) subjects = DEFAULT_SUBJ.slice();
+let showAllDone = false;
+const persist = () => save(KEY, items);
+
+function dueLabel(it) {
+  if (!it.due) return ['', 'しめきりなし'];
+  const n = daysUntil(it.due);
+  const base = fmtD(it.due) + 'まで';
+  if (it.done) return ['', base];
+  if (n < 0) return ['late', base + '（' + (-n) + '日すぎ）'];
+  if (n === 0) return ['soon', base + '（今日）'];
+  if (n === 1) return ['soon', base + '（明日）'];
+  return ['', base + '（あと' + n + '日）'];
+}
+function render() {
+  const open = items.filter((i) => !i.done);
+  const done = items.filter((i) => i.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  const late = [], today = [], tomorrow = [], later = [], none = [];
+  open.forEach((i) => { if (!i.due) return none.push(i); const n = daysUntil(i.due); (n < 0 ? late : n === 0 ? today : n === 1 ? tomorrow : later).push(i); });
+  const byDue = (a, b) => a.due.localeCompare(b.due) || a.createdAt - b.createdAt;
+  [late, today, tomorrow, later].forEach((a) => a.sort(byDue)); none.sort((a, b) => a.createdAt - b.createdAt);
+  const s = $('summary'); s.innerHTML = '';
+  if (!items.length) s.textContent = '宿題や提出物を書いておくと、しめきりの近い順に並びます。';
+  else if (!open.length) s.textContent = '🎉 やることはぜんぶ終わり！';
+  else {
+    s.append('のこり ', el('b', '', String(open.length)), ' 件');
+    if (late.length + today.length) s.append('　（今日までのもの ' + (late.length + today.length) + '件）');
+  }
+  const list = $('list'); list.innerHTML = '';
+  if (!items.length) { list.append(el('p', 'empty', '右下の「＋」から追加しよう。')); return; }
+  const sec = (title, cls, arr) => { if (!arr.length) return; list.append(el('div', 'secttl ' + cls, title + '（' + arr.length + '）')); arr.forEach((i) => list.append(row(i))); };
+  sec('⚠️ しめきりをすぎた', 'late', late);
+  sec('今日まで', 'soon', today);
+  sec('明日まで', 'soon', tomorrow);
+  sec('これから', '', later);
+  sec('しめきりなし', '', none);
+  if (done.length) {
+    const shown = showAllDone ? done : done.slice(0, 5);
+    list.append(el('div', 'secttl', '✅ おわった（' + done.length + '）'));
+    shown.forEach((i) => list.append(row(i)));
+    if (done.length > 5) { const b = el('button', 'more', showAllDone ? '少なく表示' : 'ぜんぶ表示'); b.onclick = () => { showAllDone = !showAllDone; render(); }; list.append(b); }
+  }
+}
+function row(it) {
+  const r = el('div', 'item' + (it.done ? ' done' : ''));
+  const ck = el('button', 'ck', it.done ? '✓' : ''); ck.setAttribute('aria-label', it.done ? 'まだにもどす' : 'おわった');
+  ck.onclick = () => { it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; persist(); render(); };
+  const b = el('div', 'body');
+  b.append(el('div', 't', it.text));
+  const m = el('div', 'm');
+  if (it.subject) m.append(el('span', 'tag', it.subject));
+  const [cls, txt] = dueLabel(it); m.append(el('span', cls, txt));
+  b.append(m);
+  b.onclick = () => openEdit(it);
+  r.append(ck, b);
+  return r;
+}
+
+// ===== 追加・編集 =====
+let editing = null, busy = false;
+function openEdit(it) {
+  editing = it || null;
+  $('edit-title').textContent = it ? '宿題・提出物を直す' : '宿題・提出物を追加';
+  const sel = $('e-subj'); sel.innerHTML = '';
+  sel.add(new Option('（えらばない）', ''));
+  [...new Set([...subjects, ...(it && it.subject ? [it.subject] : [])])].forEach((s) => sel.add(new Option(s, s)));
+  $('e-text').value = it ? it.text : '';
+  sel.value = it ? it.subject : '';
+  $('e-due').value = it ? it.due : addDays(todayStr(), 1);
+  $('e-del').hidden = !it;
+  openSheet('edit');
+}
+document.querySelector('.quick').onclick = (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  $('e-due').value = b.dataset.d === '' ? '' : addDays(todayStr(), +b.dataset.d);
+};
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = () => {
+  if (busy) return;
+  const text = $('e-text').value.trim().slice(0, 60), due = $('e-due').value;
+  if (!text) { alert('なにをするか入れてね。'); return; }
+  if (due && !parseD(due)) { alert('しめきりの日付を選び直してね。'); return; }
+  busy = true; setTimeout(() => { busy = false; }, 400);
+  if (editing) Object.assign(editing, { text, subject: $('e-subj').value, due });
+  else items.push({ id: uid(), text, subject: $('e-subj').value, due, done: false, doneAt: 0, createdAt: Date.now() });
+  persist(); closeSheet('edit'); render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.text + '」を消します。いい？')) return;
+  items = items.filter((i) => i.id !== editing.id); persist(); closeSheet('edit'); render();
+};
+
+// ===== 設定 =====
+$('open-settings').onclick = () => { $('subj-edit').value = subjects.join('\n'); openSheet('settings'); };
+$('s-close').onclick = () => { closeSheet('settings'); render(); };
+$('subj-save').onclick = () => {
+  const v = [...new Set($('subj-edit').value.split('\n').map((s) => s.trim().slice(0, 20)).filter(Boolean))];
+  subjects = v.length ? v : DEFAULT_SUBJ.slice();
+  save(KEY_SUBJ, subjects); $('subj-edit').value = subjects.join('\n'); alert('教科を保存しました。');
+};
+$('clear-done').onclick = () => {
+  const n = items.filter((i) => i.done).length;
+  if (!n) { alert('おわったものはありません。'); return; }
+  if (!confirm('おわったもの ' + n + '件を消します。いい？')) return;
+  items = items.filter((i) => !i.done); persist(); render(); alert('消しました。');
+};
+$('export').onclick = () => exportBackup('c-shukudai', { items, subjects });
+setupImport('import-btn', 'import', 'c-shukudai', (d) => Array.isArray(d.items), (d, dry) => {
+  const list = d.items.filter((i) => i && str(i.text, 60).trim()).map((i) => ({
+    id: str(i.id, 40) || uid(), text: str(i.text, 60).trim(), subject: str(i.subject, 20).trim(),
+    due: parseD(i.due) ? i.due : '', done: i.done === true, doneAt: Number.isFinite(i.doneAt) ? i.doneAt : 0,
+    createdAt: Number.isFinite(i.createdAt) ? i.createdAt : Date.now(),
+  }));
+  if (dry) return list.length ? list.length + '件を読み込みます。' : (alert('読み込めるものがありませんでした。'), null);
+  list.forEach((x) => { const k = items.findIndex((y) => y.id === x.id); if (k >= 0) items[k] = x; else items.push(x); });
+  if (Array.isArray(d.subjects)) { subjects = [...new Set([...subjects, ...d.subjects.map((s) => str(s, 20).trim()).filter(Boolean)])]; save(KEY_SUBJ, subjects); }
+  persist(); render(); return 'ok';
+});
+
+// 日付が変わったら並びを直す
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+$('ver').textContent = APP_VERSION;
+render();
+
+</script>
+</body>
+</html>

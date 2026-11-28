@@ -1,0 +1,273 @@
+<!doctype html>
+<!-- このファイルは「子どもの年齢・学年早見」の本体です。家族の呼び名と生年月日から、今日（または指定した日）の年齢と学年を計算して一覧にします。 -->
+<!-- 登録した内容はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>子どもの年齢・学年早見</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="学年早見">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#5b5fc7">
+<style>
+  :root { --bg:#f4f4fa; --card:#fff; --text:#1d1e33; --sub:#5d6077; --accent:#5b5fc7; --accent-soft:#e6e7f8; --line:#dfe0ee; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#131420; --card:#1d1e2d; --text:#eceefa; --sub:#a2a5bf; --accent:#9497f0; --accent-soft:#2a2c4a; --line:#2e3046; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.2rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  input[type=date] { min-height:44px; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .when { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin-bottom:10px; }
+  .when .lab { font-size:.85rem; color:var(--sub); }
+  .when .row { display:flex; gap:6px; margin-top:4px; }
+  .when .row input { flex:1; min-width:0; }
+  .when .row button { white-space:nowrap; }
+  .when .fy { font-weight:700; margin-top:6px; }
+  .when.other { border:2px solid var(--accent); }
+
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--accent); border-radius:12px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .card.adult { border-left-color:var(--line); }
+  .card .top { display:flex; justify-content:space-between; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .card .nm { font-weight:700; font-size:1.1rem; word-break:break-word; }
+  .card .age { font-size:1.35rem; font-weight:700; white-space:nowrap; }
+  .card .gr { font-size:1.15rem; font-weight:700; color:var(--accent); margin-top:2px; }
+  .card .sub { font-size:.8rem; color:var(--sub); margin-top:2px; }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; }
+  .rule { background:var(--accent-soft); border-radius:12px; padding:10px 12px; font-size:.84rem; margin-top:14px; }
+  .rule b { color:var(--accent); }
+  .rule p { margin:4px 0; }
+
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .seg { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .seg button { background:var(--card); border:2px solid var(--line); border-radius:10px; padding:10px; font-weight:700; }
+  .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .small { padding:8px 12px; border-radius:10px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header><h1>🎒 子どもの年齢・学年早見</h1></header>
+
+  <div class="when" id="when">
+    <div class="lab">この日の時点で表示しています</div>
+    <div class="row"><input type="date" id="target" aria-label="表示する日"><button class="plain small" id="to-today">今日</button></div>
+    <div class="fy" id="fy"></div>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="rule">
+    <p><b>学年の決まり</b>：日本の学校では、<b>4月2日生まれから翌年の4月1日生まれまで</b>が同じ学年です（4月1日生まれは、前の学年に入ります）。小学校には、6歳になったあとの最初の4月に入学します（4月1日生まれは、法律上の数え方では前日の3月31日の終わりに6歳になるため、その年の4月に入学します）。学年は4月1日〜翌年3月31日の「年度」で変わります。</p>
+    <p><b>年齢の表示</b>：誕生日の日付で1つ増える形で表示します。2月29日生まれの方は、うるう年でない年は3月1日に1つ増える表示です（法律上の年齢の数え方では、誕生日の前日の終わりに年をとる扱いがあります）。</p>
+    <p>高校の学年は、進学した場合の目安です。</p>
+  </div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="家族を追加">＋</button>
+
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">家族を追加</h2>
+    <div class="warn">名前ではなく呼び名で登録してください（例：子ども1）。個人を特定できる情報は書かないでください。</div>
+    <label class="f" for="e-name">呼び名</label>
+    <input id="e-name" maxlength="16">
+    <label class="f" for="e-birth">生年月日</label>
+    <input id="e-birth" type="date" min="1900-01-01" max="2100-12-31">
+    <label class="f">区分</label>
+    <div class="seg"><button type="button" id="k-child">子ども</button><button type="button" id="k-adult">大人</button></div>
+    <p class="note">子どもは年齢と学年を、大人は年齢だけを表示します。</p>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_PEOPLE = 'gakunen:people';   // 登録した家族
+const $ = (id) => document.getElementById(id);
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { return false; } }
+const p2 = (n) => String(n).padStart(2, '0');
+const str = (v) => (typeof v === 'string' ? v : '');
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+// 「2026-11-28」→ { y, m, d }（実在しない日付なら null）
+function ymd(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d && y >= 1900 && y <= 2100 ? { y, m, d } : null;
+}
+const fmt = (o) => o.y + '年' + o.m + '月' + o.d + '日';
+const cmp = (a, b) => (a.y - b.y) || (a.m - b.m) || (a.d - b.d);
+
+// ===== 計算 =====
+// 生まれてから何か月たったか（誕生日の「日」に1か月増える。その月にその日がなければ翌月1日に増える）
+function monthsOld(b, t) {
+  let m = (t.y - b.y) * 12 + (t.m - b.m);
+  if (t.d < b.d) m -= 1;
+  return m;
+}
+// 年度（4月1日〜翌年3月31日）
+const fiscalYear = (t) => (t.m >= 4 ? t.y : t.y - 1);
+// 小学校に入学する年度：4月2日〜翌年4月1日生まれが同じ学年
+function entryYear(b) {
+  const after = b.m > 4 || (b.m === 4 && b.d >= 2); // 4月2日以降の生まれ
+  return (after ? b.y : b.y - 1) + 7;
+}
+function gradeText(b, t) {
+  const E = entryYear(b), fy = fiscalYear(t), g = fy - E + 1;
+  if (g <= 0) {
+    const pre = { 0: '（幼稚園などの年長にあたる学年）', '-1': '（幼稚園などの年中にあたる学年）', '-2': '（幼稚園などの年少にあたる学年）' }[g] || '';
+    return ['未就学・' + E + '年度に小学校入学', pre];
+  }
+  if (g <= 6) return ['小学' + g + '年生', E + '年度に小学校入学'];
+  if (g <= 9) return ['中学' + (g - 6) + '年生', E + '年度に小学校入学'];
+  if (g <= 12) return ['高校' + (g - 9) + '年生（進学した場合）', E + '年度に小学校入学'];
+  return ['高校卒業の年齢以降', (E + 12) + '年3月に高校卒業の学年'];
+}
+function ageText(b, t) {
+  const m = monthsOld(b, t);
+  if (m < 0) return null;
+  return Math.floor(m / 12) + '歳' + (m % 12) + 'か月';
+}
+function earlyBorn(b) { return b.m < 4 || (b.m === 4 && b.d === 1); } // 1月1日〜4月1日生まれ（早生まれ）
+
+// ===== データ =====
+const newId = () => 'p' + Date.now() + Math.random().toString(36).slice(2, 6);
+function normPeople(v) {
+  return Array.isArray(v) ? v.filter((p) => p && typeof p === 'object' && ymd(str(p.birth))).map((p) => ({
+    id: str(p.id) || newId(), name: str(p.name).trim().slice(0, 16) || '呼び名なし', birth: p.birth, kind: p.kind === 'adult' ? 'adult' : 'child',
+  })) : [];
+}
+let people = normPeople(load(KEY_PEOPLE, []));
+
+// ===== 表示 =====
+function target() { return ymd($('target').value) || ymd(todayStr()); }
+function render() {
+  const t = target();
+  const isToday = cmp(t, ymd(todayStr())) === 0;
+  $('when').className = 'when' + (isToday ? '' : ' other');
+  $('fy').textContent = (isToday ? '今日 ' : '') + fmt(t) + '（' + fiscalYear(t) + '年度）';
+  const list = $('list'); list.innerHTML = '';
+  if (!people.length) { list.append(el('p', 'empty', 'まだ登録がありません。右下の「＋」から、呼び名と生年月日を登録してください。')); return; }
+  // 大人→子どもの順、その中は年上から
+  const sorted = people.slice().sort((a, b) => (a.kind === b.kind ? (a.birth < b.birth ? -1 : a.birth > b.birth ? 1 : 0) : a.kind === 'adult' ? -1 : 1));
+  for (const p of sorted) {
+    const b = ymd(p.birth);
+    const c = el('div', 'card' + (p.kind === 'adult' ? ' adult' : ''));
+    const top = el('div', 'top');
+    const age = ageText(b, t);
+    top.append(el('span', 'nm', p.name), el('span', 'age', age || 'まだ生まれていない日'));
+    c.append(top);
+    if (p.kind === 'child' && age) {
+      const [g, sub] = gradeText(b, t);
+      c.append(el('div', 'gr', g));
+      if (sub) c.append(el('div', 'sub', sub));
+    }
+    c.append(el('div', 'sub', fmt(b) + '生まれ' + (p.kind === 'child' && earlyBorn(b) ? '（早生まれ）' : '')));
+    c.onclick = () => openEdit(p);
+    list.append(c);
+  }
+}
+$('target').addEventListener('change', render);
+$('to-today').onclick = () => { $('target').value = todayStr(); render(); };
+
+// ===== 入力・編集 =====
+let editing = null, kind = 'child';
+function setKind(k) { kind = k; $('k-child').className = k === 'child' ? 'on' : ''; $('k-adult').className = k === 'adult' ? 'on' : ''; }
+$('k-child').onclick = () => setKind('child');
+$('k-adult').onclick = () => setKind('adult');
+function openEdit(p) {
+  editing = p || null;
+  $('edit-title').textContent = p ? '登録を直す' : '家族を追加';
+  const nKids = people.filter((x) => x.kind === 'child').length;
+  $('e-name').value = p ? p.name : '';
+  $('e-name').placeholder = '例：子ども' + (nKids + 1);
+  if (!p && nKids < 4) $('e-name').value = '子ども' + (nKids + 1);
+  $('e-birth').value = p ? p.birth : '';
+  setKind(p ? p.kind : 'child');
+  $('e-del').hidden = !p;
+  $('edit').classList.add('open'); window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = () => {
+  if (!$('edit').classList.contains('open')) return; // 連打で2件できないように
+  const name = $('e-name').value.trim();
+  if (!name) { alert('呼び名を入れてください。'); return; }
+  if (!ymd($('e-birth').value)) { alert('生年月日を正しく入れてください。'); return; }
+  const p = { id: editing ? editing.id : newId(), name: name.slice(0, 16), birth: $('e-birth').value, kind };
+  const next = editing ? people.map((x) => (x.id === p.id ? p : x)) : [...people, p];
+  if (!save(KEY_PEOPLE, next)) { alert('保存できませんでした。'); return; }
+  people = next;
+  closeSheet('edit'); render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm('「' + editing.name + '」を削除します。よろしいですか？')) return;
+  people = people.filter((x) => x.id !== editing.id); save(KEY_PEOPLE, people);
+  closeSheet('edit'); render();
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+$('target').value = todayStr();
+render();
+</script>
+</body>
+</html>

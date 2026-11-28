@@ -1,0 +1,438 @@
+<!doctype html>
+<!-- このファイルは「坂ラン手帳」の本体です。自分で登録した坂を、走った日に何本のぼったかを記録し、坂ごとの合計や今月のまとめを見られます。 -->
+<!-- 記録はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。「今月のまとめを共有」を押したときだけ、あなたが選んだ先へ渡します。非公式・個人の試作です。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>坂ラン手帳</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="坂ラン手帳">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#7a3fb0">
+<style>
+  :root { --bg:#f7f4fa; --card:#fff; --text:#221a2b; --sub:#645a70; --accent:#7a3fb0; --accent-soft:#eee3f8; --line:#e4dcec; --danger:#c8372d; --ok:#1e9e5a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15111a; --card:#1f1926; --text:#efe9f5; --sub:#ab9fba; --accent:#b588e6; --accent-soft:#33244a; --line:#30283a; --danger:#ef6b61; --ok:#45c27f; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  h2 { font-size:1rem; color:var(--sub); margin:0 0 8px; font-weight:600; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:4em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  .stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; text-align:center; }
+  .stats div { font-size:.8rem; color:var(--sub); }
+  .stats b { display:block; font-size:1.5rem; color:var(--text); }
+  .stamps { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
+  .stamp { -webkit-user-select:none; user-select:none; border:2px dashed var(--line); border-radius:14px; padding:10px 6px; text-align:center; }
+  .stamp.on { border-style:solid; border-color:var(--accent); background:var(--accent-soft); }
+  .stamp .nm { font-weight:700; font-size:.92rem; word-break:break-all; }
+  .stamp .ct { font-size:.8rem; color:var(--sub); }
+  .run { border-bottom:1px solid var(--line); padding:10px 0; cursor:pointer; }
+  .run:last-child { border-bottom:none; }
+  .run .d { font-weight:700; }
+  .run .m { font-size:.85rem; color:var(--sub); word-break:break-word; }
+  .empty, .muted { color:var(--sub); }
+  .empty { text-align:center; padding:12px 0; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
+  #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; color:var(--text); margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .slope { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .slope .nm { flex:1; min-width:0; word-break:break-all; font-weight:600; }
+  .step { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .step button { width:44px; height:44px; border-radius:12px; background:var(--accent-soft); color:var(--accent); font-size:1.4rem; font-weight:700; }
+  .step span { min-width:2em; text-align:center; font-size:1.2rem; font-weight:700; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .plain:disabled { opacity:.45; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .err { color:var(--danger); font-size:.85rem; margin:4px 0 0; min-height:1em; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .editrow { margin-bottom:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>⛰️ 坂ラン手帳</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <section>
+    <h2 id="month-title">今月</h2>
+    <div class="stats">
+      <div><b id="m-runs">0</b>走った日</div>
+      <div><b id="m-climbs">0</b>のぼった本数</div>
+      <div><b id="m-km">0</b>km</div>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="plain" id="share">📣 今月のまとめを共有</button>
+    </div>
+    <p class="note" id="share-note"></p>
+  </section>
+
+  <section>
+    <h2>🏅 坂スタンプ帳（合計）</h2>
+    <div class="stamps" id="stamps"></div>
+  </section>
+
+  <section>
+    <h2>🏃 走った記録（新しい順）</h2>
+    <div id="runs"></div>
+  </section>
+
+  <footer>非公式・個人の試作です（文京区の公式アプリではありません）<br>版 <span id="ver"></span> ・ 記録はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<button id="add" aria-label="走った記録を追加">＋</button>
+
+<!-- 記録の追加・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">走った記録</h2>
+    <label class="f" for="e-date">日付</label>
+    <input id="e-date" type="date">
+    <label class="f">のぼった坂と本数</label>
+    <div id="e-slopes"></div>
+    <div class="row2">
+      <div><label class="f" for="e-km">距離 km</label><input id="e-km" inputmode="decimal" maxlength="6" placeholder="例：5.2"></div>
+      <div><label class="f" for="e-min">時間（分）</label><input id="e-min" inputmode="numeric" maxlength="4" placeholder="例：40"></div>
+    </div>
+    <p class="note" style="margin-top:4px">距離と時間は、空でもかまいません。</p>
+    <p class="err" id="e-err"></p>
+    <label class="f" for="e-memo">ひとことメモ</label>
+    <textarea id="e-memo" maxlength="120" placeholder="例：朝は涼しかった"></textarea>
+    <p class="note">自宅の場所が分かるような書き方や、一緒に走った人の名前など、個人を特定できる情報は書かないでください。</p>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">自分の坂（名前を空にして保存すると一覧から消えます。記録は残ります。20まで）</label>
+    <div class="warn">坂の名前は、自分で分かる呼び名でかまいません（例：「家の近くの坂」）。</div>
+    <div id="slope-edit"></div>
+    <div class="actions">
+      <button class="plain" id="slope-add">＋ 坂をふやす</button>
+      <button class="primary" id="slope-save">坂を保存</button>
+    </div>
+
+    <label class="f" for="votedays" style="margin-top:22px">共有を止める日（投票日など。1行に1日、例：2027-04-25）</label>
+    <textarea id="votedays" style="min-height:5em"></textarea>
+    <p class="err" id="vd-err"></p>
+    <div class="actions"><button class="primary" id="vd-save">止める日を保存</button></div>
+    <p class="note">この日は0時から終わりまで「今月のまとめを共有」が使えなくなります。</p>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、記録も消えます。ときどき書き出して保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <p class="note">このアプリは記録の道具です。体調の判断はしません。無理をせず、ご自分の体調に合わせて走ってください。</p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_SLOPES = 'p-sakarun:slopes';  // 坂：[{id, name, active}]
+const KEY_RUNS = 'p-sakarun:runs';      // 記録：[{id, date, climbs:{slopeId:本数}, km, min, memo}]
+const KEY_VOTE = 'p-sakarun:votedays';
+const DEFAULT_VOTE = ['2027-04-25'];    // 投票日（見込み）。設定で変えられる
+const DEFAULT_SLOPES = [{ id: 'k1', name: '坂A（名前を変えてください）', active: true }, { id: 'k2', name: '坂B', active: true }];
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { alert('保存できませんでした。'); } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function dk(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function validDate(s) { if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const [y, m, d] = s.split('-').map(Number); const t = new Date(y, m - 1, d); return t.getMonth() === m - 1 && t.getDate() === d; }
+function dLabel(s) { const [y, m, d] = s.split('-').map(Number); return m + '月' + d + '日（' + WEEK[new Date(y, m - 1, d).getDay()] + '）'; }
+const toHalf = (s) => s.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const kmText = (n) => (Math.round(n * 10) / 10).toString();
+
+// 読み込んだデータを点検（壊れたものは捨て、欠けた項目は補う）
+function cleanSlopes(a) {
+  if (!Array.isArray(a)) return [];
+  return a.filter((s) => s && typeof s.name === 'string' && s.name.trim()).map((s, i) => ({ id: typeof s.id === 'string' && s.id ? s.id : 'k' + Date.now() + i, name: s.name.trim().slice(0, 20), active: s.active !== false }));
+}
+function cleanRun(r, i) {
+  if (!r || typeof r !== 'object' || !validDate(r.date)) return null;
+  const climbs = {};
+  if (r.climbs && typeof r.climbs === 'object') for (const [k, v] of Object.entries(r.climbs)) if (Number.isInteger(v) && v > 0 && v <= 999) climbs[k] = v;
+  return { id: typeof r.id === 'string' && r.id ? r.id : 'r' + Date.now() + '-' + i, date: r.date, climbs,
+           km: typeof r.km === 'number' && r.km > 0 && r.km <= 200 ? r.km : null,
+           min: Number.isInteger(r.min) && r.min > 0 && r.min <= 1440 ? r.min : null,
+           memo: typeof r.memo === 'string' ? r.memo.slice(0, 120) : '' };
+}
+let slopes = cleanSlopes(load(KEY_SLOPES, DEFAULT_SLOPES));
+let runs = (Array.isArray(load(KEY_RUNS, [])) ? load(KEY_RUNS, []) : []).map(cleanRun).filter(Boolean);
+let voteDays = load(KEY_VOTE, DEFAULT_VOTE);
+if (!Array.isArray(voteDays)) voteDays = DEFAULT_VOTE.slice();
+const slopeName = (id) => { const s = slopes.find((x) => x.id === id); return s ? s.name : '（消した坂）'; };
+const sumClimbs = (r) => Object.values(r.climbs).reduce((a, b) => a + b, 0);
+
+function isVoteDay() { return voteDays.includes(dk(new Date())); }
+
+// ===== 表示 =====
+function monthRuns() { const pre = dk(new Date()).slice(0, 8); return runs.filter((r) => r.date.startsWith(pre)); }
+function render() {
+  const now = new Date();
+  $('month-title').textContent = (now.getMonth() + 1) + '月のまとめ';
+  const mr = monthRuns();
+  $('m-runs').textContent = new Set(mr.map((r) => r.date)).size;
+  $('m-climbs').textContent = mr.reduce((a, r) => a + sumClimbs(r), 0);
+  $('m-km').textContent = kmText(mr.reduce((a, r) => a + (r.km || 0), 0));
+  const vote = isVoteDay();
+  $('share').disabled = vote || !mr.length;
+  $('share-note').textContent = vote ? '投票日のため共有できません。' : (mr.length ? '' : '今月の記録ができると共有できます。');
+
+  // スタンプ帳：いま使っている坂と、記録にある坂
+  const total = {};
+  runs.forEach((r) => { for (const [k, v] of Object.entries(r.climbs)) total[k] = (total[k] || 0) + v; });
+  const ids = [...new Set([...slopes.filter((s) => s.active).map((s) => s.id), ...Object.keys(total)])];
+  const sb = $('stamps'); sb.innerHTML = '';
+  if (!ids.length) sb.append(el('p', 'muted', '設定から坂を登録してください。'));
+  ids.forEach((id) => {
+    const n = total[id] || 0;
+    const st = el('div', 'stamp' + (n ? ' on' : ''));
+    st.append(el('div', 'nm', (n ? '⛰️ ' : '') + slopeName(id)), el('div', 'ct', n ? n + '本' : 'まだ'));
+    sb.append(st);
+  });
+
+  // 記録の一覧（最近30件）
+  const rb = $('runs'); rb.innerHTML = '';
+  const sorted = runs.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  if (!sorted.length) rb.append(el('p', 'empty', 'まだ記録はありません。右下の「＋」から追加してください。'));
+  sorted.slice(0, 30).forEach((r) => {
+    const d = el('div', 'run');
+    const parts = [];
+    if (r.km) parts.push(kmText(r.km) + 'km');
+    if (r.min) parts.push(r.min + '分');
+    d.append(el('div', 'd', dLabel(r.date) + '　' + sumClimbs(r) + '本' + (parts.length ? '・' + parts.join('・') : '')));
+    const cl = Object.entries(r.climbs).map(([k, v]) => slopeName(k) + '×' + v).join('、');
+    d.append(el('div', 'm', [cl, r.memo].filter(Boolean).join(' ／ ') || '（坂の記録なし）'));
+    d.onclick = () => openEdit(r);
+    rb.append(d);
+  });
+  if (sorted.length > 30) rb.append(el('p', 'note', 'ほか' + (sorted.length - 30) + '件（合計には入っています）'));
+}
+
+// ===== 記録の追加・編集 =====
+let editing = null, draft = {}, lastSave = 0;
+function renderSteppers() {
+  const box = $('e-slopes'); box.innerHTML = '';
+  const ids = [...new Set([...slopes.filter((s) => s.active).map((s) => s.id), ...Object.keys(draft)])];
+  if (!ids.length) box.append(el('p', 'muted', '坂が登録されていません。設定から登録できます（距離だけの記録もできます）。'));
+  ids.forEach((id) => {
+    const row = el('div', 'slope');
+    const minus = el('button', '', '−'), plus = el('button', '', '＋'), n = el('span', '', String(draft[id] || 0));
+    minus.setAttribute('aria-label', slopeName(id) + 'を1本へらす');
+    plus.setAttribute('aria-label', slopeName(id) + 'を1本ふやす');
+    minus.onclick = () => { if (draft[id] > 1) draft[id]--; else delete draft[id]; renderSteppers(); };
+    plus.onclick = () => { draft[id] = Math.min(999, (draft[id] || 0) + 1); renderSteppers(); };
+    const st = el('div', 'step'); st.append(minus, n, plus);
+    row.append(el('span', 'nm', slopeName(id)), st);
+    box.append(row);
+  });
+}
+function openEdit(r) {
+  if (Date.now() - lastSave < 700) return; // 保存の2回目のタップが下の記録に当たっても開かない
+  editing = r || null;
+  draft = r ? { ...r.climbs } : {};
+  $('edit-title').textContent = r ? '記録を編集' : '走った記録を追加';
+  $('e-date').value = r ? r.date : dk(new Date());
+  $('e-km').value = r && r.km ? kmText(r.km) : '';
+  $('e-min').value = r && r.min ? r.min : '';
+  $('e-memo').value = r ? r.memo : '';
+  $('e-err').textContent = '';
+  $('e-del').hidden = !r;
+  renderSteppers();
+  $('edit').classList.add('open');
+  window.scrollTo(0, 0);
+}
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => $('edit').classList.remove('open');
+$('e-save').onclick = () => {
+  if (Date.now() - lastSave < 1000) return; // 連打で同じ記録が2件できないように
+  const err = (m) => { $('e-err').textContent = m; };
+  const date = $('e-date').value;
+  if (!validDate(date)) { err('日付を選んでください。'); return; }
+  if (date > dk(new Date())) { err('まだ来ていない日は記録できません。'); return; }
+  // 距離：0より大きく200以下、小数は1けたまで。マイナスなどは入れ直してもらう
+  const kmRaw = toHalf($('e-km').value.trim());
+  let km = null;
+  if (kmRaw !== '') {
+    if (!/^\d{1,3}(\.\d)?$/.test(kmRaw) || Number(kmRaw) <= 0 || Number(kmRaw) > 200) { err('距離は 0.1〜200 の数で、小数は1けたまでで入れてください（例：5.2）。'); $('e-km').focus(); return; }
+    km = Number(kmRaw);
+  }
+  const minRaw = toHalf($('e-min').value.trim());
+  let min = null;
+  if (minRaw !== '') {
+    if (!/^\d+$/.test(minRaw) || Number(minRaw) < 1 || Number(minRaw) > 1440) { err('時間は 1〜1440 の整数（分）で入れてください。'); $('e-min').focus(); return; }
+    min = Number(minRaw);
+  }
+  if (!Object.keys(draft).length && km === null && min === null) { err('坂の本数か、距離・時間のどれかを入れてください。'); return; }
+  lastSave = Date.now();
+  const r = editing || { id: 'r' + Date.now() + Math.random().toString(36).slice(2, 6) };
+  Object.assign(r, { date, climbs: { ...draft }, km, min, memo: $('e-memo').value.trim().slice(0, 120) });
+  if (!editing) runs.push(r);
+  save(KEY_RUNS, runs);
+  $('edit').classList.remove('open');
+  render();
+};
+$('e-del').onclick = () => {
+  if (!editing || !confirm(dLabel(editing.date) + 'の記録を削除します。よろしいですか？')) return;
+  runs = runs.filter((r) => r.id !== editing.id);
+  save(KEY_RUNS, runs);
+  $('edit').classList.remove('open');
+  render();
+};
+
+// 今月のまとめを共有（投票日は止める）
+$('share').onclick = async () => {
+  if (isVoteDay()) { alert('投票日のため共有できません。'); render(); return; }
+  const mr = monthRuns();
+  if (!mr.length) return;
+  const per = {};
+  mr.forEach((r) => { for (const [k, v] of Object.entries(r.climbs)) per[k] = (per[k] || 0) + v; });
+  const top = Object.entries(per).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => slopeName(k) + ' ' + v + '本');
+  const text = ['⛰️ ' + (new Date().getMonth() + 1) + '月の坂ラン',
+    '走った日：' + new Set(mr.map((r) => r.date)).size + '日',
+    'のぼった本数：' + mr.reduce((a, r) => a + sumClimbs(r), 0) + '本',
+    '距離：' + kmText(mr.reduce((a, r) => a + (r.km || 0), 0)) + 'km',
+    ...(top.length ? ['よくのぼった坂：' + top.join('、')] : [])].join('\n');
+  if (navigator.share) { try { await navigator.share({ title: '坂ランのまとめ', text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// 入れ直し始めたら、前のエラー表示を消す
+['e-km', 'e-min'].forEach((id) => $(id).addEventListener('input', () => { $('e-err').textContent = ''; }));
+
+// ===== 設定 =====
+function buildSlopeEdit() { $('slope-edit').innerHTML = ''; slopes.filter((s) => s.active).forEach((s) => addSlopeRow(s.name, s.id)); }
+function addSlopeRow(v, id) {
+  if ($('slope-edit').children.length >= 20) { alert('20までです。'); return null; }
+  const row = el('div', 'editrow');
+  const inp = el('input'); inp.value = v; inp.maxLength = 20; inp.dataset.id = id || '';
+  row.append(inp); $('slope-edit').append(row);
+  return inp;
+}
+$('slope-add').onclick = () => { const i = addSlopeRow('', ''); if (i) i.focus(); };
+$('slope-save').onclick = () => {
+  const rows = [...$('slope-edit').querySelectorAll('input')];
+  const keep = new Set();
+  for (const inp of rows) {
+    const name = inp.value.trim().slice(0, 20);
+    if (!name) continue;
+    const s = inp.dataset.id && slopes.find((x) => x.id === inp.dataset.id);
+    if (s) { s.name = name; s.active = true; keep.add(s.id); }
+    else { const n = { id: 'k' + Date.now() + Math.random().toString(36).slice(2, 5), name, active: true }; slopes.push(n); keep.add(n.id); }
+  }
+  // 名前を空にした坂は「使わない」にする（過去の記録の名前は残す）
+  slopes.forEach((s) => { if (!keep.has(s.id)) s.active = false; });
+  save(KEY_SLOPES, slopes);
+  buildSlopeEdit(); render();
+  alert('保存しました。');
+};
+$('open-settings').onclick = () => { buildSlopeEdit(); $('votedays').value = voteDays.join('\n'); $('vd-err').textContent = ''; $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('vd-save').onclick = () => {
+  const lines = $('votedays').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const bad = lines.filter((s) => !validDate(s));
+  if (bad.length) { $('vd-err').textContent = '日付の形が正しくありません：' + bad.join('、') + '（例：2027-04-25）'; return; }
+  voteDays = [...new Set(lines)].sort();
+  save(KEY_VOTE, voteDays);
+  $('vd-err').textContent = '';
+  render();
+  alert('保存しました。');
+};
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'p-sakarun-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'p-sakarun', version: APP_VERSION, exportedAt: d.toISOString(), slopes, runs, voteDays }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'p-sakarun' || !Array.isArray(data.runs)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  const nr = data.runs.map(cleanRun).filter(Boolean), ns = cleanSlopes(data.slopes);
+  if (!confirm(nr.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします。よろしいですか？')) return;
+  for (const s of ns) { const i = slopes.findIndex((x) => x.id === s.id); if (i >= 0) slopes[i] = s; else slopes.push(s); }
+  for (const r of nr) { const i = runs.findIndex((x) => x.id === r.id); if (i >= 0) runs[i] = r; else runs.push(r); }
+  save(KEY_SLOPES, slopes); save(KEY_RUNS, runs);
+  buildSlopeEdit(); render();
+  alert('読み込みました。');
+};
+
+// 日付が変わったら（月の切り替わり・投票日）表示を直す
+setInterval(() => { if (!$('edit').classList.contains('open')) render(); }, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('edit').classList.contains('open')) render(); });
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>
