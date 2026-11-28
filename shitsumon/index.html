@@ -15,10 +15,10 @@
 <meta name="theme-color" content="#2e6b4f">
 <style>
   :root { --bg:#f3f7f5; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#2e6b4f; --accent-soft:#e0efe7; --line:#dbe3df; --danger:#c8372d;
-          --c0:#2f9e6b; --c1:#7cb342; --c2:#2f8fd8; --c3:#e08a1e; --c4:#8a5cd0; --c5:#c8507a; --c6:#5a6675; }
+          --c0:#2f9e6b; --c1:#7cb342; --c2:#2f8fd8; --c3:#e08a1e; --c4:#8a5cd0; --c5:#c8507a; --c6:#5a6675; --on:#fff; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#111815; --card:#1b2420; --text:#e9eef4; --sub:#9aa6b4; --accent:#6cc39a; --accent-soft:#1d3a2d; --line:#2b3632; --danger:#ef6b61;
-            --c0:#4fc18b; --c1:#9ccc65; --c2:#5aaeea; --c3:#f0a848; --c4:#a785e0; --c5:#e07a9e; --c6:#9aa6b4; }
+            --c0:#4fc18b; --c1:#9ccc65; --c2:#5aaeea; --c3:#f0a848; --c4:#a785e0; --c5:#e07a9e; --c6:#9aa6b4; --on:#0f2219; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
@@ -31,12 +31,12 @@
   textarea { min-height:6em; resize:vertical; }
   a { color:var(--accent); }
   .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
-  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update { display:none; background:var(--accent); color:var(--on); border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
   #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
 
   .tabs { display:grid; grid-template-columns:1fr 1fr; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:3px; margin-bottom:10px; }
   .tabs button { background:none; border-radius:9px; padding:9px 0; font-weight:700; color:var(--sub); }
-  .tabs button.on { background:var(--accent); color:#fff; }
+  .tabs button.on { background:var(--accent); color:var(--on); }
 
   .filters { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:6px; }
   .filters select { padding:7px 6px; font-size:.88rem; min-width:0; }
@@ -54,7 +54,7 @@
   .empty { color:var(--sub); text-align:center; padding:30px 0; }
 
   #add { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:60px; height:60px; border-radius:50%;
-         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+         background:var(--accent); color:var(--on); font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); }
 
   .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
   .panel h2 { font-size:1rem; margin:0 0 4px; }
@@ -68,7 +68,7 @@
   .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .row2 > div { min-width:0; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
-  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .primary { background:var(--accent); color:var(--on); border-radius:12px; padding:12px 18px; font-weight:700; }
   .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
   .danger { color:var(--danger); }
   .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
@@ -276,7 +276,7 @@ function buildFilters() {
   const sess = sessionOrder(items);
   fillSelect($('f-ses'), sess, '全定例会');
   fillSelect($('f-tag'), allTags(), '全タグ');
-  fillSelect($('f-st'), allStates(), 'その後の動き：全部');
+  fillSelect($('f-st'), allStates(), '動き：全部');
   $('f-ses').value = sess.includes(filter.ses) ? filter.ses : '';
   $('f-tag').value = allTags().includes(filter.tag) ? filter.tag : '';
   $('f-st').value = allStates().includes(filter.st) ? filter.st : '';
@@ -367,7 +367,7 @@ function hbar(canvas, rows, emptyText) {
   g.font = '13px -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif';
   g.textBaseline = 'middle';
   if (!rows.length) { g.fillStyle = cssVar('--sub'); g.fillText(emptyText, 0, h / 2); return; }
-  const labelW = Math.min(Math.max(...rows.map((r) => g.measureText(r.label).width)) + 8, w * 0.38);
+  const labelW = Math.min(Math.max(...rows.map((r) => g.measureText(r.label).width)) + 8, w * 0.5);
   const valW = Math.max(...rows.map((r) => g.measureText(r.text).width)) + 8;
   const barMax = Math.max(10, w - labelW - valW);
   const max = Math.max(...rows.map((r) => r.value), 1);
