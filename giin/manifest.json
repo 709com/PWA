@@ -1,0 +1,16 @@
+{
+  "_comment": "このファイルは、ホーム画面に追加したときの名前・アイコン・色を決める設定です。",
+  "id": "./",
+  "name": "議員のタイマーと区の情報入口",
+  "short_name": "議員タイマー",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#2f3640",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

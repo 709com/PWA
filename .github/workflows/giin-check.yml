@@ -1,0 +1,19 @@
+# このファイルは、giin（議員のタイマーと区の情報入口）の「公開前の自動点検」を動かす設定です。
+# giin フォルダを変えてGitHubに送るたびに、外部への通信・音・鍵の混入などがないかを確かめます。
+name: giin 公開前の点検
+on:
+  push:
+    paths: ['giin/**', '.github/workflows/giin-check.yml']
+  pull_request:
+    paths: ['giin/**']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node giin/tools/check.mjs
