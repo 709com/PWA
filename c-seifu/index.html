@@ -1,0 +1,422 @@
+<!doctype html>
+<!-- このファイルは「正負の数れんしゅう」の本体です。プラス・マイナスの数のたし算・ひき算・かけ算・わり算の問題をその場で作り、答え合わせと記録ができます。 -->
+<!-- 入力したことはこの端末の中（localStorage）だけに保存し、外部へは一切送信しません。広告・課金・アカウント登録もありません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>正負の数れんしゅう</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="正負の数">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#7a45c9">
+<style>
+  :root { --bg:#f6f2fd; --card:#fff; --text:#221a33; --sub:#665c7a; --accent:#7a45c9; --accent-soft:#ece2fa; --line:#e2d9f0; --danger:#c8372d; --ok:#2f9e6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#15111d; --card:#211a2c; --text:#efe9f8; --sub:#aa9fbe; --accent:#b08af0; --accent-soft:#2e2245; --line:#352b45; --danger:#ef6b61; --ok:#4cc48b; } }
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
+  h1 { font-size:1.25rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:100%; }
+  textarea { min-height:6em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:14px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .empty { color:var(--sub); text-align:center; padding:28px 8px; }
+  .fab { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:64px; height:64px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5; }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.88rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:14px; padding:13px 20px; font-weight:700; min-height:48px; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 16px; min-height:48px; }
+  .wide { width:100%; }
+  .danger { color:var(--danger); }
+  .note { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:12px; padding:8px 12px; font-size:.86rem; margin-bottom:6px; }
+  .tag { display:inline-block; font-size:.76rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; min-height:40px; }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .seg { display:grid; gap:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:18px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+
+
+  .seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .seg3 .chip, .seg2 .chip { width:100%; }
+  .seg2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .hintbox { background:var(--accent-soft); border-radius:14px; padding:10px 14px; font-size:.9rem; margin:14px 0; }
+  .bigstart { width:100%; font-size:1.2rem; padding:16px; border-radius:16px; margin-top:14px; }
+  .hist { font-size:.88rem; }
+  .hist div { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px dashed var(--line); }
+  .hist div:last-child { border-bottom:none; }
+  .best { font-weight:700; color:var(--accent); }
+  /* 問題の画面 */
+  .prog { display:flex; justify-content:space-between; align-items:center; gap:8px; color:var(--sub); font-size:.9rem; }
+  .pbar { height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin:6px 0 10px; }
+  .pbar i { display:block; height:100%; background:var(--accent); transition:width .2s; }
+  .prob { text-align:center; font-size:2rem; font-weight:800; margin:18px 0 8px; letter-spacing:.02em; word-break:keep-all; }
+  .ans { background:var(--card); border:2px solid var(--accent); border-radius:16px; min-height:64px; font-size:2rem; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; max-width:240px; }
+  .ans.empty { color:var(--sub); font-weight:400; font-size:1.1rem; }
+  .fb { text-align:center; min-height:2.2em; font-weight:700; font-size:1.1rem; }
+  .fb.ok { color:var(--ok); } .fb.ng { color:var(--danger); }
+  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:380px; margin:0 auto; }
+  .pad button { background:var(--card); border:1px solid var(--line); border-radius:14px; font-size:1.5rem; min-height:58px; font-weight:700; }
+  .pad .go { grid-column:1 / -1; background:var(--accent); color:#fff; border:none; font-size:1.2rem; }
+  .result { text-align:center; }
+  .result .big { font-size:2.6rem; font-weight:800; color:var(--accent); }
+  .miss { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 14px; margin-top:12px; }
+  .miss div { padding:4px 0; border-bottom:1px dashed var(--line); word-break:break-word; }
+  .miss div:last-child { border-bottom:none; }
+
+</style>
+</head>
+<body>
+
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>➕➖ 正負の数れんしゅう</h1>
+    <button class="iconbtn" id="open-settings">⚙️</button>
+  </header>
+  <div class="box">
+    <label class="f" style="margin-top:0">計算の種類</label>
+    <div class="seg3" id="s-op">
+      <button class="chip" data-v="add">たし算</button>
+      <button class="chip" data-v="sub">ひき算</button>
+      <button class="chip" data-v="mix1">たし・ひき</button>
+      <button class="chip" data-v="mul">かけ算</button>
+      <button class="chip" data-v="div">わり算</button>
+      <button class="chip" data-v="all">ぜんぶ</button>
+    </div>
+    <label class="f">数の大きさ</label>
+    <div class="seg2" id="s-range">
+      <button class="chip" data-v="10">−10 〜 10</button>
+      <button class="chip" data-v="20">−20 〜 20</button>
+    </div>
+    <label class="f">問題の数</label>
+    <div class="seg3" id="s-count">
+      <button class="chip" data-v="5">5問</button>
+      <button class="chip" data-v="10">10問</button>
+      <button class="chip" data-v="20">20問</button>
+    </div>
+    <button class="primary bigstart" id="start">▶ スタート</button>
+    <p class="note" id="best"></p>
+  </div>
+  <div class="hintbox">
+    <b>ヒント</b><br>
+    ・ひき算は「ひく数の符号を変えて、たす」と同じ。例：(+3) − (−5) ＝ (+3) + (+5) ＝ 8<br>
+    ・かけ算・わり算の符号：同じ符号どうしは ＋、ちがう符号どうしは −。例：(−4) × (−2) ＝ 8、(−6) ÷ (+3) ＝ −2
+  </div>
+  <div class="box">
+    <b>最近のきろく</b>
+    <div class="hist" id="hist"></div>
+  </div>
+  <footer>版 <span id="ver"></span> ・ データはこの端末の中だけに保存されます（外には送りません）</footer>
+</main>
+
+<!-- 問題 -->
+<div class="sheet" id="play">
+  <div class="inner">
+    <div class="prog"><span id="p-prog"></span><span id="p-time"></span><button class="iconbtn" id="p-quit">やめる</button></div>
+    <div class="pbar"><i id="p-bar"></i></div>
+    <div class="prob" id="p-q"></div>
+    <div class="ans empty" id="p-ans">こたえを入れてね</div>
+    <div class="fb" id="p-fb"></div>
+    <div class="pad" id="pad">
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="-" aria-label="マイナス">−</button><button data-k="0">0</button><button data-k="bs" aria-label="1文字消す">⌫</button>
+      <button class="go" data-k="go" id="p-go">こたえる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 結果 -->
+<div class="sheet" id="end">
+  <div class="inner">
+    <div class="result">
+      <h2 id="r-title"></h2>
+      <div class="big" id="r-score"></div>
+      <p id="r-time"></p>
+    </div>
+    <div class="miss" id="r-miss" hidden></div>
+    <div class="actions">
+      <button class="primary" id="r-again">もう一回</button>
+      <button class="plain" id="r-close">はじめの画面へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <p class="note">問題はアプリが毎回その場で作ります。こたえもアプリが計算するので、まちがった問題は出ません。</p>
+    <label class="f">きろく</label>
+    <div class="actions" style="margin-top:0"><button class="plain danger" id="clear-hist">きろくをぜんぶ消す</button></div>
+    
+    <label class="f" style="margin-top:22px">バックアップ（データの保存）</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、データもすべて消えます。ときどき「書き出す」で「ファイル」アプリなどに保存しておくと安心です。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+
+// ===== 小さな道具（どのページでも使う） =====
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) {
+  try { localStorage.setItem(key, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。スマホの空き容量を確認してね。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dstr(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function todayStr() { return dstr(new Date()); }
+function parseD(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (isNaN(d) || d.getMonth() !== +m[2] - 1) ? null : d;
+}
+function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+function daysUntil(s) { const d = parseD(s); if (!d) return null; return Math.round((d - parseD(todayStr())) / 86400000); }
+function fmtD(s) { const d = parseD(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ')' : ''; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function str(v, max) { return (typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : '')).slice(0, max); }
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+let closedAt = 0;
+function closeSheet(id) { $(id).classList.remove('open'); closedAt = Date.now(); }
+// 画面を閉じた直後の2回目のタップ（連打）で、下にある一覧の項目が開かないようにする
+document.addEventListener('click', (e) => {
+  if (Date.now() - closedAt < 350 && !e.target.closest('.sheet.open')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+function anySheetOpen() { return !!document.querySelector('.sheet.open'); }
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null）
+function wholeNum(text) { const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); return /^\d{1,5}$/.test(t) ? parseInt(t, 10) : null; }
+
+// ===== バックアップ（書き出し・読み込み） =====
+async function exportBackup(app, data) {
+  const d = new Date();
+  const name = app + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app, version: APP_VERSION, exportedAt: d.toISOString(), ...data }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// apply(data) は取り込んだ件数のメッセージを返す。ふさわしくないファイルなら null を返す
+function setupImport(btnId, inputId, app, check, apply) {
+  $(btnId).onclick = () => $(inputId).click();
+  $(inputId).onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。こわれているかもしれません。'); return; }
+    if (!data || typeof data !== 'object' || data.app !== app || !check(data)) { alert('このアプリのバックアップファイルではありません。'); return; }
+    const msg = apply(data, true);
+    if (!msg || !confirm(msg + '\n同じものはファイルの内容で上書きします（ほかのデータは消えません）。よろしいですか？')) return;
+    apply(data, false);
+    alert('読み込みました。');
+  };
+}
+
+// ===== 電波がなくても使えるようにする仕組みと、更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || anySheetOpen()) return; // 入力中・れんしゅう中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+
+const KEY_SET = 'c-seifu:settings';
+const KEY_HIST = 'c-seifu:history';
+const OP_NAME = { add: 'たし算', sub: 'ひき算', mix1: 'たし・ひき', mul: 'かけ算', div: 'わり算', all: 'ぜんぶ' };
+let set = load(KEY_SET, {});
+if (!OP_NAME[set.op]) set.op = 'add';
+if (![10, 20].includes(set.range)) set.range = 10;
+if (![5, 10, 20].includes(set.count)) set.count = 10;
+let hist = load(KEY_HIST, []); if (!Array.isArray(hist)) hist = [];
+
+const M = '−';
+const fmtN = (n) => n > 0 ? '(+' + n + ')' : n < 0 ? '(' + M + (-n) + ')' : '0';
+const fmtA = (n) => n < 0 ? M + (-n) : String(n);
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+function nz(max) { let n = 0; while (!n) n = rnd(-max, max); return n; }
+// 1問つくる（こたえはここで計算する）
+function makeProblem(op, R) {
+  if (op === 'mix1') op = Math.random() < 0.5 ? 'add' : 'sub';
+  if (op === 'all') op = ['add', 'sub', 'mul', 'div'][rnd(0, 3)];
+  const F = R === 10 ? 9 : 12; // かけ算・わり算で使う数の大きさ
+  let a, b, ans, sym;
+  if (op === 'add') { a = nz(R); b = nz(R); ans = a + b; sym = '+'; }
+  else if (op === 'sub') { a = nz(R); b = nz(R); ans = a - b; sym = M; }
+  else if (op === 'mul') { a = nz(F); b = nz(F); ans = a * b; sym = '×'; }
+  else { b = nz(F); ans = nz(F); a = b * ans; sym = '÷'; }
+  return { text: fmtN(a) + ' ' + sym + ' ' + fmtN(b), ans };
+}
+
+// ===== はじめの画面 =====
+function setChips(id, v) { $(id).querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b.dataset.v === String(v))); }
+function renderHome() {
+  setChips('s-op', set.op); setChips('s-range', set.range); setChips('s-count', set.count);
+  const same = hist.filter((h) => h.op === set.op && h.range === set.range && h.total === set.count);
+  if (same.length) {
+    const b = same.slice().sort((x, y) => y.score - x.score || x.sec - y.sec)[0];
+    $('best').textContent = 'この組み合わせのベスト：' + b.score + ' / ' + b.total + '問（' + fmtSec(b.sec) + '）';
+  } else $('best').textContent = '';
+  const h = $('hist'); h.innerHTML = '';
+  if (!hist.length) { h.append(el('p', 'empty', 'まだきろくはありません。')); return; }
+  hist.slice(0, 10).forEach((x) => {
+    const d = new Date(x.at);
+    const r = el('div');
+    r.append(el('span', '', (d.getMonth() + 1) + '/' + d.getDate() + ' ' + OP_NAME[x.op] + '・±' + x.range),
+             el('span', x.score === x.total ? 'best' : '', x.score + '/' + x.total + '　' + fmtSec(x.sec)));
+    h.append(r);
+  });
+}
+function fmtSec(s) { return s >= 60 ? Math.floor(s / 60) + '分' + (s % 60) + '秒' : s + '秒'; }
+[['s-op', 'op', String], ['s-range', 'range', Number], ['s-count', 'count', Number]].forEach(([id, k, conv]) => {
+  $(id).onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; set[k] = conv(b.dataset.v); save(KEY_SET, set); renderHome(); };
+});
+
+// ===== 問題を解く =====
+let probs = [], idx = 0, input = '', score = 0, miss = [], t0 = 0, timer = null, waiting = false, finished = false;
+function start() {
+  probs = []; const seen = new Set();
+  let guard = 0;
+  while (probs.length < set.count && guard++ < 500) { const p = makeProblem(set.op, set.range); if (seen.has(p.text) && guard < 400) continue; seen.add(p.text); probs.push(p); }
+  idx = 0; score = 0; miss = []; t0 = Date.now(); finished = false;
+  clearInterval(timer); timer = setInterval(tick, 500);
+  closeSheet('end'); openSheet('play'); show();
+}
+function tick() { $('p-time').textContent = '⏱ ' + fmtSec(Math.floor((Date.now() - t0) / 1000)); }
+function show() {
+  input = ''; waiting = false;
+  $('p-prog').textContent = (idx + 1) + ' / ' + probs.length + '問';
+  $('p-bar').style.width = (idx / probs.length * 100) + '%';
+  $('p-q').textContent = probs[idx].text + ' ＝ ?';
+  $('p-fb').textContent = ''; $('p-fb').className = 'fb';
+  $('p-go').textContent = 'こたえる';
+  drawAns(); tick();
+}
+function drawAns() {
+  const a = $('p-ans');
+  if (input === '' || input === '-') { a.className = 'ans' + (input ? '' : ' empty'); a.textContent = input ? M : 'こたえを入れてね'; }
+  else { a.className = 'ans'; a.textContent = input.replace('-', M); }
+}
+function key(k) {
+  if (finished) return;
+  if (waiting) { if (k === 'go') next(); return; }
+  if (k === 'go') { answer(); return; }
+  if (k === 'bs') input = input.slice(0, -1);
+  else if (k === '-') input = input.startsWith('-') ? input.slice(1) : '-' + input;
+  else if (/^\d$/.test(k) && input.replace('-', '').length < 4) input = (input === '0' ? '' : input === '-0' ? '-' : input) + k;
+  drawAns();
+}
+function answer() {
+  if (!/^-?\d+$/.test(input)) { $('p-fb').className = 'fb'; $('p-fb').textContent = '数を入れてから「こたえる」を押してね'; return; }
+  const v = parseInt(input, 10), p = probs[idx];
+  waiting = true;
+  if (v === p.ans) { score++; $('p-fb').className = 'fb ok'; $('p-fb').textContent = '◯ せいかい！'; setTimeout(() => { if (waiting && probs[idx] === p) next(); }, 700); }
+  else { miss.push({ text: p.text, ans: p.ans, you: v }); $('p-fb').className = 'fb ng'; $('p-fb').textContent = '✗ こたえは ' + fmtA(p.ans); $('p-go').textContent = 'つぎへ'; }
+}
+function next() {
+  if (!waiting) return;
+  waiting = false;
+  idx++;
+  if (idx >= probs.length) finish(); else show();
+}
+function finish() {
+  finished = true; clearInterval(timer);
+  const sec = Math.max(1, Math.round((Date.now() - t0) / 1000));
+  hist.unshift({ at: Date.now(), op: set.op, range: set.range, total: probs.length, score, sec });
+  hist = hist.slice(0, 50); save(KEY_HIST, hist);
+  $('r-title').textContent = score === probs.length ? '🎉 ぜんぶせいかい！' : 'おつかれさま！';
+  $('r-score').textContent = score + ' / ' + probs.length;
+  $('r-time').textContent = 'かかった時間：' + fmtSec(sec);
+  const m = $('r-miss'); m.innerHTML = '';
+  m.hidden = !miss.length;
+  if (miss.length) {
+    m.append(el('b', '', 'まちがえた問題'));
+    miss.forEach((x) => m.append(el('div', '', x.text + ' ＝ ' + fmtA(x.ans) + '（あなたのこたえ ' + fmtA(x.you) + '）')));
+  }
+  closeSheet('play'); openSheet('end'); renderHome();
+}
+$('pad').onclick = (e) => { const b = e.target.closest('button'); if (b) key(b.dataset.k); };
+document.addEventListener('keydown', (e) => {
+  if (!$('play').classList.contains('open')) return;
+  if (/^\d$/.test(e.key)) key(e.key);
+  else if (e.key === '-' || e.key === 'ー') key('-');
+  else if (e.key === 'Backspace') key('bs');
+  else if (e.key === 'Enter') key('go');
+  else return;
+  e.preventDefault();
+});
+$('start').onclick = start;
+$('r-again').onclick = start;
+$('r-close').onclick = () => closeSheet('end');
+$('p-quit').onclick = () => { if (!confirm('とちゅうでやめますか？（きろくは残りません）')) return; finished = true; clearInterval(timer); closeSheet('play'); };
+
+// ===== 設定 =====
+$('open-settings').onclick = () => openSheet('settings');
+$('s-close').onclick = () => closeSheet('settings');
+$('clear-hist').onclick = () => { if (!hist.length || !confirm('きろくをぜんぶ消します。いい？')) return; hist = []; save(KEY_HIST, hist); renderHome(); alert('消しました。'); };
+$('export').onclick = () => exportBackup('c-seifu', { history: hist, settings: set });
+setupImport('import-btn', 'import', 'c-seifu', (d) => Array.isArray(d.history), (d, dry) => {
+  const list = d.history.filter((h) => h && OP_NAME[h.op] && [10, 20].includes(h.range) && Number.isInteger(h.total) && h.total > 0 && h.total <= 100
+    && Number.isInteger(h.score) && h.score >= 0 && h.score <= h.total && Number.isFinite(h.at))
+    .map((h) => ({ at: h.at, op: h.op, range: h.range, total: h.total, score: h.score, sec: Number.isInteger(h.sec) && h.sec > 0 ? h.sec : 1 }));
+  if (dry) return list.length ? list.length + '回分のきろくを読み込みます。' : (alert('読み込めるきろくがありませんでした。'), null);
+  const key = (h) => h.at + ':' + h.op;
+  const map = new Map(hist.map((h) => [key(h), h])); list.forEach((h) => map.set(key(h), h));
+  hist = [...map.values()].sort((a, b) => b.at - a.at).slice(0, 50); save(KEY_HIST, hist); renderHome(); return 'ok';
+});
+
+$('ver').textContent = APP_VERSION;
+renderHome();
+
+</script>
+</body>
+</html>

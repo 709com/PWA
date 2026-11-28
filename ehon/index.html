@@ -24,7 +24,7 @@
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
   main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
   header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
-  h1 { font-size:1.25rem; margin:0; }
+  h1 { font-size:1.15rem; margin:0; }
   button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
   input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
   textarea { min-height:5em; resize:vertical; }
@@ -46,7 +46,7 @@
   .medals { font-size:1.3rem; letter-spacing:2px; word-break:break-all; }
   .months { margin-top:10px; }
   .mrow { display:flex; align-items:center; gap:8px; font-size:.85rem; margin:3px 0; }
-  .mrow .ml { width:5.2em; flex:0 0 auto; color:var(--sub); }
+  .mrow .ml { width:6.6em; white-space:nowrap; flex:0 0 auto; color:var(--sub); }
   .mrow .bar { flex:1; height:14px; background:var(--accent-soft); border-radius:99px; overflow:hidden; }
   .mrow .bar div { height:100%; background:var(--accent); border-radius:99px; }
   .mrow .mc { width:3em; text-align:right; flex:0 0 auto; }
@@ -58,8 +58,8 @@
   #q { margin-bottom:8px; }
   .shelf { background:var(--shelf); border:6px solid var(--wood); border-radius:10px; padding:0 6px;
            display:flex; flex-wrap:wrap; align-content:flex-start;
-           background-image:linear-gradient(to top, var(--wood) 0, var(--wood) 8px, transparent 8px); background-size:100% 160px; }
-  .book { width:44px; height:140px; margin:12px 3px 8px; border-radius:4px 4px 2px 2px; padding:6px 2px 4px; display:flex; flex-direction:column; align-items:center; gap:2px;
+           background-image:linear-gradient(to top, var(--wood) 0, var(--wood) 8px, transparent 8px); background-size:100% 190px; }
+  .book { width:44px; height:170px; margin:12px 3px 8px; border-radius:4px 4px 2px 2px; padding:6px 2px 4px; display:flex; flex-direction:column; align-items:center; gap:2px;
           background:hsl(var(--h) 55% var(--sl)); color:hsl(var(--h) 50% var(--sd)); box-shadow:inset -4px 0 0 rgba(0,0,0,.12), inset 3px 0 0 rgba(255,255,255,.25); overflow:hidden; }
   .book .st { font-size:1.05rem; line-height:1; }
   .book .tt { writing-mode:vertical-rl; font-size:.82rem; font-weight:700; overflow:hidden; flex:1; line-height:1.15; white-space:nowrap; text-overflow:ellipsis; }

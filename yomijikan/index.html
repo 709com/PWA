@@ -1,0 +1,420 @@
+<!doctype html>
+<!-- このファイルは「原稿の読み上げ時間計算」の本体です。原稿を貼ると、文字数（空白・改行を除く）と読む速さから読み上げ時間の目安を出し、持ち時間に合わせて何文字削る・足せるかを示します。 -->
+<!-- 原稿と設定はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>原稿の読み上げ時間計算</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="読み時間">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#7a4fb0">
+<style>
+  :root { --bg:#f6f3fa; --card:#fff; --text:#1b2633; --sub:#5a6675; --accent:#7a4fb0; --accent-soft:#ede4f7; --line:#e0dae8; --danger:#c8372d; --ok:#2f8a5b; --on:#fff; --mark:#dccbf0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15121b; --card:#211c29; --text:#ece8f2; --sub:#a59fb2; --accent:#b996e8; --accent-soft:#33264a; --line:#352d40; --danger:#ef6b61; --ok:#5fcf93; --on:#1d1328; --mark:#4f3a6e; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.2rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  textarea { min-height:12em; resize:vertical; }
+  #update { display:none; background:var(--accent); color:var(--on); border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:#7a4fb0; border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .drafts { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+  .drafts select { flex:1 1 100%; min-width:0; }
+  .drafts button { flex:1 1 0; padding:10px; }
+  .small { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; white-space:nowrap; font-size:.9rem; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:12px; }
+  .big { display:grid; grid-template-columns:1fr 1fr; gap:8px; text-align:center; }
+  .big div { background:var(--accent-soft); border-radius:12px; padding:8px 4px; }
+  .big b { display:block; font-size:1.6rem; line-height:1.2; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .big small { color:var(--sub); font-size:.78rem; }
+  .line { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .line input { width:5.5em; text-align:right; }
+  .line .u { color:var(--sub); font-size:.9rem; }
+  .msg { margin-top:10px; font-weight:700; border-radius:10px; padding:8px 10px; background:var(--accent-soft); }
+  .msg.over { color:var(--danger); }
+  .msg.ok { color:var(--ok); }
+  .err { color:var(--danger); font-size:.82rem; margin-top:4px; }
+  .note { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  .hint { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.84rem; margin-top:12px; }
+  @media (prefers-color-scheme: dark) { .hint { background:#3a2e12; color:#f3dca6; } }
+  table { width:100%; border-collapse:collapse; font-size:.86rem; margin-top:6px; table-layout:fixed; }
+  th, td { padding:6px 4px; border-bottom:1px solid var(--line); text-align:right; font-variant-numeric:tabular-nums; }
+  th { color:var(--sub); font-weight:400; font-size:.78rem; }
+  th:first-child, td:first-child { text-align:left; width:2em; color:var(--sub); }
+  td.h { text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  th.h { text-align:left; }
+  .primary { background:var(--accent); color:var(--on); border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 8px; }
+  .timer { font-size:2.2rem; font-weight:700; text-align:center; font-variant-numeric:tabular-nums; color:var(--accent); margin:6px 0; }
+  .reading { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:1.15rem; line-height:1.9; word-break:break-all; margin-top:10px; }
+  .reading span.done { background:var(--mark); }
+  .reading span.end { background:var(--accent); color:var(--on); border-radius:3px; }
+  .reading.tap span { cursor:pointer; }
+  .result { font-size:1.1rem; font-weight:700; margin-top:10px; }
+  .sticky { position:sticky; top:0; background:var(--bg); padding:6px 0 4px; z-index:2; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header><h1>⏱ 原稿の読み上げ時間計算</h1></header>
+
+  <div class="drafts">
+    <select id="draft" aria-label="保存した原稿"></select>
+    <button class="small" id="new">＋ 新しい原稿</button>
+    <button class="small" id="del" style="color:var(--danger)">削除</button>
+  </div>
+  <label class="f" for="title">原稿の名前（なくてもかまいません）</label>
+  <input id="title" maxlength="60" placeholder="例：11月定例会 一般質問">
+  <label class="f" for="text">原稿（ここに貼りつけてください。自動で保存されます）</label>
+  <textarea id="text" placeholder="原稿の文章を貼りつけてください"></textarea>
+  <p class="note">区民の方の個人名など、個人を特定できる情報は書かないでください。</p>
+
+  <div class="panel">
+    <div class="big">
+      <div><b id="chars">0字</b><small>文字数（空白・改行を除く）</small></div>
+      <div><b id="time">0分00秒</b><small>読み上げ時間の目安</small></div>
+    </div>
+    <div class="line">
+      <span>読む速さ</span><input id="speed" inputmode="numeric" maxlength="4" aria-label="1分あたりの文字数"><span class="u">字／1分</span>
+      <button class="small" id="measure">🎙 速さを測る</button>
+    </div>
+    <div class="err" id="speed-err" hidden></div>
+    <div class="line">
+      <span>持ち時間</span><input id="am" inputmode="numeric" maxlength="3" aria-label="持ち時間（分）" placeholder="分"><span class="u">分</span>
+      <input id="as" inputmode="numeric" maxlength="2" aria-label="持ち時間（秒）" placeholder="0"><span class="u">秒</span>
+    </div>
+    <div class="err" id="allot-err" hidden></div>
+    <div class="msg" id="allot-msg" hidden></div>
+    <div class="hint">読む速さの目安は人によって違います。ここに出る時間は「1分あたりの文字数」で割った目安です。本番の前に、一度声に出して確かめてください。</div>
+  </div>
+
+  <div class="panel">
+    <b>段落ごとの内訳</b>
+    <p class="note">改行ごとに1つの段落として数えます。「経過」は、その段落を読み終えるまでの目安です。</p>
+    <div id="parts"></div>
+  </div>
+
+  <footer>版 <span id="ver"></span> ・ 原稿はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 速さを測る -->
+<div class="sheet" id="msheet">
+  <div class="inner">
+    <div class="sticky">
+      <h2>🎙 読む速さを測る</h2>
+      <p class="note" id="m-guide" style="margin:0">「始める」を押して、下の文章をいつもの速さで声に出して読んでください。1分たつと止まります（途中で「止める」を押してもかまいません）。止まったら、読み終えたところの文字を押してください。</p>
+      <div class="timer" id="m-timer">1:00</div>
+      <div class="actions" style="margin-top:0;justify-content:center">
+        <button class="primary" id="m-start">始める</button>
+        <button class="plain" id="m-stop" hidden>止める</button>
+        <button class="plain" id="m-close">閉じる</button>
+      </div>
+      <div class="result" id="m-result" hidden></div>
+      <div class="actions" id="m-apply-row" hidden style="margin-top:6px"><button class="primary" id="m-apply">この速さにする</button></div>
+    </div>
+    <div class="reading" id="m-text"></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_DRAFTS = 'yomijikan:drafts';   // 保存した原稿の一覧
+const KEY_CUR = 'yomijikan:current';     // いま開いている原稿
+const KEY_SPEED = 'yomijikan:speed';     // 読む速さ（1分あたりの文字数）
+const KEY_ALLOT = 'yomijikan:allot';     // 持ち時間
+const DEFAULT_SPEED = 300;
+const MIN_SPEED = 50, MAX_SPEED = 1500;
+const $ = (id) => document.getElementById(id);
+
+// 速さを測るときに、原稿が短い場合に使う練習用の文章（事実を含まない、ふつうの文章）
+const SAMPLE = 'みなさん、おはようございます。きょうは、日ごろの活動についてお話しします。\n' +
+  '声に出して読むときは、文章を目で追うよりも少しゆっくりになります。句読点で軽く息をつき、聞いている人が言葉を受け取れる間を取ると、内容が伝わりやすくなります。\n' +
+  '早口になりそうなときは、一文を短く区切ってみてください。大事な言葉の前で一拍おくと、聞き手の耳に残りやすくなります。\n' +
+  '原稿を準備するときは、まず全体の流れを決め、次に一つひとつの段落で何を伝えたいかを書き出します。そのうえで、持ち時間に合わせて言葉を足したり削ったりしていきます。\n' +
+  '読み上げの練習は、本番と同じ姿勢で、同じくらいの声の大きさで行うのがおすすめです。何度か読むうちに、自分にとって自然な速さがわかってきます。\n' +
+  '最後に、伝えたいことをもう一度短くまとめて締めくくると、聞いている人の印象に残ります。きょうは、お聞きいただきありがとうございました。\n' +
+  'ここから先は、続けて読むための文章です。朝の空気は澄んでいて、通りを歩く人の足どりも軽く見えます。季節の変わり目には、体調をくずさないよう気をつけたいものです。\n' +
+  '身近な話題から話し始めると、聞く人との距離が近くなります。ゆっくりと、はっきりと、語りかけるように読んでみてください。';
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { return false; } }
+const p2 = (n) => String(n).padStart(2, '0');
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+// 文字数：空白（全角の空白を含む）と改行を除いて数える
+const countChars = (s) => Array.from(String(s || '').replace(/\s/g, '')).length;
+function fmtSec(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + '分' + p2(sec % 60) + '秒'; }
+function fmtDay(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); }
+const toHalf = (s) => String(s).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null）
+function parseIntStrict(s) { const t = toHalf(s); return /^\d+$/.test(t) ? parseInt(t, 10) : null; }
+
+// ===== 保存している原稿 =====
+let drafts = load(KEY_DRAFTS, []);
+if (!Array.isArray(drafts)) drafts = [];
+drafts = drafts.filter((d) => d && typeof d === 'object').map((d) => ({
+  id: typeof d.id === 'string' && d.id ? d.id : 'd' + Date.now() + Math.random().toString(36).slice(2, 6),
+  title: typeof d.title === 'string' ? d.title : '',
+  text: typeof d.text === 'string' ? d.text : '',
+  updatedAt: Number.isFinite(d.updatedAt) ? d.updatedAt : Date.now(),
+}));
+let curId = load(KEY_CUR, '');
+let speed = load(KEY_SPEED, DEFAULT_SPEED);
+if (!Number.isInteger(speed) || speed < MIN_SPEED || speed > MAX_SPEED) speed = DEFAULT_SPEED;
+let allot = load(KEY_ALLOT, { m: '', s: '' });
+if (!allot || typeof allot !== 'object') allot = { m: '', s: '' };
+
+function newDraft() { return { id: 'd' + Date.now() + Math.random().toString(36).slice(2, 6), title: '', text: '', updatedAt: Date.now() }; }
+function cur() {
+  let d = drafts.find((x) => x.id === curId);
+  if (!d) { d = drafts[0]; if (!d) { d = newDraft(); drafts.push(d); } curId = d.id; }
+  return d;
+}
+function draftLabel(d) {
+  const head = d.title.trim() || d.text.replace(/\s+/g, ' ').trim().slice(0, 16) || '（まだ空の原稿）';
+  return head + '（' + countChars(d.text) + '字・' + fmtDay(d.updatedAt) + '）';
+}
+function buildDraftSelect() {
+  const sel = $('draft'); sel.innerHTML = '';
+  [...drafts].sort((a, b) => b.updatedAt - a.updatedAt).forEach((d) => sel.add(new Option(draftLabel(d), d.id)));
+  sel.value = cur().id;
+}
+function persist() {
+  // 中身が空の原稿は、いま開いているもの以外は保存しない
+  const keep = drafts.filter((d) => d.id === curId || d.title.trim() || d.text.trim());
+  drafts = keep;
+  if (!save(KEY_DRAFTS, drafts.filter((d) => d.title.trim() || d.text.trim()))) alert('保存できませんでした。原稿が長すぎるか、iPhoneの空き容量が足りません。');
+  save(KEY_CUR, curId);
+}
+function openDraft(id) {
+  curId = id;
+  const d = cur();
+  $('title').value = d.title;
+  $('text').value = d.text;
+  buildDraftSelect();
+  calc();
+}
+let st = null;
+function onEdit() {
+  const d = cur();
+  d.title = $('title').value.slice(0, 60);
+  d.text = $('text').value;
+  d.updatedAt = Date.now();
+  calc();
+  clearTimeout(st);
+  st = setTimeout(() => { persist(); buildDraftSelect(); }, 400);
+}
+$('title').addEventListener('input', onEdit);
+$('text').addEventListener('input', onEdit);
+$('draft').onchange = () => { persist(); openDraft($('draft').value); };
+$('new').onclick = () => {
+  const d = cur();
+  if (!d.title.trim() && !d.text.trim()) { $('text').focus(); return; } // 空の原稿があれば、それを使う
+  persist();
+  const n = newDraft(); drafts.push(n);
+  openDraft(n.id); persist();
+  $('text').focus();
+};
+$('del').onclick = () => {
+  const d = cur();
+  if (!d.title.trim() && !d.text.trim()) return;
+  if (!confirm('「' + (d.title.trim() || d.text.trim().slice(0, 16)) + '」を削除します。元に戻せません。よろしいですか？')) return;
+  drafts = drafts.filter((x) => x.id !== d.id);
+  const next = [...drafts].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  curId = next ? next.id : '';
+  openDraft(cur().id); persist();
+};
+window.addEventListener('pagehide', () => { clearTimeout(st); persist(); });
+
+// ===== 計算 =====
+function readAllot() {
+  const mRaw = $('am').value, sRaw = $('as').value;
+  if (!mRaw.trim() && !sRaw.trim()) return { sec: null };
+  const m = mRaw.trim() ? parseIntStrict(mRaw) : 0;
+  const s = sRaw.trim() ? parseIntStrict(sRaw) : 0;
+  if (m === null || s === null) return { err: '持ち時間は、0以上の整数（分と秒）で入れてください。小数やマイナスは使えません。' };
+  if (s > 59) return { err: '秒は0〜59で入れてください。' };
+  if (m > 300) return { err: '持ち時間は300分までで入れてください。' };
+  if (m === 0 && s === 0) return { sec: null };
+  return { sec: m * 60 + s };
+}
+function calc() {
+  const text = $('text').value;
+  const n = countChars(text);
+  $('chars').textContent = n.toLocaleString('ja-JP') + '字';
+  $('time').textContent = fmtSec(n / speed * 60);
+
+  // 持ち時間
+  const a = readAllot();
+  const msg = $('allot-msg');
+  $('allot-err').hidden = !a.err; $('allot-err').textContent = a.err || '';
+  if (a.err || a.sec === null) { msg.hidden = true; }
+  else {
+    const cap = Math.floor(speed * a.sec / 60);
+    msg.hidden = false;
+    msg.className = 'msg';
+    if (!n) msg.textContent = '持ち時間 ' + fmtSec(a.sec) + ' で、約' + cap.toLocaleString('ja-JP') + '字まで読めます。';
+    else if (n > cap) { msg.classList.add('over'); msg.textContent = 'あと ' + (n - cap).toLocaleString('ja-JP') + '字 削ると収まります（目安で約' + fmtSec((n - cap) / speed * 60) + 'の超過）。'; }
+    else { msg.classList.add('ok'); msg.textContent = n === cap ? 'ちょうど持ち時間に収まる目安です。' : 'あと ' + (cap - n).toLocaleString('ja-JP') + '字 足せます（持ち時間 ' + fmtSec(a.sec) + ' ＝ 約' + cap.toLocaleString('ja-JP') + '字）。'; }
+  }
+  save(KEY_ALLOT, { m: $('am').value.slice(0, 3), s: $('as').value.slice(0, 2) });
+
+  // 段落ごと
+  const box = $('parts'); box.innerHTML = '';
+  const paras = text.split(/\r?\n/).filter((p) => countChars(p) > 0);
+  if (!paras.length) { box.append(el('p', 'note', '原稿を貼ると、ここに段落ごとの文字数と時間が出ます。')); return; }
+  const t = el('table');
+  const hr = el('tr');
+  [['', ''], ['段落の書き出し', 'h'], ['文字数', ''], ['時間', ''], ['経過', '']].forEach(([x, c]) => hr.append(el('th', c, x)));
+  t.append(hr);
+  let acc = 0;
+  paras.forEach((p, i) => {
+    const c = countChars(p); acc += c;
+    const tr = el('tr');
+    tr.append(el('td', '', String(i + 1)), el('td', 'h', p.trim()), el('td', '', c.toLocaleString('ja-JP') + '字'), el('td', '', fmtSec(c / speed * 60)), el('td', '', fmtSec(acc / speed * 60)));
+    t.append(tr);
+  });
+  box.append(t);
+}
+$('am').addEventListener('input', calc);
+$('as').addEventListener('input', calc);
+
+// 読む速さ
+function setSpeed(v) {
+  speed = v; save(KEY_SPEED, speed);
+  $('speed').value = speed;
+  $('speed-err').hidden = true;
+  calc();
+}
+$('speed').addEventListener('change', () => {
+  const v = parseIntStrict($('speed').value);
+  if (v === null || v < MIN_SPEED || v > MAX_SPEED) {
+    $('speed-err').hidden = false;
+    $('speed-err').textContent = '読む速さは ' + MIN_SPEED + '〜' + MAX_SPEED + ' の整数で入れてください（いまは ' + speed + '字のまま計算しています）。';
+    return;
+  }
+  setSpeed(v);
+});
+
+// ===== 速さを測る =====
+let mStart = 0, mTimer = null, mElapsed = 0, mPhase = 'ready';
+function measureText() {
+  const t = $('text').value;
+  return countChars(t) >= 600 ? t : SAMPLE;
+}
+function buildReading() {
+  const box = $('m-text'); box.innerHTML = '';
+  let n = 0;
+  const frag = document.createDocumentFragment();
+  for (const ch of Array.from(measureText())) {
+    if (ch === '\n') { frag.append(document.createElement('br')); continue; }
+    const s = document.createElement('span');
+    s.textContent = ch;
+    if (!/\s/.test(ch)) { n++; s.dataset.n = n; }
+    frag.append(s);
+  }
+  box.append(frag);
+}
+function setPhase(p) {
+  mPhase = p;
+  $('m-start').hidden = p === 'running';
+  $('m-start').textContent = p === 'ready' ? '始める' : 'もう一度測る';
+  $('m-stop').hidden = p !== 'running';
+  $('m-text').classList.toggle('tap', p === 'tap');
+  $('m-guide').textContent = p === 'running' ? '読んでいます…。止まったら、読み終えたところの文字を押してください。'
+    : p === 'tap' ? '読み終えたところの文字を押してください（押し直せます）。'
+    : '「始める」を押して、下の文章をいつもの速さで声に出して読んでください。1分たつと止まります（途中で「止める」を押してもかまいません）。止まったら、読み終えたところの文字を押してください。';
+}
+function showTimer(sec) { const r = Math.ceil(Math.max(0, 60 - sec)); $('m-timer').textContent = Math.floor(r / 60) + ':' + p2(r % 60); }
+function stopMeasure() {
+  clearInterval(mTimer); mTimer = null;
+  mElapsed = Math.min(60, (Date.now() - mStart) / 1000);
+  showTimer(mElapsed);
+  setPhase('tap');
+}
+$('m-start').onclick = () => {
+  $('m-text').querySelectorAll('.done,.end').forEach((s) => s.classList.remove('done', 'end'));
+  $('m-result').hidden = true; $('m-apply-row').hidden = true;
+  mStart = Date.now();
+  setPhase('running');
+  showTimer(0);
+  mTimer = setInterval(() => { const e = (Date.now() - mStart) / 1000; showTimer(e); if (e >= 60) stopMeasure(); }, 200);
+};
+$('m-stop').onclick = stopMeasure;
+let mResult = null;
+$('m-text').addEventListener('click', (e) => {
+  if (mPhase !== 'tap') return;
+  let s = e.target.closest('span');
+  if (!s) return;
+  // 空白を押したときは、その前の文字までとする
+  while (s && !s.dataset.n) s = s.previousElementSibling;
+  if (!s) return;
+  const n = +s.dataset.n;
+  $('m-text').querySelectorAll('span').forEach((x) => { const k = +(x.dataset.n || 0); x.classList.toggle('done', k > 0 && k < n); x.classList.toggle('end', k === n); });
+  $('m-result').hidden = false;
+  if (mElapsed < 10) { $('m-result').textContent = '10秒以上読んでから測ってください。'; $('m-apply-row').hidden = true; mResult = null; return; }
+  mResult = Math.round(n / mElapsed * 60);
+  if (mResult < MIN_SPEED || mResult > MAX_SPEED) { $('m-result').textContent = '1分あたり約' + mResult + '字でした。範囲（' + MIN_SPEED + '〜' + MAX_SPEED + '字）の外なので、もう一度測ってください。'; $('m-apply-row').hidden = true; mResult = null; return; }
+  $('m-result').textContent = Math.round(mElapsed) + '秒で ' + n + '字 → 1分あたり 約' + mResult + '字';
+  $('m-apply-row').hidden = false;
+});
+$('m-apply').onclick = () => { if (mResult) { setSpeed(mResult); closeMeasure(); alert('読む速さを1分あたり' + speed + '字にしました。'); } };
+function closeMeasure() { clearInterval(mTimer); mTimer = null; $('msheet').classList.remove('open'); }
+$('m-close').onclick = closeMeasure;
+$('measure').onclick = () => {
+  buildReading(); setPhase('ready'); showTimer(0);
+  $('m-result').hidden = true; $('m-apply-row').hidden = true; mResult = null;
+  $('msheet').classList.add('open'); $('msheet').scrollTop = 0;
+};
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => { persist(); w.postMessage('SKIP_WAITING'); }; };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('msheet').classList.contains('open')) return; // 測っている間は読み込み直さない
+    reloaded = true; persist(); location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+$('speed').value = speed;
+$('am').value = typeof allot.m === 'string' ? allot.m : '';
+$('as').value = typeof allot.s === 'string' ? allot.s : '';
+openDraft(cur().id);
+</script>
+</body>
+</html>

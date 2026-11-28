@@ -1,0 +1,337 @@
+<!doctype html>
+<!-- このファイルは「送り迎えログ」の本体です。保育園などの送り・迎えを、だれが担当したかをワンタップで記録し、週・月ごとの分担を数えます。 -->
+<!-- 記録はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。非公式・個人の試作です。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>送り迎えログ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="送迎ログ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c97a12">
+<style>
+  :root { --bg:#fbf7f0; --card:#fff; --text:#2a2418; --sub:#6b604e; --accent:#c97a12; --accent-soft:#f8ead2; --line:#ece2d2; --danger:#c8372d;
+          --c0:#2f8fd8; --c1:#d0508a; --c2:#2f9e6b; --c3:#8a5cd0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161310; --card:#211c16; --text:#f2ece3; --sub:#b4a792; --accent:#f0a845; --accent-soft:#3b2d16; --line:#352d22; --danger:#ef6b61;
+            --c0:#5aa9ea; --c1:#ea7aaa; --c2:#4fc48d; --c3:#ab86e6; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.3rem; margin:0; }
+  h2 { font-size:1rem; color:var(--sub); margin:0 0 8px; font-weight:600; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  .daynav { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .daynav b { font-size:1.15rem; text-align:center; flex:1; }
+  .daynav button { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-size:1.1rem; }
+  .kind { margin-top:10px; }
+  .kind .lbl { font-weight:700; margin-bottom:6px; }
+  .who { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; }
+  .who button { background:var(--bg); border:2px solid var(--line); border-radius:14px; padding:14px 4px; font-size:1rem; font-weight:700; word-break:break-all; min-height:56px; }
+  .who button.on { color:#fff; }
+  .who button.on.m0 { background:var(--c0); border-color:var(--c0); }
+  .who button.on.m1 { background:var(--c1); border-color:var(--c1); }
+  .who button.on.m2 { background:var(--c2); border-color:var(--c2); }
+  .who button.on.m3 { background:var(--c3); border-color:var(--c3); }
+  .memo { margin-top:12px; }
+  .hint { font-size:.8rem; color:var(--sub); margin:6px 0 0; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; table-layout:fixed; }
+  th, td { padding:6px 3px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+  th { color:var(--sub); font-weight:600; font-size:.8rem; }
+  tr:last-child td { border-bottom:none; }
+  td.today { font-weight:700; }
+  .dot { display:inline-block; width:.7em; height:.7em; border-radius:50%; margin-right:3px; vertical-align:baseline; }
+  .bars .row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .bars .nm { width:6.5em; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bars .bar { flex:1; height:14px; background:var(--accent-soft); border-radius:99px; overflow:hidden; }
+  .bars .bar div { height:100%; border-radius:99px; }
+  .bars .n { width:3.5em; text-align:right; flex-shrink:0; }
+  .muted { color:var(--sub); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; color:var(--text); margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:14px 0 6px; }
+  .editrow { margin-bottom:6px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin:6px 0; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🚲 送り迎えログ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+
+  <section>
+    <div class="daynav">
+      <button id="prev" aria-label="前の日">◀</button>
+      <b id="day"></b>
+      <button id="next" aria-label="次の日">▶</button>
+    </div>
+    <div class="kind"><div class="lbl">🌅 送り</div><div class="who" id="who-o"></div></div>
+    <div class="kind"><div class="lbl">🌇 迎え</div><div class="who" id="who-m"></div></div>
+    <div class="memo">
+      <input id="memo" maxlength="60" placeholder="ひとことメモ（例：延長保育、雨で自転車なし）">
+      <p class="hint">もう一度押すと取り消せます。お子さんの名前など、個人を特定できる情報は書かないでください。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>📅 この週（月〜日）</h2>
+    <table><thead><tr><th style="width:30%">日</th><th>送り</th><th>迎え</th></tr></thead><tbody id="week"></tbody></table>
+  </section>
+
+  <section>
+    <h2 id="month-title">📊 今月の分担</h2>
+    <div class="bars" id="bars"></div>
+    <p class="hint">送り・迎えを1回ずつ数えています。</p>
+  </section>
+
+  <footer>非公式・個人の試作です（文京区の公式アプリではありません）<br>版 <span id="ver"></span> ・ 記録はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">担当する人の呼び名（2〜4人。空にすると消えます）</label>
+    <div class="warn">本名ではなく「わたし」「パートナー」「おばあちゃん」などの呼び名がおすすめです。</div>
+    <div id="mem-edit"></div>
+    <div class="actions">
+      <button class="plain" id="mem-add">＋ ふやす</button>
+      <button class="primary" id="mem-save">保存する</button>
+    </div>
+    <label class="f">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、記録も消えます。ときどき書き出して保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain danger" id="reset">記録をすべて消す</button></div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_MEM = 'p-sougei:members';   // 担当する人：[{id, name}]
+const KEY_DAYS = 'p-sougei:days';     // 記録：{ "2026-11-28": { o:"m1", m:"m2", memo:"" } }
+const DEFAULT_MEM = [{ id: 'a', name: 'わたし' }, { id: 'b', name: 'パートナー' }];
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { alert('保存できませんでした。'); } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function dk(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function fromKey(k) { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); }
+function label(d) { return (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）'; }
+
+// 読み込んだデータを点検（壊れたものは捨て、欠けた項目は補う）
+function cleanMem(a) {
+  if (!Array.isArray(a)) return [];
+  const out = [];
+  a.forEach((m, i) => { if (m && typeof m.name === 'string' && m.name.trim()) out.push({ id: typeof m.id === 'string' && m.id ? m.id : 'x' + i, name: m.name.trim().slice(0, 12) }); });
+  return out.slice(0, 4);
+}
+function cleanDays(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, v] of Object.entries(o)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
+    out[k] = { o: typeof v.o === 'string' ? v.o : '', m: typeof v.m === 'string' ? v.m : '', memo: typeof v.memo === 'string' ? v.memo.slice(0, 60) : '' };
+  }
+  return out;
+}
+let members = cleanMem(load(KEY_MEM, DEFAULT_MEM));
+if (members.length < 2) members = DEFAULT_MEM.slice();
+let days = cleanDays(load(KEY_DAYS, {}));
+let viewDay = new Date();
+
+const memIndex = (id) => members.findIndex((m) => m.id === id);
+const memName = (id) => { const m = members.find((x) => x.id === id); return m ? m.name : ''; };
+
+// ===== 表示 =====
+function render() {
+  const k = dk(viewDay);
+  const isToday = k === dk(new Date());
+  $('day').textContent = (isToday ? '今日 ' : '') + label(viewDay);
+  $('next').disabled = isToday;
+  $('next').style.opacity = isToday ? .3 : 1;
+  const rec = days[k] || { o: '', m: '', memo: '' };
+  for (const kind of ['o', 'm']) {
+    const box = $('who-' + kind); box.innerHTML = '';
+    members.forEach((m, i) => {
+      const b = el('button', 'm' + i + (rec[kind] === m.id ? ' on' : ''), m.name);
+      b.onclick = () => setWho(kind, m.id);
+      box.append(b);
+    });
+  }
+  if (document.activeElement !== $('memo')) $('memo').value = rec.memo || '';
+  renderWeek();
+  renderMonth();
+}
+function cell(id) {
+  const td = el('td');
+  if (!id) { td.textContent = '—'; td.className = 'muted'; return td; }
+  const i = memIndex(id);
+  const dot = el('span', 'dot'); dot.style.background = 'var(--c' + (i < 0 ? 0 : i) + ')';
+  td.append(dot, document.createTextNode(i < 0 ? '（消した人）' : memName(id)));
+  return td;
+}
+function renderWeek() {
+  const body = $('week'); body.innerHTML = '';
+  const base = new Date(viewDay); const shift = (base.getDay() + 6) % 7; base.setDate(base.getDate() - shift);
+  const today = dk(new Date());
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base); d.setDate(base.getDate() + i);
+    const rec = days[dk(d)] || {};
+    const tr = el('tr');
+    const td = el('td', dk(d) === today ? 'today' : '', d.getDate() + '日（' + WEEK[d.getDay()] + '）');
+    tr.append(td, cell(rec.o), cell(rec.m));
+    body.append(tr);
+  }
+}
+function renderMonth() {
+  const y = viewDay.getFullYear(), mo = viewDay.getMonth();
+  $('month-title').textContent = '📊 ' + (mo + 1) + '月の分担';
+  const prefix = y + '-' + p2(mo + 1) + '-';
+  const cnt = {}; let total = 0;
+  for (const [k, v] of Object.entries(days)) {
+    if (!k.startsWith(prefix)) continue;
+    for (const id of [v.o, v.m]) if (id && memIndex(id) >= 0) { cnt[id] = (cnt[id] || 0) + 1; total++; }
+  }
+  const box = $('bars'); box.innerHTML = '';
+  if (!total) { box.append(el('p', 'muted', 'この月の記録はまだありません。')); return; }
+  members.forEach((m, i) => {
+    const n = cnt[m.id] || 0;
+    const row = el('div', 'row');
+    const bar = el('div', 'bar'); const fill = el('div'); fill.style.width = (n / total * 100) + '%'; fill.style.background = 'var(--c' + i + ')'; bar.append(fill);
+    row.append(el('span', 'nm', m.name), bar, el('span', 'n', n + '回'));
+    box.append(row);
+  });
+}
+
+// 担当を決める（同じ人をもう一度押すと取り消し）
+function setWho(kind, id) {
+  const k = dk(viewDay);
+  const rec = days[k] || { o: '', m: '', memo: '' };
+  rec[kind] = rec[kind] === id ? '' : id;
+  if (!rec.o && !rec.m && !rec.memo) delete days[k]; else days[k] = rec;
+  save(KEY_DAYS, days);
+  render();
+}
+$('memo').addEventListener('change', () => {
+  const k = dk(viewDay);
+  const rec = days[k] || { o: '', m: '', memo: '' };
+  rec.memo = $('memo').value.trim().slice(0, 60);
+  if (!rec.o && !rec.m && !rec.memo) delete days[k]; else days[k] = rec;
+  save(KEY_DAYS, days);
+  render();
+});
+$('prev').onclick = () => { viewDay.setDate(viewDay.getDate() - 1); render(); };
+$('next').onclick = () => { if (dk(viewDay) < dk(new Date())) { viewDay.setDate(viewDay.getDate() + 1); render(); } };
+
+// ===== 設定 =====
+function buildEdit() { $('mem-edit').innerHTML = ''; members.forEach((m) => addRow(m.name, m.id)); }
+function addRow(v, id) {
+  if ($('mem-edit').children.length >= 4) { alert('4人までです。'); return null; }
+  const row = el('div', 'editrow');
+  const inp = el('input'); inp.value = v; inp.maxLength = 12; inp.dataset.id = id || '';
+  row.append(inp); $('mem-edit').append(row);
+  return inp;
+}
+$('mem-add').onclick = () => { const i = addRow('', ''); if (i) i.focus(); };
+$('mem-save').onclick = () => {
+  const list = [...$('mem-edit').querySelectorAll('input')].map((i) => ({ id: i.dataset.id || 'm' + Date.now() + Math.random().toString(36).slice(2, 5), name: i.value.trim() })).filter((m) => m.name);
+  if (list.length < 2) { alert('2人以上 入れてください。'); return; }
+  members = list.slice(0, 4);
+  save(KEY_MEM, members);
+  buildEdit(); render();
+  alert('保存しました。');
+};
+$('open-settings').onclick = () => { buildEdit(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('reset').onclick = () => {
+  if (!confirm('送り迎えの記録をすべて消します（呼び名は残ります）。元に戻せません。よろしいですか？')) return;
+  days = {}; save(KEY_DAYS, days); render();
+};
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'p-sougei-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'p-sougei', version: APP_VERSION, exportedAt: d.toISOString(), members, days }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'p-sougei' || !data.days || typeof data.days !== 'object') { alert('このアプリのバックアップファイルではありません。'); return; }
+  const nm = cleanMem(data.members), nd = cleanDays(data.days);
+  if (!confirm(Object.keys(nd).length + '日分の記録を読み込みます。同じ日は、ファイルの内容で上書きします。よろしいですか？')) return;
+  if (nm.length >= 2) { members = nm; save(KEY_MEM, members); }
+  days = { ...days, ...nd }; save(KEY_DAYS, days);
+  buildEdit(); render();
+  alert('読み込みました。');
+};
+
+// ===== 日付が変わったら「今日」に合わせる =====
+let shown = dk(new Date());
+function checkDay() { const t = dk(new Date()); if (t !== shown) { if (dk(viewDay) === shown) viewDay = new Date(); shown = t; render(); } }
+setInterval(checkDay, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || document.activeElement === $('memo')) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+render();
+</script>
+</body>
+</html>

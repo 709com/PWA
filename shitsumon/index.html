@@ -400,6 +400,7 @@ function showTab(stats) {
   $('tab-stats').classList.toggle('on', stats);
   $('view-list').hidden = stats;
   $('view-stats').hidden = !stats;
+  $('add').hidden = stats;
   if (stats) drawStats();
 }
 $('tab-list').onclick = () => showTab(false);

@@ -1,0 +1,550 @@
+<!doctype html>
+<!-- このファイルは「子どもの体温・体調メモ」の本体です。子どもごとに体温・症状・飲んだ薬・メモを記録し、直近7日のグラフと、病院で見せる用のまとめを表示します。 -->
+<!-- 記録はiPhoneの中のデータベース（IndexedDB）だけに保存し、外部へは一切送信しません。医療的な判断や助言は一切表示しません（記録の道具です）。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>子どもの体温・体調メモ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="体温メモ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#c9567a">
+<style>
+  :root { --bg:#f8f4f6; --card:#fff; --text:#2a1c22; --sub:#6c5a62; --accent:#c9567a; --accent-soft:#f8e1e9; --line:#e9dde2; --danger:#c8372d; --grid:#eee4e8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#171215; --card:#231b1f; --text:#f2eaee; --sub:#b19fa7; --accent:#ef86a8; --accent-soft:#3d2230; --line:#382b31; --danger:#ef6b61; --grid:#30252a; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:1.02rem; margin:0; }
+  h3 { font-size:.95rem; margin:0 0 6px; color:var(--sub); }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  input[type=datetime-local] { min-height:44px; }
+  textarea { min-height:4em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+
+  .doctor { background:var(--accent-soft); border-radius:12px; padding:8px 12px; font-size:.85rem; margin-bottom:10px; }
+  .doctor b { color:var(--accent); }
+  .kids { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px; }
+  .kids button { background:var(--card); border:2px solid var(--line); border-radius:12px; padding:10px 4px; font-weight:700; font-size:.92rem; word-break:break-all; line-height:1.25; }
+  .kids button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px; }
+  canvas.graph { width:100%; height:200px; display:block; }
+  .bigbtns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .primary { background:var(--accent); color:#fff; border-radius:12px; padding:14px 14px; font-weight:700; }
+  .primary:disabled, .plain:disabled { opacity:.45; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+
+  .rec { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .rec .top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .rec .when { font-size:.88rem; color:var(--sub); }
+  .rec .tp { font-size:1.35rem; font-weight:700; white-space:nowrap; }
+  .rec .d { font-size:.88rem; word-break:break-word; white-space:pre-wrap; }
+  .tag { display:inline-block; font-size:.78rem; border-radius:99px; padding:0 8px; margin:2px 4px 0 0; background:var(--accent-soft); color:var(--accent); }
+  .empty { color:var(--sub); text-align:center; padding:20px 0; }
+
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .temp { font-size:1.6rem; font-weight:700; text-align:center; }
+  .syms { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .syms label { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .syms input { width:22px; height:22px; margin:0; flex:none; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .note { font-size:.8rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:10px; padding:8px 10px; font-size:.82rem; margin-bottom:6px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+  .stop { background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:8px 10px; font-weight:700; margin-top:8px; }
+  .kidrow { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
+  .kidrow button { white-space:nowrap; padding:9px 10px; }
+
+  /* 病院で見せる用 */
+  .hv-title { font-size:1.35rem; font-weight:700; margin:0; word-break:break-word; }
+  .hv-rec { border-top:1px solid var(--line); padding:8px 0; }
+  .hv-rec .l1 { display:flex; justify-content:space-between; gap:8px; font-size:1.1rem; font-weight:700; }
+  .hv-rec .l2 { font-size:1rem; word-break:break-word; white-space:pre-wrap; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>子どもの体温・体調メモ</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div class="doctor">このアプリは<b>記録のための道具</b>です。熱の高さの判断や受診の目安は表示しません。<b>判断はかかりつけ医などにご相談ください。</b></div>
+
+  <div class="kids" id="kids"></div>
+  <div class="bigbtns">
+    <button class="primary" id="btn-add">＋ 記録する</button>
+    <button class="plain" id="btn-hosp">病院で見せる</button>
+  </div>
+  <div class="panel">
+    <h3 id="g-title">直近7日の体温</h3>
+    <canvas class="graph" id="graph"></canvas>
+  </div>
+  <h3 id="list-title">記録</h3>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 記録の入力・編集 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">記録する</h2>
+    <div class="warn">子どもは名前ではなく呼び名で記録します。メモに個人を特定できる情報は書かないでください。</div>
+    <div class="row2">
+      <div><label class="f" for="e-kid">だれの記録</label><select id="e-kid"></select></div>
+      <div><label class="f" for="e-at">日時</label><input id="e-at" type="datetime-local"></div>
+    </div>
+    <label class="f" for="e-temp">体温（℃・小数1桁まで。測っていなければ空のまま）</label>
+    <input id="e-temp" class="temp" inputmode="decimal" maxlength="5" placeholder="例：36.8">
+    <label class="f">症状（あてはまるものに✓）</label>
+    <div class="syms" id="e-syms"></div>
+    <input id="e-other" maxlength="80" placeholder="「その他」の内容" style="margin-top:6px">
+    <label class="f" for="e-meds">飲んだ薬（任意）</label>
+    <input id="e-meds" maxlength="100" placeholder="例：処方された薬の名前と量">
+    <label class="f" for="e-memo">メモ（任意）</label>
+    <textarea id="e-memo" maxlength="400" placeholder="例：食欲、眠れたか など"></textarea>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+      <button class="plain danger" id="e-del" hidden>削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 病院で見せる用 -->
+<div class="sheet" id="hosp">
+  <div class="inner">
+    <div class="row2" style="align-items:center;margin-bottom:8px">
+      <select id="h-days" aria-label="表示する期間">
+        <option value="3">直近3日</option><option value="7" selected>直近7日</option><option value="14">直近14日</option>
+      </select>
+      <button class="plain" id="h-close">閉じる</button>
+    </div>
+    <p class="hv-title" id="h-title"></p>
+    <p class="note" id="h-range" style="margin-top:0"></p>
+    <div class="panel" style="margin-top:8px"><canvas class="graph" id="h-graph"></canvas></div>
+    <div id="h-list"></div>
+    <div class="doctor" style="margin-top:10px">記録をまとめたものです。判断はかかりつけ医などにご相談ください。</div>
+    <div class="actions" style="margin-top:6px">
+      <button class="primary" id="h-share">文章で共有</button>
+    </div>
+    <div class="stop" id="h-stop" hidden>投票日のため共有できません。</div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">子どもの呼び名（名前ではなく呼び名で）</label>
+    <div id="kid-edit"></div>
+    <button class="plain" id="kid-add">＋ 子どもを追加</button>
+    <div class="actions"><button class="primary" id="kid-save">呼び名を保存</button></div>
+    <p class="note">記録がある子は消せません（先に記録を消してください）。</p>
+
+    <label class="f" for="vote" style="margin-top:22px">投票日（この日は共有ボタンを止めます。1行に1日、2027-04-25 の形で）</label>
+    <textarea id="vote" style="min-height:5em"></textarea>
+    <div class="actions"><button class="primary" id="vote-save">投票日を保存</button></div>
+
+    <label class="f" style="margin-top:22px">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを削除すると、記録もすべて消えます。ときどき書き出して、「ファイル」アプリなどに保存してください。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す（保存）</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="set-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_KIDS = 'taion:kids';          // 子どもの呼び名
+const KEY_SEL = 'taion:selected';       // 最後に選んだ子
+const KEY_VOTE = 'taion:votedays';      // 投票日（共有を止める日）
+const DEFAULT_VOTE = ['2027-04-25'];
+const SYMS = ['せき', 'はなみず', 'のどの痛み', 'げり', 'おう吐', '発しん', 'その他'];
+const T_MIN = 35.0, T_MAX = 42.0;       // 入力として受け付ける範囲（判断のためではなく、打ち間違いを防ぐため）
+const $ = (id) => document.getElementById(id);
+
+// ===== 端末内のデータベース（IndexedDB） =====
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('taion', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('records', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDo(mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('records', mode);
+    const r = fn(tx.objectStore('records'));
+    tx.oncomplete = () => resolve(r && r.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const dbAll = () => dbDo('readonly', (s) => s.getAll());
+const dbPut = (it) => dbDo('readwrite', (s) => s.put(it));
+const dbDel = (id) => dbDo('readwrite', (s) => s.delete(id));
+
+// ===== 小さな道具 =====
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch (e) { return false; } }
+const p2 = (n) => String(n).padStart(2, '0');
+const str = (v) => (typeof v === 'string' ? v : '');
+const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function nowLocal() { const d = new Date(); return todayStr() + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function parseYmd(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null;
+}
+// 「2026-11-28T21:30」→ Date（正しくなければ null）
+function parseAt(s) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s || '')) return null;
+  const d = parseYmd(s.slice(0, 10)); const h = +s.slice(11, 13), mi = +s.slice(14, 16);
+  if (!d || h > 23 || mi > 59) return null;
+  d.setHours(h, mi); return d;
+}
+const fmtAt = (s) => { const d = parseAt(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ') ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) : ''; };
+const fmtYmd = (d) => d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+const half = (s) => s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[．。]/g, '.').trim();
+const newId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 6);
+const fmtT = (t) => t.toFixed(1) + '℃';
+
+// ===== 子ども =====
+function normKids(v) {
+  const list = Array.isArray(v) ? v.filter((k) => k && typeof k === 'object' && str(k.id)).map((k) => ({ id: k.id, name: str(k.name).trim().slice(0, 12) || '呼び名なし' })) : [];
+  return list.length ? list : [1, 2, 3, 4].map((n) => ({ id: 'k' + n, name: '子ども' + n }));
+}
+let kids = normKids(load(KEY_KIDS, null));
+let sel = load(KEY_SEL, kids[0].id);
+if (!kids.some((k) => k.id === sel)) sel = kids[0].id;
+const kidName = (id) => (kids.find((k) => k.id === id) || { name: '（不明）' }).name;
+
+// ===== 記録の形をそろえる（欠けた項目を補う。読み込み時にも使う） =====
+function normTemp(v) {
+  if (typeof v !== 'number' || !isFinite(v)) return null;
+  const r = Math.round(v * 10) / 10;
+  return Math.abs(r - v) < 1e-9 && r >= T_MIN && r <= T_MAX ? r : null;
+}
+function normRec(x) {
+  if (!x || typeof x !== 'object' || !parseAt(str(x.at)) || !str(x.kidId)) return null;
+  const now = Date.now();
+  return {
+    id: str(x.id) || newId('r'), kidId: x.kidId, at: x.at, temp: normTemp(x.temp),
+    sym: Array.isArray(x.sym) ? SYMS.filter((s) => x.sym.includes(s)) : [],
+    other: str(x.other).slice(0, 80), meds: str(x.meds).slice(0, 100), memo: str(x.memo).slice(0, 400),
+    createdAt: num(x.createdAt) || now, updatedAt: num(x.updatedAt) || now,
+  };
+}
+let recs = [];
+
+// ===== 投票日（この日は共有を止める） =====
+function voteDays() { const v = load(KEY_VOTE, null); return Array.isArray(v) ? v.filter((s) => parseYmd(s)) : DEFAULT_VOTE.slice(); }
+const isVoteDay = () => voteDays().includes(todayStr());
+
+// ===== グラフ（canvas） =====
+// 縦軸の目盛りは記録の幅に合わせて決めるだけで、高い・低いの線や色分けはしません
+function drawGraph(cv, list, days) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth || 300, H = cv.clientHeight || 200;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const css = getComputedStyle(document.documentElement);
+  const C = (n) => css.getPropertyValue(n).trim();
+  const start = parseYmd(todayStr()); start.setDate(start.getDate() - (days - 1));
+  const end = parseYmd(todayStr()); end.setDate(end.getDate() + 1);
+  const pts = list.filter((r) => r.temp !== null).map((r) => ({ t: parseAt(r.at), v: r.temp })).filter((p) => p.t >= start && p.t < end).sort((a, b) => a.t - b.t);
+  const L = 40, R = 10, T = 10, B = 26, PW = W - L - R, PH = H - T - B;
+  ctx.font = '11px -apple-system,"Hiragino Sans",sans-serif';
+  let lo = 36, hi = 38;
+  if (pts.length) {
+    const vs = pts.map((p) => p.v);
+    lo = Math.min(lo, Math.floor((Math.min(...vs) - 0.2) * 2) / 2);
+    hi = Math.max(hi, Math.ceil((Math.max(...vs) + 0.2) * 2) / 2);
+  }
+  const X = (t) => L + (t - start) / (end - start) * PW;
+  const Y = (v) => T + (hi - v) / (hi - lo) * PH;
+  // 横の目盛り（0.5℃ごと）
+  ctx.strokeStyle = C('--grid'); ctx.fillStyle = C('--sub'); ctx.lineWidth = 1; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = lo; v <= hi + 1e-9; v += 0.5) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(W - R, Y(v)); ctx.stroke(); ctx.fillText(v.toFixed(1), L - 4, Y(v)); }
+  // 日付の区切り
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const step = days > 7 ? 2 : 1;
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const x = X(d); ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + PH); ctx.stroke();
+    if (i < days && i % step === 0) { const m = new Date(d); m.setHours(12); ctx.fillText((d.getMonth() + 1) + '/' + d.getDate(), X(m), T + PH + 6); }
+  }
+  if (!pts.length) {
+    ctx.fillStyle = C('--sub'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px -apple-system,"Hiragino Sans",sans-serif';
+    const msg = '体温の記録はまだありません', mw = ctx.measureText(msg).width + 16;
+    ctx.fillStyle = C('--card'); ctx.fillRect(L + PW / 2 - mw / 2, T + PH / 2 - 12 + PH / 8, mw, 24);
+    ctx.fillStyle = C('--sub'); ctx.fillText(msg, L + PW / 2, T + PH / 2 + PH / 8); return;
+  }
+  ctx.strokeStyle = C('--accent'); ctx.fillStyle = C('--accent'); ctx.lineWidth = 2;
+  ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p.t), Y(p.v)) : ctx.moveTo(X(p.t), Y(p.v)))); ctx.stroke();
+  pts.forEach((p) => { ctx.beginPath(); ctx.arc(X(p.t), Y(p.v), 3.5, 0, Math.PI * 2); ctx.fill(); });
+}
+
+// ===== 画面の表示 =====
+function kidRecs(id) { return recs.filter((r) => r.kidId === id).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : b.createdAt - a.createdAt)); }
+function symText(r) { return r.sym.map((s) => (s === 'その他' && r.other ? 'その他（' + r.other + '）' : s)); }
+function render() {
+  const box = $('kids'); box.innerHTML = '';
+  for (const k of kids) {
+    const b = el('button', k.id === sel ? 'on' : '', k.name);
+    b.onclick = () => { sel = k.id; save(KEY_SEL, sel); render(); };
+    box.append(b);
+  }
+  const name = kidName(sel);
+  $('g-title').textContent = name + '：直近7日の体温';
+  $('list-title').textContent = name + 'の記録';
+  const list = kidRecs(sel);
+  drawGraph($('graph'), list, 7);
+  const out = $('list'); out.innerHTML = '';
+  if (!list.length) { out.append(el('p', 'empty', 'まだ記録がありません。「＋ 記録する」から入れてください。')); return; }
+  for (const r of list) {
+    const c = el('div', 'rec');
+    const top = el('div', 'top');
+    top.append(el('span', 'when', fmtAt(r.at)), el('span', 'tp', r.temp !== null ? fmtT(r.temp) : '体温なし'));
+    c.append(top);
+    const sy = symText(r);
+    if (sy.length) { const t = el('div'); sy.forEach((s) => t.append(el('span', 'tag', s))); c.append(t); }
+    if (r.meds) c.append(el('div', 'd', '💊 ' + r.meds));
+    if (r.memo) c.append(el('div', 'd', '📝 ' + r.memo));
+    c.onclick = () => openEdit(r);
+    out.append(c);
+  }
+}
+async function reload() {
+  try { recs = (await dbAll()).map(normRec).filter(Boolean); } catch (e) { recs = []; alert('データベースを開けませんでした。'); }
+  render();
+}
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { render(); if ($('hosp').classList.contains('open')) renderHosp(); }, 150); });
+if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render); } catch (e) {} }
+
+// ===== 入力・編集 =====
+let editing = null, busy = false;
+function openEdit(r) {
+  editing = r || null;
+  const ek = $('e-kid'); ek.innerHTML = '';
+  kids.forEach((k) => ek.add(new Option(k.name, k.id)));
+  if (r && !kids.some((k) => k.id === r.kidId)) ek.add(new Option(kidName(r.kidId), r.kidId));
+  ek.value = r ? r.kidId : sel;
+  $('edit-title').textContent = r ? '記録を直す' : '記録する';
+  $('e-at').value = r ? r.at : nowLocal();
+  $('e-temp').value = r && r.temp !== null ? r.temp.toFixed(1) : '';
+  const sy = $('e-syms'); sy.innerHTML = '';
+  SYMS.forEach((s) => { const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.value = s; c.checked = !!(r && r.sym.includes(s)); l.append(c, el('span', '', s)); sy.append(l); });
+  $('e-other').value = r ? r.other : '';
+  $('e-meds').value = r ? r.meds : '';
+  $('e-memo').value = r ? r.memo : '';
+  $('e-del').hidden = !r;
+  $('edit').classList.add('open'); window.scrollTo(0, 0);
+}
+function closeSheet(id) { $(id).classList.remove('open'); }
+$('btn-add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = async () => {
+  if (busy) return;
+  const at = $('e-at').value;
+  if (!parseAt(at)) { alert('日時を入れてください。'); return; }
+  const tv = half($('e-temp').value);
+  let temp = null;
+  if (tv !== '') {
+    if (!/^\d{2}(\.\d)?$/.test(tv)) { alert('体温は「36.8」のように、小数1桁までの数字で入れ直してください。'); $('e-temp').focus(); return; }
+    temp = Number(tv);
+    if (temp < T_MIN || temp > T_MAX) { alert('体温は35.0〜42.0の範囲で入れてください。打ち間違いがないか確かめて、入れ直してください。'); $('e-temp').focus(); return; }
+  }
+  const sym = [...$('e-syms').querySelectorAll('input:checked')].map((c) => c.value);
+  const other = $('e-other').value.trim();
+  if (other && !sym.includes('その他')) sym.push('その他');
+  const meds = $('e-meds').value.trim(), memo = $('e-memo').value.trim();
+  if (temp === null && !sym.length && !meds && !memo) { alert('体温・症状・薬・メモのどれかを入れてください。'); return; }
+  const now = Date.now();
+  const r = normRec({ ...(editing || { id: newId('r'), createdAt: now }), kidId: $('e-kid').value, at, temp, sym, other, meds, memo, updatedAt: now });
+  busy = true; $('e-save').disabled = true;
+  try { await dbPut(r); sel = r.kidId; save(KEY_SEL, sel); closeSheet('edit'); await reload(); }
+  catch (e) { alert('保存できませんでした。iPhoneの空き容量を確認してください。'); }
+  finally { busy = false; $('e-save').disabled = false; }
+};
+$('e-del').onclick = async () => {
+  if (!editing || !confirm(fmtAt(editing.at) + ' の記録を削除します。元に戻せません。よろしいですか？')) return;
+  await dbDel(editing.id); closeSheet('edit'); reload();
+};
+
+// ===== 病院で見せる用 =====
+function hospRecs() {
+  const days = Number($('h-days').value) || 7;
+  const start = parseYmd(todayStr()); start.setDate(start.getDate() - (days - 1));
+  return { days, start, list: kidRecs(sel).filter((r) => parseAt(r.at) >= start).reverse() }; // 古い順
+}
+function renderHosp() {
+  const { days, start, list } = hospRecs();
+  $('h-title').textContent = kidName(sel) + ' の体温・体調の記録';
+  $('h-range').textContent = '直近' + days + '日（' + fmtYmd(start) + '〜' + fmtYmd(new Date()) + '）・' + list.length + '件';
+  drawGraph($('h-graph'), list, days);
+  const out = $('h-list'); out.innerHTML = '';
+  if (!list.length) { out.append(el('p', 'empty', 'この期間の記録はありません')); }
+  for (const r of list) {
+    const b = el('div', 'hv-rec');
+    const l1 = el('div', 'l1'); l1.append(el('span', '', fmtAt(r.at)), el('span', '', r.temp !== null ? fmtT(r.temp) : '体温なし'));
+    b.append(l1);
+    const lines = [];
+    const sy = symText(r); if (sy.length) lines.push('症状：' + sy.join('、'));
+    if (r.meds) lines.push('薬：' + r.meds);
+    if (r.memo) lines.push('メモ：' + r.memo);
+    if (lines.length) b.append(el('div', 'l2', lines.join('\n')));
+    out.append(b);
+  }
+  const stop = isVoteDay();
+  $('h-share').disabled = stop || !list.length; $('h-stop').hidden = !stop;
+}
+function hospText() {
+  const { days, start, list } = hospRecs();
+  const lines = ['【' + kidName(sel) + ' の体温・体調の記録】', '直近' + days + '日（' + fmtYmd(start) + '〜' + fmtYmd(new Date()) + '）', ''];
+  for (const r of list) {
+    const parts = [fmtAt(r.at), r.temp !== null ? fmtT(r.temp) : '体温なし'];
+    const sy = symText(r); if (sy.length) parts.push('症状：' + sy.join('、'));
+    if (r.meds) parts.push('薬：' + r.meds);
+    if (r.memo) parts.push('メモ：' + r.memo.replace(/\n/g, ' '));
+    lines.push('・' + parts.join('　'));
+  }
+  lines.push('', '※記録をまとめたものです。判断はかかりつけ医などにご相談ください。');
+  return lines.join('\n');
+}
+$('btn-hosp').onclick = () => { $('hosp').classList.add('open'); window.scrollTo(0, 0); renderHosp(); };
+$('h-days').onchange = renderHosp;
+$('h-close').onclick = () => closeSheet('hosp');
+$('h-share').onclick = async () => {
+  if (isVoteDay()) { renderHosp(); alert('投票日のため共有できません。'); return; }
+  const text = hospText();
+  if (navigator.share) { try { await navigator.share({ title: kidName(sel) + ' の記録', text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); alert('コピーしました。'); } catch (e) { prompt('この文章をコピーしてください', text); }
+};
+
+// ===== 設定 =====
+function buildKidEdit() {
+  const box = $('kid-edit'); box.innerHTML = '';
+  kids.forEach((k) => addKidRow(k));
+}
+function addKidRow(k) {
+  const row = el('div', 'kidrow'); row.dataset.id = k.id;
+  const inp = el('input'); inp.value = k.name; inp.maxLength = 12; inp.placeholder = '呼び名';
+  const del = el('button', 'plain danger', '消す');
+  del.onclick = () => {
+    if (recs.some((r) => r.kidId === k.id)) { alert('この子には記録があるので消せません。'); return; }
+    if ($('kid-edit').children.length <= 1) { alert('1人は残してください。'); return; }
+    row.remove();
+  };
+  row.append(inp, del); $('kid-edit').append(row);
+  return inp;
+}
+$('kid-add').onclick = () => {
+  if ($('kid-edit').children.length >= 10) { alert('10人まで登録できます。'); return; }
+  addKidRow({ id: newId('k'), name: '子ども' + ($('kid-edit').children.length + 1) }).focus();
+};
+$('kid-save').onclick = () => {
+  const rows = [...$('kid-edit').querySelectorAll('.kidrow')];
+  const next = rows.map((r) => ({ id: r.dataset.id, name: r.querySelector('input').value.trim() }));
+  if (next.some((k) => !k.name)) { alert('呼び名が空の欄があります。'); return; }
+  kids = normKids(next); save(KEY_KIDS, kids);
+  if (!kids.some((k) => k.id === sel)) { sel = kids[0].id; save(KEY_SEL, sel); }
+  buildKidEdit(); render(); alert('呼び名を保存しました。');
+};
+$('open-settings').onclick = () => { buildKidEdit(); $('vote').value = voteDays().join('\n'); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('set-close').onclick = () => closeSheet('settings');
+$('vote-save').onclick = () => {
+  const lines = $('vote').value.split('\n').map((s) => s.trim().replace(/\//g, '-')).filter(Boolean);
+  const bad = lines.filter((s) => !parseYmd(s));
+  if (bad.length) { alert('日付の形が正しくない行があります：' + bad.join('、') + '\n2027-04-25 の形で、1行に1日ずつ入れてください。'); return; }
+  if (!lines.length && !confirm('投票日が空です。共有ボタンを止める日がなくなります。よろしいですか？')) return;
+  save(KEY_VOTE, [...new Set(lines)]);
+  $('vote').value = voteDays().join('\n');
+  alert('投票日を保存しました。');
+};
+
+// ===== バックアップ =====
+$('export').onclick = async () => {
+  const name = 'taion-backup-' + todayStr().replace(/-/g, '') + '.json';
+  const data = JSON.stringify({ app: 'taion', version: APP_VERSION, exportedAt: new Date().toISOString(), kids, records: recs, voteDays: voteDays() }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。壊れているか、別の種類のファイルです。'); return; }
+  if (!data || data.app !== 'taion' || !Array.isArray(data.records)) { alert('このアプリのバックアップファイルではありません。'); return; }
+  const list = data.records.map(normRec).filter(Boolean);
+  if (!confirm(list.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  // 子どもの呼び名：ファイルにあって、いまの一覧にない子を足す
+  const fileKids = Array.isArray(data.kids) ? normKids(data.kids) : [];
+  for (const k of fileKids) if (!kids.some((x) => x.id === k.id)) kids.push(k);
+  for (const r of list) if (!kids.some((x) => x.id === r.kidId)) kids.push({ id: r.kidId, name: '子ども' + (kids.length + 1) });
+  save(KEY_KIDS, kids);
+  if (Array.isArray(data.voteDays)) save(KEY_VOTE, data.voteDays.filter((s) => parseYmd(s)));
+  try { for (const r of list) await dbPut(r); } catch (err) { alert('読み込みの途中で保存できませんでした。'); }
+  buildKidEdit(); $('vote').value = voteDays().join('\n');
+  await reload();
+  alert('読み込みました。');
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || $('edit').classList.contains('open')) return; // 入力中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+reload();
+</script>
+</body>
+</html>

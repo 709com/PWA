@@ -24,7 +24,7 @@
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
   main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom)); }
   header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
-  h1 { font-size:1.25rem; margin:0; }
+  h1 { font-size:1.12rem; margin:0; }
   button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
   input, select, textarea { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
   input[type=date] { min-height:44px; }
@@ -64,7 +64,7 @@
   .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
   .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
   label.f { display:block; font-size:.85rem; color:var(--sub); margin:10px 0 4px; }
-  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:end; }
   .datebox { display:flex; gap:6px; } .datebox input { flex:1; min-width:0; } .datebox button { white-space:nowrap; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
   .primary { background:var(--accent); color:#fff; border-radius:12px; padding:12px 18px; font-weight:700; }
@@ -83,7 +83,7 @@
 <main>
   <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
   <header>
-    <h1>🧰 防災備蓄の期限ノート</h1>
+    <h1>防災備蓄の期限ノート</h1>
     <button class="iconbtn" id="open-settings">⚙️ 設定</button>
   </header>
 
@@ -112,7 +112,7 @@
     <label class="f" for="e-name">品名</label>
     <input id="e-name" maxlength="60" placeholder="例：水（2リットル）">
     <div class="row2">
-      <div><label class="f" for="e-qty">数量（整数・任意）</label><input id="e-qty" inputmode="numeric" maxlength="6" placeholder="例：6"></div>
+      <div><label class="f" for="e-qty">数量（任意）</label><input id="e-qty" inputmode="numeric" maxlength="6" placeholder="例：6"></div>
       <div><label class="f" for="e-unit">単位（任意）</label><input id="e-unit" maxlength="20" placeholder="例：本"></div>
     </div>
     <div class="row2">
@@ -141,7 +141,7 @@
     <label class="f" for="s-exp">新しい期限（入れ替えた品の期限を入れてください）</label>
     <div class="datebox"><input id="s-exp" type="date"><button class="plain small" id="s-exp-clear" type="button">期限なし</button></div>
     <div class="row2">
-      <div><label class="f" for="s-qty">いまの数量（整数・任意）</label><input id="s-qty" inputmode="numeric" maxlength="6"></div>
+      <div><label class="f" for="s-qty">いまの数量（任意）</label><input id="s-qty" inputmode="numeric" maxlength="6"></div>
       <div><label class="f">単位</label><input id="s-unit" disabled></div>
     </div>
     <div class="actions">
@@ -180,7 +180,7 @@
 const APP_VERSION = '1.0.0';
 const KEY_FILTER = 'bichiku:filter';   // 最後に選んだ絞り込み
 const CATS = ['水', '食料', '電池・電気', '薬・救急', '衛生用品', 'その他'];
-const STS = [['', '期限：すべて'], ['exp', '期限切れ'], ['soon', '30日以内'], ['none', '期限なし']];
+const STS = [['', '全期限'], ['exp', '期限切れ'], ['soon', '30日以内'], ['none', '期限なし']];
 const SOON_DAYS = 30;
 const $ = (id) => document.getElementById(id);
 
@@ -280,8 +280,8 @@ if (!filter || typeof filter !== 'object') filter = { place: '', cat: '', st: ''
 const places = () => [...new Set(items.map((i) => i.place).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja'));
 function buildFilters() {
   const ps = places();
-  fillSelect($('f-place'), [['', '置き場所：すべて'], ...ps.map((p) => [p, p])]);
-  fillSelect($('f-cat'), [['', '種類：すべて'], ...CATS.map((c) => [c, c])]);
+  fillSelect($('f-place'), [['', '全場所'], ...ps.map((p) => [p, p])]);
+  fillSelect($('f-cat'), [['', '全種類'], ...CATS.map((c) => [c, c])]);
   fillSelect($('f-st'), STS);
   $('f-place').value = ps.includes(filter.place) ? filter.place : '';
   $('f-cat').value = CATS.includes(filter.cat) ? filter.cat : '';

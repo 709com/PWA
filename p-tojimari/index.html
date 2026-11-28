@@ -1,0 +1,300 @@
+<!doctype html>
+<!-- このファイルは「出かける前の確認」の本体です。ガス・電気・窓・かぎなどを大きなボタンで確かめ、「最後にいつ確かめたか」を残して、外出先での「閉めたかな？」の不安を減らします。 -->
+<!-- 記録はiPhoneの中（localStorage）だけに保存し、外部へは一切送信しません。非公式・個人の試作です。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>出かける前の確認</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="戸じまり">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2e6f5e">
+<style>
+  :root { --bg:#f3f7f5; --card:#fff; --text:#1a2622; --sub:#55665f; --accent:#2e6f5e; --accent-soft:#dcefe8; --ok:#1e8a50; --ok-soft:#dff4e7; --line:#d9e3df; --danger:#c8372d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111816; --card:#1a2420; --text:#e9f1ee; --sub:#9db0a8; --accent:#5fbfa4; --accent-soft:#1b3a31; --ok:#4cc985; --ok-soft:#173a28; --line:#28352f; --danger:#ef6b61; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { font-size:17px; }
+  html.big { font-size:21px; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.5; }
+  main { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+  h1 { font-size:min(1.3rem, 6vw); margin:0; white-space:nowrap; }
+  h2 { font-size:1rem; color:var(--sub); margin:0 0 8px; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  input { font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 10px; width:100%; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  .last { font-size:1.05rem; }
+  .last b { font-size:1.5rem; display:block; }
+  .items { display:grid; grid-template-columns:1fr; gap:10px; }
+  .item { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg); border:3px solid var(--line); border-radius:16px; padding:16px; text-align:left; min-height:70px; }
+  .item .name { font-size:1.25rem; font-weight:700; word-break:break-word; }
+  .item .st { font-size:1rem; color:var(--sub); text-align:right; flex-shrink:0; max-width:45%; word-break:keep-all; }
+  .item.done { background:var(--ok-soft); border-color:var(--ok); }
+  .item.done .st { color:var(--ok); font-weight:700; }
+  .item:active { transform:scale(.98); }
+  .allok { display:none; text-align:center; font-size:1.3rem; font-weight:800; color:var(--ok); margin:12px 0 4px; }
+  .allok.on { display:block; }
+  .primary { background:var(--accent); color:#fff; border-radius:14px; padding:16px 18px; font-weight:700; width:100%; font-size:1.1rem; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .danger { color:var(--danger); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  td { padding:7px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  .muted { color:var(--sub); }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:560px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; color:var(--text); margin:4px 0 12px; }
+  label.f { display:block; font-size:.9rem; color:var(--sub); margin:14px 0 6px; }
+  .editrow { display:flex; gap:6px; margin-bottom:6px; }
+  .note { font-size:.85rem; color:var(--sub); margin:8px 0 0; }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  footer { text-align:center; font-size:.8rem; color:var(--sub); margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>🔑 出かける前の確認</h1>
+    <button class="iconbtn" id="open-settings" aria-label="設定">⚙️</button>
+  </header>
+
+  <section>
+    <h2>さいごに 全部 確かめたのは</h2>
+    <div class="last" id="last"></div>
+  </section>
+
+  <section>
+    <h2>ひとつずつ 押して 確かめましょう</h2>
+    <div class="items" id="items"></div>
+    <p class="allok" id="allok">✅ 全部 確かめました。いってらっしゃい！</p>
+    <div class="actions"><button class="plain" id="restart" style="width:100%">はじめから 確かめ直す</button></div>
+  </section>
+
+  <section>
+    <h2>これまでの 確認（新しい順）</h2>
+    <table><tbody id="history"></tbody></table>
+  </section>
+
+  <footer>非公式・個人の試作です（文京区の公式アプリではありません）<br>版 <span id="ver"></span> ・ 記録はこのiPhoneの中だけに保存されます</footer>
+</main>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <label class="f">文字の大きさ</label>
+    <div class="seg"><button id="fs-normal">ふつう</button><button id="fs-big">大きい</button></div>
+
+    <label class="f">確かめるもの（名前を空にすると消えます。8つまで）</label>
+    <div id="item-edit"></div>
+    <div class="actions">
+      <button class="plain" id="item-add">＋ ふやす</button>
+      <button class="primary" id="item-save" style="width:auto">保存する</button>
+    </div>
+
+    <label class="f">バックアップ</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、記録も消えます。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain danger" id="reset">記録をすべて消す</button></div>
+    <p class="note">このアプリは「自分で確かめたこと」を書き留めるだけの道具です。火の元や戸じまりを自動で調べるものではありません。</p>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+const KEY_ITEMS = 'p-tojimari:items';     // 確かめるものの一覧
+const KEY_NOW = 'p-tojimari:current';     // いま確かめている途中の状態
+const KEY_LOG = 'p-tojimari:log';         // 全部確かめた記録
+const KEY_FS = 'p-tojimari:fontsize';
+const KEEP = 30;                          // 記録を何回分残すか
+const DEFAULT_ITEMS = ['ガスの火', 'ストーブ・電気', '水道の蛇口', '窓', '玄関のかぎ'];
+const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { alert('保存できませんでした。'); } }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+const p2 = (n) => String(n).padStart(2, '0');
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function hm(ms) { const d = new Date(ms); return d.getHours() + '時' + p2(d.getMinutes()) + '分'; }
+function dayLabel(ms) {
+  const d = new Date(ms), t = new Date();
+  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (same(d, t)) return '今日';
+  if (same(d, y)) return 'きのう';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEK[d.getDay()] + '）';
+}
+
+// 読み込んだデータを点検する（壊れていたら初めの形に）
+function cleanItems(a) { return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 20)).slice(0, 8) : []; }
+function cleanLog(a) { return Array.isArray(a) ? a.filter((x) => x && Number.isFinite(x.at)).map((x) => ({ at: x.at, items: cleanItems(x.items) })).slice(0, KEEP) : []; }
+let items = cleanItems(load(KEY_ITEMS, DEFAULT_ITEMS));
+if (!items.length) items = DEFAULT_ITEMS.slice();
+let current = load(KEY_NOW, {});        // 例：{ "窓": 1730000000000 }
+if (!current || typeof current !== 'object') current = {};
+let log = cleanLog(load(KEY_LOG, []));
+
+// ===== 表示 =====
+function render() {
+  // さいごに全部確かめた時刻
+  const last = $('last'); last.innerHTML = '';
+  if (log.length) {
+    last.append(el('b', '', dayLabel(log[0].at) + ' ' + hm(log[0].at)));
+    last.append(el('span', 'muted', '（' + log[0].items.join('・') + '）'));
+  } else {
+    last.append(el('span', 'muted', 'まだ 記録は ありません。下のボタンを 押して 確かめてみましょう。'));
+  }
+  // ボタン
+  const box = $('items'); box.innerHTML = '';
+  for (const name of items) {
+    const at = current[name];
+    const b = el('button', 'item' + (at ? ' done' : ''));
+    b.append(el('span', 'name', name), el('span', 'st', at ? '✔ ' + (dayLabel(at) === '今日' ? '' : dayLabel(at) + ' ') + hm(at) : '未'));
+    b.onclick = () => toggle(name);
+    box.append(b);
+  }
+  const all = items.every((n) => current[n]);
+  $('allok').classList.toggle('on', all);
+  // これまで
+  const body = $('history'); body.innerHTML = '';
+  if (!log.length) { const tr = el('tr'); tr.append(el('td', 'muted', '記録なし')); body.append(tr); }
+  for (const r of log.slice(0, 10)) {
+    const tr = el('tr');
+    tr.append(el('td', '', dayLabel(r.at)), el('td', '', hm(r.at)), el('td', 'muted', r.items.length + 'こ'));
+    body.append(tr);
+  }
+}
+
+// ひとつ押したとき：確かめた／取り消し。全部そろったら記録に残す
+function toggle(name) {
+  if (current[name]) delete current[name];
+  else current[name] = Date.now();
+  const all = items.every((n) => current[n]);
+  if (all && !current._logged) {
+    log.unshift({ at: Date.now(), items: items.slice() });
+    log = log.slice(0, KEEP);
+    current._logged = true;
+    save(KEY_LOG, log);
+  }
+  if (!all) delete current._logged;
+  save(KEY_NOW, current);
+  render();
+}
+$('restart').onclick = () => { current = {}; save(KEY_NOW, current); render(); window.scrollTo(0, 0); };
+
+// ===== 設定 =====
+function applyFs() {
+  const big = load(KEY_FS, 'normal') === 'big';
+  document.documentElement.classList.toggle('big', big);
+  $('fs-big').classList.toggle('on', big);
+  $('fs-normal').classList.toggle('on', !big);
+}
+$('fs-normal').onclick = () => { save(KEY_FS, 'normal'); applyFs(); };
+$('fs-big').onclick = () => { save(KEY_FS, 'big'); applyFs(); };
+function buildEdit() {
+  $('item-edit').innerHTML = '';
+  items.forEach((n) => addRow(n));
+}
+function addRow(v) {
+  if ($('item-edit').children.length >= 8) { alert('8つまでです。'); return null; }
+  const row = el('div', 'editrow');
+  const inp = el('input'); inp.value = v; inp.maxLength = 20;
+  row.append(inp); $('item-edit').append(row);
+  return inp;
+}
+$('item-add').onclick = () => { const i = addRow(''); if (i) i.focus(); };
+$('item-save').onclick = () => {
+  const vals = [...new Set([...$('item-edit').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean))];
+  if (!vals.length) { alert('ひとつ以上 入れてください。'); return; }
+  items = vals.slice(0, 8);
+  save(KEY_ITEMS, items);
+  current = {}; save(KEY_NOW, current);
+  buildEdit(); render();
+  alert('保存しました。');
+};
+$('open-settings').onclick = () => { buildEdit(); applyFs(); $('settings').classList.add('open'); window.scrollTo(0, 0); };
+$('s-close').onclick = () => $('settings').classList.remove('open');
+$('reset').onclick = () => {
+  if (!confirm('確認の記録をすべて消します。元に戻せません。よろしいですか？')) return;
+  log = []; current = {};
+  save(KEY_LOG, log); save(KEY_NOW, current);
+  render();
+};
+$('export').onclick = async () => {
+  const d = new Date();
+  const name = 'p-tojimari-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const data = JSON.stringify({ app: 'p-tojimari', version: APP_VERSION, exportedAt: d.toISOString(), items, log }, null, 1);
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) {} return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+$('import-btn').onclick = () => $('import').click();
+$('import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
+  if (!data || data.app !== 'p-tojimari') { alert('このアプリのバックアップファイルではありません。'); return; }
+  const ni = cleanItems(data.items), nl = cleanLog(data.log);
+  if (!confirm('確かめるもの' + (ni.length || items.length) + 'こ、記録' + nl.length + '回分を読み込みます。いまの記録と合わせます。よろしいですか？')) return;
+  if (ni.length) { items = ni; save(KEY_ITEMS, items); current = {}; save(KEY_NOW, current); }
+  const seen = new Set(log.map((r) => r.at));
+  log = [...log, ...nl.filter((r) => !seen.has(r.at))].sort((a, b) => b.at - a.at).slice(0, KEEP);
+  save(KEY_LOG, log);
+  buildEdit(); render();
+  alert('読み込みました。');
+};
+
+// ===== 日付が変わったら「今日・きのう」の表示を直す =====
+setInterval(render, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+// ===== オフライン動作と更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  });
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true; location.reload();
+  });
+}
+
+// ===== 起動 =====
+$('ver').textContent = APP_VERSION;
+applyFs();
+render();
+</script>
+</body>
+</html>

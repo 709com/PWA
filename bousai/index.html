@@ -128,7 +128,7 @@
   <div class="inner">
     <h2>🖼️ カードを画像にする</h2>
     <div class="privacy">🔒 画像には入力した内容がそのまま入ります。家族以外に送らないでください。SNSなどに載せないでください。</div>
-    <label class="check"><input type="checkbox" id="i-health" checked><span>持病・アレルギーのメモを画像に入れる<br><span class="note">入れない場合は、呼び名と学校・保育園だけが入ります。</span></span></label>
+    <label class="check"><input type="checkbox" id="i-health"><span>持病・アレルギーのメモを画像に入れる<br><span class="note">入れない場合は、呼び名と学校・保育園だけが入ります。</span></span></label>
     <div class="actions" style="margin-top:6px">
       <button class="primary" id="i-share">家族に送る（共有）</button>
       <button class="plain" id="i-save">画像ファイルとして保存</button>
@@ -279,7 +279,8 @@ function wrap(ctx, text, maxW) {
   for (const para of String(text).split('\n')) {
     let line = '';
     for (const ch of para) {
-      if (ctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; } else line += ch;
+      // 閉じかっこ・句読点は行の頭に来ないよう、前の行に付ける
+      if (ctx.measureText(line + ch).width > maxW && line && !'）)」』、。，．ー'.includes(ch)) { out.push(line); line = ch; } else line += ch;
     }
     out.push(line);
   }

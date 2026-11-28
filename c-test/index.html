@@ -1,0 +1,434 @@
+<!doctype html>
+<!-- このファイルは「テストまであと何日」の本体です。定期テストまでの日数を数え、教科ごとの「やること」のチェックと、点数の合計・平均の計算ができます。 -->
+<!-- 入力したことはこの端末の中（localStorage）だけに保存し、外部へは一切送信しません。広告・課金・アカウント登録もありません。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>テストまであと何日</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="テスト計画">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3366cc">
+<style>
+  :root { --bg:#f2f6ff; --card:#fff; --text:#18233a; --sub:#5b6680; --accent:#3366cc; --accent-soft:#e0e9fb; --line:#d9e1f0; --danger:#c8372d; --ok:#2f9e6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#10151f; --card:#1a2130; --text:#e8eefb; --sub:#9ba8c2; --accent:#7ea4f0; --accent-soft:#1f2d4a; --line:#2a3447; --danger:#ef6b61; --ok:#4cc48b; } }
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; line-height:1.55; }
+  main { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 12px; }
+  h1 { font-size:1.25rem; margin:0; }
+  button { font:inherit; color:inherit; border:none; cursor:pointer; touch-action:manipulation; }
+  button:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { font:inherit; font-size:16px; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:100%; }
+  textarea { min-height:6em; resize:vertical; }
+  .iconbtn { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; white-space:nowrap; }
+  #update { display:none; background:var(--accent); color:#fff; border-radius:14px; padding:10px 14px; margin-bottom:10px; align-items:center; justify-content:space-between; gap:8px; }
+  #update button { background:#fff; color:var(--accent); border-radius:99px; padding:6px 14px; font-weight:700; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .empty { color:var(--sub); text-align:center; padding:28px 8px; }
+  .fab { position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:64px; height:64px; border-radius:50%;
+         background:var(--accent); color:#fff; font-size:2rem; box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5; }
+  .sheet { position:fixed; inset:0; background:var(--bg); overflow:auto; display:none; z-index:10; }
+  .sheet.open { display:block; }
+  .sheet .inner { max-width:640px; margin:0 auto; padding:calc(12px + env(safe-area-inset-top)) 16px calc(30px + env(safe-area-inset-bottom)); }
+  .sheet h2 { font-size:1.15rem; margin:4px 0 12px; }
+  label.f { display:block; font-size:.88rem; color:var(--sub); margin:12px 0 4px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .primary { background:var(--accent); color:#fff; border-radius:14px; padding:13px 20px; font-weight:700; min-height:48px; }
+  .plain { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 16px; min-height:48px; }
+  .wide { width:100%; }
+  .danger { color:var(--danger); }
+  .note { font-size:.82rem; color:var(--sub); margin:8px 0 0; }
+  .warn { background:#fff5e0; color:#6b4a00; border-radius:12px; padding:8px 12px; font-size:.86rem; margin-bottom:6px; }
+  .tag { display:inline-block; font-size:.76rem; border-radius:99px; padding:0 8px; margin-right:4px; background:var(--accent-soft); color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:8px 14px; min-height:40px; }
+  .chip.on { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .seg { display:grid; gap:6px; }
+  footer { text-align:center; font-size:.78rem; color:var(--sub); margin-top:18px; }
+  @media (prefers-color-scheme: dark) { .warn { background:#3a2e12; color:#f3dca6; } }
+
+
+  .tcard { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; cursor:pointer; display:flex; gap:12px; align-items:center; }
+  .tcard.past { opacity:.7; }
+  .tcard .cd { min-width:84px; text-align:center; background:var(--accent-soft); color:var(--accent); border-radius:12px; padding:6px 4px; }
+  .tcard .cd b { display:block; font-size:1.7rem; line-height:1.1; }
+  .tcard .cd small { font-size:.75rem; }
+  .tcard .info { flex:1; min-width:0; }
+  .tcard .nm { font-weight:700; word-break:break-word; }
+  .tcard .m { font-size:.82rem; color:var(--sub); }
+  .bar { height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:6px; }
+  .bar i { display:block; height:100%; background:var(--ok); border-radius:99px; }
+  .secttl { font-size:.9rem; color:var(--sub); margin:16px 0 6px; }
+  .hero { text-align:center; padding:6px 0 10px; }
+  .hero .big { font-size:2.6rem; font-weight:800; color:var(--accent); line-height:1.2; }
+  .subj { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px; }
+  .subj .hd { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .subj .hd b { font-size:1.05rem; word-break:break-word; }
+  .xbtn { background:none; color:var(--sub); font-size:.85rem; padding:6px 8px; white-space:nowrap; }
+  .todo { display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .todo:last-of-type { border-bottom:none; }
+  .todo .ck { width:34px; height:34px; flex:none; border-radius:10px; border:2px solid var(--line); background:var(--card); font-size:1.1rem; color:#fff; }
+  .todo.done .ck { background:var(--ok); border-color:var(--ok); }
+  .todo .tx { flex:1; min-width:0; word-break:break-word; }
+  .todo.done .tx { text-decoration:line-through; color:var(--sub); }
+  .addrow { display:flex; gap:6px; margin-top:8px; }
+  .addrow input { flex:1; min-width:0; }
+  .addrow button { flex:none; }
+  .small { padding:8px 12px; min-height:42px; border-radius:12px; }
+  .score { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; font-size:.9rem; color:var(--sub); }
+  .score input { width:5.2em; text-align:right; padding:8px; }
+  .sum { background:var(--accent-soft); color:var(--text); border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:.95rem; }
+  .ckgrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .ckgrid label { display:flex; gap:8px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 10px; }
+  .ckgrid input { width:22px; height:22px; flex:none; }
+
+</style>
+</head>
+<body>
+
+<main>
+  <div id="update"><span>新しい版があります</span><button id="update-btn">更新する</button></div>
+  <header>
+    <h1>📅 テストまであと何日</h1>
+    <button class="iconbtn" id="open-settings">⚙️ 設定</button>
+  </header>
+  <div id="list"></div>
+  <footer>版 <span id="ver"></span> ・ データはこの端末の中だけに保存されます（外には送りません）</footer>
+</main>
+<button class="fab" id="add" aria-label="テストを追加">＋</button>
+
+<!-- テストの追加・名前と日付の変更 -->
+<div class="sheet" id="edit">
+  <div class="inner">
+    <h2 id="edit-title">テストを追加</h2>
+    <div class="warn">名前や学校名は書かないでね（自分や友だちの名前・学校名・住所など）。</div>
+    <label class="f" for="e-name">テストの名前</label>
+    <input id="e-name" maxlength="40" placeholder="例：2学期 期末テスト">
+    <label class="f" for="e-date">1日目の日付</label>
+    <input id="e-date" type="date">
+    <div id="e-subj-box">
+      <label class="f">教科（あとから足したり消したりできます）</label>
+      <div class="ckgrid" id="e-subj"></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="e-save">保存する</button>
+      <button class="plain" id="e-cancel">やめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- テストのくわしい画面 -->
+<div class="sheet" id="detail">
+  <div class="inner">
+    <div class="actions" style="margin:0 0 6px; justify-content:space-between">
+      <button class="iconbtn" id="d-back">← もどる</button>
+      <button class="iconbtn" id="d-edit">✏️ 名前・日付</button>
+    </div>
+    <div class="hero">
+      <div id="d-name" style="font-weight:700;font-size:1.1rem;word-break:break-word"></div>
+      <div class="big" id="d-count"></div>
+      <div class="note" id="d-date" style="margin:0"></div>
+    </div>
+    <div class="sum" id="d-sum"></div>
+    <div id="d-subjects"></div>
+    <div class="box">
+      <label class="f" for="d-newsubj" style="margin-top:0">教科を追加</label>
+      <div class="addrow">
+        <input id="d-newsubj" maxlength="20" placeholder="例：音楽">
+        <button class="plain small" id="d-addsubj">追加</button>
+      </div>
+    </div>
+    <div class="actions"><button class="plain danger" id="d-del">このテストを消す</button></div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="settings">
+  <div class="inner">
+    <h2>⚙️ 設定</h2>
+    <p class="note">「やること」には、ワークのページや、覚えることなどを書いておくと、テスト前にチェックできます。点数を入れると、合計と平均を計算します。</p>
+    
+    <label class="f" style="margin-top:22px">バックアップ（データの保存）</label>
+    <p class="note" style="margin-top:0">ホーム画面のアイコンを消すと、データもすべて消えます。ときどき「書き出す」で「ファイル」アプリなどに保存しておくと安心です。</p>
+    <div class="actions">
+      <button class="plain" id="export">書き出す</button>
+      <button class="plain" id="import-btn">読み込む</button>
+      <input type="file" id="import" accept="application/json,.json" hidden>
+    </div>
+    <div class="actions"><button class="plain" id="s-close">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ===== 基本の設定 =====
+// アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
+const APP_VERSION = '1.0.0';
+
+// ===== 小さな道具（どのページでも使う） =====
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function load(key, fallback) { try { const t = localStorage.getItem(key); return t ? JSON.parse(t) : fallback; } catch (e) { return fallback; } }
+function save(key, v) {
+  try { localStorage.setItem(key, JSON.stringify(v)); return true; }
+  catch (e) { alert('保存できませんでした。スマホの空き容量を確認してね。'); return false; }
+}
+const p2 = (n) => String(n).padStart(2, '0');
+const WD = '日月火水木金土';
+function dstr(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+function todayStr() { return dstr(new Date()); }
+function parseD(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (isNaN(d) || d.getMonth() !== +m[2] - 1) ? null : d;
+}
+function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+function daysUntil(s) { const d = parseD(s); if (!d) return null; return Math.round((d - parseD(todayStr())) / 86400000); }
+function fmtD(s) { const d = parseD(s); return d ? (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ')' : ''; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function str(v, max) { return (typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : '')).slice(0, max); }
+function openSheet(id) { $(id).classList.add('open'); $(id).scrollTop = 0; }
+let closedAt = 0;
+function closeSheet(id) { $(id).classList.remove('open'); closedAt = Date.now(); }
+// 画面を閉じた直後の2回目のタップ（連打）で、下にある一覧の項目が開かないようにする
+document.addEventListener('click', (e) => {
+  if (Date.now() - closedAt < 350 && !e.target.closest('.sheet.open')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+function anySheetOpen() { return !!document.querySelector('.sheet.open'); }
+// 0以上の整数だけを受け付ける（小数・マイナス・文字は null）
+function wholeNum(text) { const t = String(text).trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); return /^\d{1,5}$/.test(t) ? parseInt(t, 10) : null; }
+
+// ===== バックアップ（書き出し・読み込み） =====
+async function exportBackup(app, data) {
+  const d = new Date();
+  const name = app + '-backup-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.json';
+  const text = JSON.stringify({ app, version: APP_VERSION, exportedAt: d.toISOString(), ...data }, null, 1);
+  const file = new File([text], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (e) {}
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// apply(data) は取り込んだ件数のメッセージを返す。ふさわしくないファイルなら null を返す
+function setupImport(btnId, inputId, app, check, apply) {
+  $(btnId).onclick = () => $(inputId).click();
+  $(inputId).onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。こわれているかもしれません。'); return; }
+    if (!data || typeof data !== 'object' || data.app !== app || !check(data)) { alert('このアプリのバックアップファイルではありません。'); return; }
+    const msg = apply(data, true);
+    if (!msg || !confirm(msg + '\n同じものはファイルの内容で上書きします（ほかのデータは消えません）。よろしいですか？')) return;
+    apply(data, false);
+    alert('読み込みました。');
+  };
+}
+
+// ===== 電波がなくても使えるようにする仕組みと、更新の受け取り（サービスワーカー） =====
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (w) => { $('update').style.display = 'flex'; $('update-btn').onclick = () => w.postMessage('SKIP_WAITING'); };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(w); });
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || anySheetOpen()) return; // 入力中・れんしゅう中は読み込み直さない
+    reloaded = true; location.reload();
+  });
+}
+
+
+const KEY = 'c-test:tests';
+const BASE_SUBJ = ['国語', '数学', '英語', '理科', '社会'];
+const MORE_SUBJ = ['音楽', '美術', '保健体育', '技術・家庭'];
+let tests = load(KEY, []);
+if (!Array.isArray(tests)) tests = [];
+const persist = () => save(KEY, tests);
+const todoCount = (t) => { let a = 0, d = 0; t.subjects.forEach((s) => s.todos.forEach((x) => { a++; if (x.done) d++; })); return [d, a]; };
+function cdText(n) {
+  if (n === null) return ['', ''];
+  if (n > 0) return ['あと', n + '日'];
+  if (n === 0) return ['', '今日！'];
+  return ['', 'おわった'];
+}
+
+// ===== 一覧 =====
+function render() {
+  const list = $('list'); list.innerHTML = '';
+  if (!tests.length) { list.append(el('p', 'empty', 'まだテストがありません。右下の「＋」から、次のテストの名前と日付を入れよう。')); return; }
+  const up = tests.filter((t) => daysUntil(t.date) >= 0).sort((a, b) => a.date.localeCompare(b.date));
+  const past = tests.filter((t) => !(daysUntil(t.date) >= 0)).sort((a, b) => b.date.localeCompare(a.date));
+  const sec = (title, arr) => {
+    if (!arr.length) return;
+    list.append(el('div', 'secttl', title));
+    arr.forEach((t) => {
+      const n = daysUntil(t.date);
+      const c = el('div', 'tcard' + (n < 0 ? ' past' : ''));
+      const cd = el('div', 'cd'); const [pre, big] = cdText(n);
+      cd.append(el('small', '', pre), el('b', '', big));
+      if (n < 0) { cd.querySelector('b').style.fontSize = '1.05rem'; }
+      const info = el('div', 'info');
+      info.append(el('div', 'nm', t.name), el('div', 'm', fmtD(t.date) + 'から'));
+      const [d, a] = todoCount(t);
+      if (a) {
+        info.append(el('div', 'm', 'やること ' + d + ' / ' + a));
+        const bar = el('div', 'bar'); const i = el('i'); i.style.width = Math.round(d / a * 100) + '%'; bar.append(i); info.append(bar);
+      }
+      const sc = scoreSum(t);
+      if (sc.n) info.append(el('div', 'm', '点数 合計' + sc.sum + '点（' + sc.n + '教科）'));
+      c.append(cd, info);
+      c.onclick = () => openDetail(t.id);
+      list.append(c);
+    });
+  };
+  sec('これからのテスト', up);
+  sec('おわったテスト', past);
+}
+
+// ===== 追加・名前と日付の変更 =====
+let editing = null, busy = false;
+function openEdit(t) {
+  editing = t || null;
+  $('edit-title').textContent = t ? '名前と日付を直す' : 'テストを追加';
+  $('e-name').value = t ? t.name : '';
+  $('e-date').value = t ? t.date : '';
+  $('e-subj-box').hidden = !!t;
+  const g = $('e-subj'); g.innerHTML = '';
+  [...BASE_SUBJ, ...MORE_SUBJ].forEach((s) => {
+    const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.value = s; c.checked = BASE_SUBJ.includes(s);
+    l.append(c, el('span', '', s)); g.append(l);
+  });
+  openSheet('edit');
+}
+$('add').onclick = () => openEdit(null);
+$('e-cancel').onclick = () => closeSheet('edit');
+$('e-save').onclick = () => {
+  if (busy) return;
+  const name = $('e-name').value.trim().slice(0, 40), date = $('e-date').value;
+  if (!name) { alert('テストの名前を入れてね。'); return; }
+  if (!parseD(date)) { alert('1日目の日付を選んでね。'); return; }
+  busy = true; setTimeout(() => { busy = false; }, 400);
+  if (editing) { editing.name = name; editing.date = date; persist(); closeSheet('edit'); renderDetail(); render(); return; }
+  const subs = [...$('e-subj').querySelectorAll('input:checked')].map((c) => ({ id: uid(), name: c.value, todos: [], score: null, full: 100 }));
+  const t = { id: uid(), name, date, subjects: subs, createdAt: Date.now() };
+  tests.push(t); persist(); closeSheet('edit'); render(); openDetail(t.id);
+};
+
+// ===== くわしい画面 =====
+let curId = null;
+const curTest = () => tests.find((t) => t.id === curId);
+function scoreSum(t) { const s = t.subjects.filter((x) => x.score !== null); return { n: s.length, sum: s.reduce((a, x) => a + x.score, 0), full: s.reduce((a, x) => a + x.full, 0) }; }
+function openDetail(id) { curId = id; renderDetail(); openSheet('detail'); }
+function renderDetail() {
+  const t = curTest(); if (!t) return;
+  $('d-name').textContent = t.name;
+  const n = daysUntil(t.date);
+  $('d-count').textContent = n > 0 ? 'あと' + n + '日' : n === 0 ? '今日から！' : 'おわったテスト';
+  $('d-date').textContent = fmtD(t.date) + 'から';
+  const [d, a] = todoCount(t), sc = scoreSum(t);
+  const parts = [];
+  parts.push(a ? 'やること ' + d + ' / ' + a + ' できた' : '教科ごとに「やること」を書いておこう');
+  if (sc.n) parts.push('点数を入れた教科 ' + sc.n + '　合計 ' + sc.sum + '点 / ' + sc.full + '点満点　平均 ' + (Math.round(sc.sum / sc.n * 10) / 10) + '点');
+  $('d-sum').innerHTML = ''; parts.forEach((p, i) => { if (i) $('d-sum').append(el('br')); $('d-sum').append(document.createTextNode(p)); });
+  const box = $('d-subjects'); box.innerHTML = '';
+  if (!t.subjects.length) box.append(el('p', 'empty', '教科がありません。下の「教科を追加」から入れてね。'));
+  t.subjects.forEach((s) => {
+    const b = el('div', 'subj');
+    const hd = el('div', 'hd'); hd.append(el('b', '', s.name));
+    const x = el('button', 'xbtn', '教科を消す');
+    x.onclick = () => { if (confirm('「' + s.name + '」を消します。やることと点数も消えます。いい？')) { t.subjects = t.subjects.filter((y) => y.id !== s.id); persist(); renderDetail(); render(); } };
+    hd.append(x); b.append(hd);
+    s.todos.forEach((td) => {
+      const r = el('div', 'todo' + (td.done ? ' done' : ''));
+      const ck = el('button', 'ck', td.done ? '✓' : ''); ck.setAttribute('aria-label', 'できた');
+      ck.onclick = () => { td.done = !td.done; persist(); renderDetail(); render(); };
+      const del = el('button', 'xbtn', '×'); del.setAttribute('aria-label', '消す');
+      del.onclick = () => { s.todos = s.todos.filter((y) => y.id !== td.id); persist(); renderDetail(); render(); };
+      r.append(ck, el('div', 'tx', td.text), del); b.append(r);
+    });
+    const ar = el('div', 'addrow'); const inp = el('input'); inp.maxLength = 60; inp.placeholder = 'やることを追加（例：ワーク p.10〜15）';
+    const ab = el('button', 'plain small', '追加');
+    const addTodo = () => { const v = inp.value.trim().slice(0, 60); if (!v) return; s.todos.push({ id: uid(), text: v, done: false }); persist(); renderDetail(); render(); const ni = box.querySelector('[data-sid="' + s.id + '"]'); if (ni) ni.focus(); };
+    inp.dataset.sid = s.id;
+    ab.onclick = addTodo; inp.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); addTodo(); } };
+    ar.append(inp, ab); b.append(ar);
+    const sc2 = el('div', 'score');
+    const si = el('input'); si.inputMode = 'numeric'; si.value = s.score === null ? '' : s.score; si.placeholder = '—'; si.setAttribute('aria-label', s.name + 'の点数');
+    const fi = el('input'); fi.inputMode = 'numeric'; fi.value = s.full; fi.setAttribute('aria-label', s.name + 'の満点');
+    si.onchange = () => {
+      const v = si.value.trim();
+      if (v === '') { s.score = null; persist(); renderDetail(); render(); return; }
+      const n = wholeNum(v);
+      if (n === null || n > s.full) { alert('点数は 0 から ' + s.full + ' までの整数で入れてね（小数やマイナスは入れられません）。'); si.value = s.score === null ? '' : s.score; return; }
+      s.score = n; persist(); renderDetail(); render();
+    };
+    fi.onchange = () => {
+      const n = wholeNum(fi.value);
+      if (n === null || n < 1 || n > 1000) { alert('満点は 1 から 1000 までの整数で入れてね。'); fi.value = s.full; return; }
+      if (s.score !== null && s.score > n) { alert('いま入っている点数（' + s.score + '点）より小さくはできません。'); fi.value = s.full; return; }
+      s.full = n; persist(); renderDetail(); render();
+    };
+    sc2.append(el('span', '', '点数'), si, el('span', '', '点 ／ 満点'), fi, el('span', '', '点'));
+    b.append(sc2);
+    box.append(b);
+  });
+}
+$('d-back').onclick = () => { closeSheet('detail'); render(); };
+$('d-edit').onclick = () => openEdit(curTest());
+$('d-addsubj').onclick = () => {
+  const t = curTest(); const v = $('d-newsubj').value.trim().slice(0, 20);
+  if (!t || !v) { alert('教科の名前を入れてね。'); return; }
+  if (t.subjects.some((s) => s.name === v)) { alert('「' + v + '」はもうあります。'); return; }
+  t.subjects.push({ id: uid(), name: v, todos: [], score: null, full: 100 }); $('d-newsubj').value = '';
+  persist(); renderDetail(); render();
+};
+$('d-del').onclick = () => {
+  const t = curTest();
+  if (!t || !confirm('「' + t.name + '」を消します。やることと点数もすべて消えます。元にもどせません。いい？')) return;
+  tests = tests.filter((x) => x.id !== t.id); persist(); closeSheet('detail'); render();
+};
+
+// ===== 設定・バックアップ =====
+$('open-settings').onclick = () => openSheet('settings');
+$('s-close').onclick = () => closeSheet('settings');
+$('export').onclick = () => exportBackup('c-test', { tests });
+function cleanTest(t) {
+  if (!t || typeof t !== 'object' || !str(t.name, 40).trim() || !parseD(t.date)) return null;
+  const subs = (Array.isArray(t.subjects) ? t.subjects : []).filter((s) => s && str(s.name, 20).trim()).map((s) => {
+    const full = Number.isInteger(s.full) && s.full >= 1 && s.full <= 1000 ? s.full : 100;
+    const score = Number.isInteger(s.score) && s.score >= 0 && s.score <= full ? s.score : null;
+    const todos = (Array.isArray(s.todos) ? s.todos : []).filter((x) => x && str(x.text, 60).trim()).map((x) => ({ id: str(x.id, 40) || uid(), text: str(x.text, 60).trim(), done: x.done === true }));
+    return { id: str(s.id, 40) || uid(), name: str(s.name, 20).trim(), todos, score, full };
+  });
+  return { id: str(t.id, 40) || uid(), name: str(t.name, 40).trim(), date: t.date, subjects: subs, createdAt: Number.isFinite(t.createdAt) ? t.createdAt : Date.now() };
+}
+setupImport('import-btn', 'import', 'c-test', (d) => Array.isArray(d.tests), (d, dry) => {
+  const list = d.tests.map(cleanTest).filter(Boolean);
+  if (dry) return list.length ? list.length + '件のテストを読み込みます。' : (alert('読み込めるテストがありませんでした。'), null);
+  list.forEach((t) => { const i = tests.findIndex((x) => x.id === t.id); if (i >= 0) tests[i] = t; else tests.push(t); });
+  persist(); render(); return 'ok';
+});
+
+$('ver').textContent = APP_VERSION;
+render();
+
+</script>
+</body>
+</html>
