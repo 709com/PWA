@@ -383,7 +383,8 @@ async function giveFile(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 const stamp = () => { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); };
-const csvCell = (v) => { const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// 文字の欄で先頭が = + - @ などのときは、Excelで式として動かないよう ' を付ける（金額などの数値はそのまま）
+const csvCell = (v) => { let s = String(v); if (typeof v !== 'number' && /^[=+\-@\t\r\n]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 function csvText(rows) { return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
 function nameOf(cid) { const c = counters.find((x) => x.id === cid); return c ? c.name : '（削除したカウンター）'; }
 $('csv-day').onclick = () => {

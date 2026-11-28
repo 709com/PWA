@@ -225,8 +225,18 @@ function render() {
 $('q').addEventListener('input', render);
 document.querySelectorAll('#seg button').forEach((b) => { b.onclick = () => { view = b.dataset.v; save(KEY_VIEW, view); render(); }; });
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+function normItem(it) {
+  if (!it || typeof it !== 'object' || !it.id) return null;
+  const s = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+  const now = Date.now(), c = normTime(it.createdAt) || normTime(it.updatedAt) || now;
+  return { ...it, id: String(it.id), date: typeof it.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.date) ? it.date : '',
+    place: s(it.place), org: s(it.org), topic: s(it.topic), next: s(it.next), done: it.done === true,
+    createdAt: c, updatedAt: normTime(it.updatedAt) || c };
+}
 async function reload() {
-  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  try { items = (await dbAll()).map(normItem).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
   render();
 }
 
@@ -287,7 +297,8 @@ $('export').onclick = () => {
   const data = JSON.stringify({ app: 'meishi', version: APP_VERSION, exportedAt: new Date().toISOString(), items }, null, 1);
   shareFile(new File([data], 'meishi-backup-' + stamp() + '.json', { type: 'application/json' }));
 };
-function csvCell(v) { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+// 文字の欄で先頭が = + - @ などのときは、Excelで式として動かないよう ' を付ける（数値はそのまま）
+function csvCell(v) { let s = v == null ? '' : String(v); if (typeof v !== 'number' && /^[=+\-@\t\r\n]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 $('csv').onclick = () => {
   const head = ['会った日', '場所・会合', '相手の所属や立場', '話題', '次にすること', '済み', '作成', '更新'];
   const rows = items.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map((i) =>
@@ -302,8 +313,10 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'meishi' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件のメモを読み込みます。同じメモは、ファイルの内容で上書きします（ほかのメモは消えません）。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  const list = data.items.map(normItem).filter(Boolean);
+  if (!list.length) { alert('読み込めるメモがありませんでした。'); return; }
+  if (!confirm(list.length + '件のメモを読み込みます。同じメモは、ファイルの内容で上書きします（ほかのメモは消えません）。よろしいですか？')) return;
+  for (const it of list) await dbPut(it);
   await reload();
   alert('読み込みました。');
 };

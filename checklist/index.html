@@ -244,8 +244,25 @@ function render() {
   }
 }
 $('q').addEventListener('input', render);
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+function normItem(it) {
+  if (!it || typeof it !== 'object' || !it.id) return null;
+  const s = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+  const now = Date.now(), c = normTime(it.createdAt) || normTime(it.updatedAt) || now;
+  const rows = {};
+  if (it.rows && typeof it.rows === 'object' && !Array.isArray(it.rows)) {
+    Object.entries(it.rows).forEach(([k, v]) => {
+      if (!v || typeof v !== 'object') return;
+      rows[k] = { s: STATES.some((st) => st.k === v.s) ? v.s : '', memo: s(v.memo) };
+    });
+  }
+  return { ...it, id: String(it.id), title: s(it.title), committee: s(it.committee), memo: s(it.memo), rows,
+    date: typeof it.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.date) ? it.date : '',
+    createdAt: c, updatedAt: normTime(it.updatedAt) || c };
+}
 async function reload() {
-  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  try { items = (await dbAll()).map(normItem).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
   render();
 }
 
@@ -430,11 +447,13 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'checklist' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の資料を読み込みます。同じ資料は、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id) { if (!it.rows || typeof it.rows !== 'object') it.rows = {}; await dbPut(it); } }
+  const list = data.items.map(normItem).filter(Boolean);
+  if (!list.length) { alert('読み込める資料がありませんでした。'); return; }
+  if (!confirm(list.length + '件の資料を読み込みます。同じ資料は、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
+  for (const it of list) await dbPut(it);
   if (Array.isArray(data.points) && data.points.length) {
     const names = new Set(points.map((p) => p.name));
-    data.points.forEach((p) => { if (p && p.name && !names.has(p.name)) { points.push({ name: p.name, hint: p.hint || '' }); names.add(p.name); } });
+    data.points.forEach((p) => { if (p && typeof p.name === 'string' && p.name.trim() && !names.has(p.name)) { points.push({ name: p.name, hint: typeof p.hint === 'string' ? p.hint : '' }); names.add(p.name); } });
     save(KEY_POINTS, points); buildPointEdit();
   }
   await reload();

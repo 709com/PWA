@@ -399,7 +399,8 @@ $('open-settings').onclick = () => { buildCatEdit(); showUsage(); $('settings').
 $('s-close').onclick = () => closeSheet('settings');
 
 // ===== 設定：CSV（Excelで文字化けしないよう、先頭にBOMをつけたUTF-8） =====
-function csvField(v) { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+// 文字の欄で先頭が = + - @ などのときは、Excelで式として動かないよう ' を付ける（金額などの数値はそのまま）
+function csvField(v) { let s = String(v == null ? '' : v); if (typeof v !== 'number' && /^[=+\-@\t\r\n]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function makeCSV(list) {
   const rows = [['日付', '金額', '支払先', '区分', 'メモ']];
   list.slice().sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
@@ -441,18 +442,20 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'keihi' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
-  let skipped = 0;
-  for (const it of data.items) {
-    // 日付・金額が正しくない記録は入れない（一覧が表示できなくなるのを防ぐ）
-    if (!it || !it.id || typeof it.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(it.date) || typeof it.amount !== 'number' || !(it.amount >= 0)) { skipped++; continue; }
+  // 日付・金額が正しくない記録は入れない（一覧が表示できなくなるのを防ぐ）
+  const okRec = (it) => it && it.id && typeof it.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.date) && typeof it.amount === 'number' && it.amount >= 0 && Number.isFinite(it.amount);
+  const good = data.items.filter(okRec);
+  if (!good.length) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm(good.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  const skipped = data.items.length - good.length;
+  for (const it of good) {
     let photo = null;
     try { photo = typeof it.photo === 'string' && it.photo.startsWith('data:image/') ? dataURLToBlob(it.photo) : null; } catch (e) { photo = null; }
     const now = Date.now();
-    await dbPut({ ...it, photo, payee: String(it.payee || ''), category: String(it.category || '未分類'), memo: String(it.memo || ''),
+    await dbPut({ ...it, photo, id: String(it.id), payee: typeof it.payee === 'string' ? it.payee : '', category: typeof it.category === 'string' && it.category ? it.category : '未分類', memo: typeof it.memo === 'string' ? it.memo : '',
       createdAt: Number(it.createdAt) || now, updatedAt: Number(it.updatedAt) || now });
   }
-  if (Array.isArray(data.cats) && data.cats.length) { cats = [...new Set([...cats, ...data.cats])]; save(KEY_CATS, cats); buildCatEdit(); }
+  if (Array.isArray(data.cats) && data.cats.some((c) => typeof c === 'string' && c.trim())) { cats = [...new Set([...cats, ...data.cats.filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim().slice(0, 20))])]; save(KEY_CATS, cats); buildCatEdit(); }
   await reload();
   alert('読み込みました。' + (skipped ? '（内容が正しくない記録' + skipped + '件は読み込みませんでした）' : ''));
 };

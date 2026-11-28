@@ -454,7 +454,8 @@ async function giveFile(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 const stamp = () => { const d = new Date(); return d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()); };
-const csvCell = (v) => { let s = String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// 文字の欄で先頭が = + - @ などのときは、Excelで式として動かないよう ' を付ける（金額などの数値はそのまま）
+const csvCell = (v) => { let s = String(v); if (typeof v !== 'number' && /^[=+\-@\t\r\n]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 $('csv').onclick = () => {
   if (!items.length) { alert('まだ記録がありません。'); return; }
   const rows = [['日付', '配布物', '町名', '配布方法', '部数', 'メモ']];

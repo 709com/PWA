@@ -340,8 +340,23 @@ function setTab(t) {
 $('tab-docs').onclick = () => setTab('docs');
 $('tab-marks').onclick = () => setTab('marks');
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+const normStr = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+function normDoc(d) {
+  if (!d || typeof d !== 'object' || !d.id) return null;
+  const now = Date.now(), c = normTime(d.createdAt) || normTime(d.updatedAt) || now;
+  return { ...d, id: String(d.id), name: normStr(d.name), kind: KINDS.includes(d.kind) ? d.kind : 'その他', year: normStr(d.year),
+    org: normStr(d.org), url: normStr(d.url), memo: normStr(d.memo), createdAt: c, updatedAt: normTime(d.updatedAt) || c };
+}
+function normNote(n) {
+  if (!n || typeof n !== 'object' || !n.id || !n.docId) return null;
+  const now = Date.now(), c = normTime(n.createdAt) || normTime(n.updatedAt) || now;
+  return { ...n, id: String(n.id), docId: String(n.docId), place: normStr(n.place), body: normStr(n.body),
+    marks: Array.isArray(n.marks) ? n.marks.filter((k) => MARKS.some((mk) => mk.k === k)) : [], createdAt: c, updatedAt: normTime(n.updatedAt) || c };
+}
 async function reload() {
-  try { [docs, notes] = await Promise.all([dbAll('docs'), dbAll('notes')]); } catch (e) { docs = []; notes = []; alert('データベースを開けませんでした。'); }
+  try { [docs, notes] = await Promise.all([dbAll('docs'), dbAll('notes')]); docs = docs.map(normDoc).filter(Boolean); notes = notes.map(normNote).filter(Boolean); } catch (e) { docs = []; notes = []; alert('データベースを開けませんでした。'); }
   setTab(ui.tab);
   if (openDocId) renderDoc();
 }
@@ -521,9 +536,11 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'dokusho' || !Array.isArray(data.docs) || !Array.isArray(data.notes)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm('文書' + data.docs.length + '件・メモ' + data.notes.length + '件を読み込みます。同じものは、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
-  for (const d of data.docs) { if (d && d.id) await dbPut('docs', d); }
-  for (const n of data.notes) { if (n && n.id && n.docId) await dbPut('notes', n); }
+  const ds = data.docs.map(normDoc).filter(Boolean), ns = data.notes.map(normNote).filter(Boolean);
+  if (!ds.length && !ns.length) { alert('読み込める文書・メモがありませんでした。'); return; }
+  if (!confirm('文書' + ds.length + '件・メモ' + ns.length + '件を読み込みます。同じものは、ファイルの内容で上書きします（ほかは消えません）。よろしいですか？')) return;
+  for (const d of ds) await dbPut('docs', d);
+  for (const n of ns) await dbPut('notes', n);
   await reload();
   alert('読み込みました。');
 };

@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- このファイルは「文京区民専用ものさし」の本体です。入力した広さ・高さ・体積・人数を、文京区の名所などで「約○個分」「約○倍」に例えて表示します。 -->
-<!-- 数字はすべてこのファイルの中に出典つきで持っています。入力した数字は保存も送信もしません（最後に選んだタブだけを覚えます）。 -->
+<!-- 数字はすべてこのファイルの中に出典つきで持っています。入力した数字は保存も送信もしません（最後に選んだタブと、表示する名所の選び方だけを覚えます）。 -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -47,6 +47,20 @@
   #unit { flex:0 0 auto; max-width:48%; font-size:1rem; }
   .examples { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
   .examples button { background:var(--accent-soft); color:var(--accent); border-radius:99px; padding:5px 12px; font-size:.85rem; font-weight:600; }
+  .ex-label { font-size:.8rem; color:var(--sub); margin:10px 0 0; }
+  .ex-label + .examples { margin-top:4px; }
+  #ex-all { margin-top:10px; }
+  #ex-all summary { font-size:.85rem; }
+
+  /* ===== 表示する名所を選ぶ ===== */
+  .res .head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .res .head .name { flex:1; min-width:0; }
+  .res .remove { flex:0 0 auto; background:var(--bg); border:1px solid var(--line); color:var(--sub); border-radius:99px; padding:3px 10px; font-size:.8rem; }
+  #picker { margin-top:10px; }
+  #add-btn { width:100%; background:var(--card); color:var(--accent); border:2px dashed var(--accent); border-radius:12px; padding:10px; font-weight:700; }
+  #add-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  #add-list button { text-align:left; background:var(--accent-soft); color:var(--text); border-radius:12px; padding:10px 12px; font-size:.95rem; }
+  #add-list .hint { font-size:.8rem; color:var(--sub); margin:0; }
 
   /* ===== 結果 ===== */
   .res { border-top:1px solid var(--line); padding:12px 0; }
@@ -86,6 +100,7 @@
   <section>
     <h2>例えると…</h2>
     <div id="results"><p class="empty">数字を入れてください</p></div>
+    <div id="picker"></div>
     <button id="share" hidden>結果を共有する</button>
   </section>
 
@@ -93,7 +108,7 @@
     <details>
       <summary>📚 数字の出典</summary>
       <ul class="src" id="sources"></ul>
-      <p class="src">出典は2026年10月27日に確認しました。数字は変わることがあります（特に人口は毎月変わります）。</p>
+      <p class="src">出典は2026年10月27日に確認しました（目白台運動公園・教育の森公園・肥後細川庭園・根津神社・東京ドームシティは2026年11月28日に確認）。数字は変わることがあります（特に人口は毎月変わります）。</p>
     </details>
   </section>
 
@@ -103,8 +118,9 @@
 <script>
 // ===== 基本の設定 =====
 // アプリを更新するときは、この番号と sw.js の VERSION を同じ番号に上げる
-const APP_VERSION = '1.0.0';
-const KEY_TAB = 'monosashi:tab'; // 最後に選んだタブだけを覚える
+const APP_VERSION = '1.1.0';
+const KEY_TAB = 'monosashi:tab'; // 最後に選んだタブを覚える
+const KEY_SHOWN = 'monosashi:shown:'; // 後ろにタブの種類を付けて、表示する名所の選び方を覚える
 const $ = (id) => document.getElementById(id);
 
 // ===== 名所などの数字（出典つき） =====
@@ -117,43 +133,52 @@ const SOURCES = {
   civic: '文京区 シビックセンターに関する資料（建物高さ 141.70m） https://www.city.bunkyo.lg.jp/',
   lounge: '文京区「文京シビックセンター展望ラウンジ」（25階・地上約105m） https://www.city.bunkyo.lg.jp/',
   bunkyoArea: '文京区「文京区の位置と地形」（面積 11.29km²） https://www.city.bunkyo.lg.jp/',
+  bunkyoParks: '文京区「区立公園一覧」（目白台運動公園 30,381㎡、教育の森公園 21,171㎡、肥後細川庭園 19,008㎡） https://www.city.bunkyo.lg.jp/b036/p004872.html',
+  nezu: '根津神社 公式サイト「境内案内」（「七千坪の境内」と書かれています。公式もおおよその数字のため、7,000坪＝約23,140㎡として計算しています） https://nedujinja.or.jp/keidaiannai/',
+  domeCity: '文部科学省「スポーツ未来開拓会議」（2023年3月14日）の資料「東京ドームと読売巨人軍の取り組み」（東京ドームシティ 13.3ha。資料中に「東京都都市整備局資料より」とあります） https://www.mext.go.jp/sports/content/20230314-spt_sposeisy-000028421_5.pdf',
   bunkyoPeople: '文京区人口統計資料（令和8年7月1日現在 237,527人） https://www.city.bunkyo.lg.jp/b011/p006255/index.html',
 };
 
 // 種類ごとの基準。value は「1つ分」の大きさ（広さ＝㎡、高さ＝m、体積＝㎥、人数＝人）
+// id＝覚えておくための名前（変えない）、show＝はじめから結果に出す、fav＝「よく使う」の例に出す
 const KINDS = {
   area: {
     label: '広さ', q: 'どのくらいの広さ？',
     units: [ ['㎡', 1], ['ha（ヘクタール）', 10000], ['km²', 1e6], ['坪', 400 / 121] ],
     refs: [
-      { name: '東京ドーム（建築面積）', short: '東京ドーム', emoji: '🏟️', value: 46755, word: '個分', src: 'dome' },
-      { name: '小石川植物園', short: '小石川植物園', emoji: '🌿', value: 161588, word: '個分', src: 'botanical' },
-      { name: '六義園（開園面積）', short: '六義園', emoji: '🌸', value: 87809.41, word: '個分', src: 'rikugien' },
-      { name: '小石川後楽園（開園面積）', short: '小石川後楽園', emoji: '🏯', value: 70847.17, word: '個分', src: 'korakuen' },
-      { name: '文京区全体', short: '文京区', emoji: '🗾', value: 11.29e6, word: '個分', src: 'bunkyoArea' },
+      { id: 'dome', name: '東京ドーム（建築面積）', short: '東京ドーム', emoji: '🏟️', value: 46755, word: '個分', src: 'dome', show: true, fav: true },
+      { id: 'domeCity', name: '東京ドームシティ（全体 13.3ha）', short: '東京ドームシティ', emoji: '🎢', value: 133000, word: '個分', src: 'domeCity' },
+      { id: 'botanical', name: '小石川植物園', short: '小石川植物園', emoji: '🌿', value: 161588, word: '個分', src: 'botanical', show: true, fav: true },
+      { id: 'rikugien', name: '六義園（開園面積）', short: '六義園', emoji: '🌸', value: 87809.41, word: '個分', src: 'rikugien', show: true },
+      { id: 'korakuen', name: '小石川後楽園（開園面積）', short: '小石川後楽園', emoji: '🏯', value: 70847.17, word: '個分', src: 'korakuen' },
+      { id: 'mejirodai', name: '目白台運動公園', short: '目白台運動公園', emoji: '⚽', value: 30381, word: '個分', src: 'bunkyoParks' },
+      { id: 'nezu', name: '根津神社（境内 約7,000坪）', short: '根津神社', emoji: '⛩️', value: 7000 * 400 / 121, word: '個分', src: 'nezu' },
+      { id: 'kyoikunomori', name: '教育の森公園', short: '教育の森公園', emoji: '🌳', value: 21171, word: '個分', src: 'bunkyoParks' },
+      { id: 'higo', name: '肥後細川庭園', short: '肥後細川庭園', emoji: '🍁', value: 19008, word: '個分', src: 'bunkyoParks' },
+      { id: 'bunkyo', name: '文京区全体', short: '文京区', emoji: '🗾', value: 11.29e6, word: '個分', src: 'bunkyoArea', show: true, fav: true },
     ],
   },
   height: {
     label: '高さ', q: 'どのくらいの高さ・長さ？',
     units: [ ['m', 1], ['km', 1000], ['cm', 0.01] ],
     refs: [
-      { name: '文京シビックセンター（建物高さ）', short: 'シビックセンター', emoji: '🏢', value: 141.70, word: '本分', src: 'civic' },
-      { name: 'シビックセンター展望ラウンジ（25階・地上約105m）', short: '展望ラウンジの高さ', emoji: '🔭', value: 105, word: '個分', src: 'lounge' },
+      { id: 'civic', name: '文京シビックセンター（建物高さ）', short: 'シビックセンター', emoji: '🏢', value: 141.70, word: '本分', src: 'civic', show: true, fav: true },
+      { id: 'lounge', name: 'シビックセンター展望ラウンジ（25階・地上約105m）', short: '展望ラウンジの高さ', emoji: '🔭', value: 105, word: '個分', src: 'lounge', show: true, fav: true },
     ],
   },
   volume: {
     label: '体積', q: 'どのくらいの大きさ（体積）？',
     units: [ ['㎥', 1], ['L（リットル）', 0.001] ],
     refs: [
-      { name: '東京ドーム（容積 約124万㎥）', short: '東京ドーム', emoji: '🏟️', value: 1240000, word: '杯分', src: 'dome' },
+      { id: 'dome', name: '東京ドーム（容積 約124万㎥）', short: '東京ドーム', emoji: '🏟️', value: 1240000, word: '杯分', src: 'dome', show: true, fav: true },
     ],
   },
   people: {
     label: '人数', q: '何人？',
     units: [ ['人', 1], ['万人', 10000] ],
     refs: [
-      { name: '文京区民（令和8年7月1日現在 237,527人）', short: '文京区民', emoji: '👥', value: 237527, word: '倍', src: 'bunkyoPeople' },
-      { name: '東京ドーム満員（収容人数 55,000人）', short: '東京ドーム満員', emoji: '🏟️', value: 55000, word: '杯分', src: 'dome' },
+      { id: 'bunkyoPeople', name: '文京区民（令和8年7月1日現在 237,527人）', short: '文京区民', emoji: '👥', value: 237527, word: '倍', src: 'bunkyoPeople', show: true, fav: true },
+      { id: 'domeFull', name: '東京ドーム満員（収容人数 55,000人）', short: '東京ドーム満員', emoji: '🏟️', value: 55000, word: '杯分', src: 'dome', show: true, fav: true },
     ],
   },
 };
@@ -212,23 +237,94 @@ function buildUnits() {
   KINDS[kind].refs.forEach((r, i) => grp.append(new Option(r.short + '（' + r.word.replace('分', '') + '）', 'r' + i)));
   sel.append(grp);
 }
-// 例のボタン：名所1つ分を入れて、ほかの名所と比べる
-function buildExamples() {
-  const box = $('examples');
-  box.innerHTML = '';
-  KINDS[kind].refs.forEach((r, i) => {
+// 例のボタン：名所1つ分を入れて、ほかの名所と比べる（「よく使う」と「すべて」に分ける）
+function exampleRow(list) {
+  const row = document.createElement('div');
+  row.className = 'examples';
+  list.forEach(({ r, i }) => {
     const b = document.createElement('button');
     b.textContent = r.emoji + ' ' + r.short + 'は？';
     b.onclick = () => { $('num').value = '1'; $('unit').value = 'r' + i; calc(); };
-    box.append(b);
+    row.append(b);
   });
+  return row;
+}
+function buildExamples() {
+  const box = $('examples');
+  box.innerHTML = '';
+  box.className = '';
+  const all = KINDS[kind].refs.map((r, i) => ({ r, i }));
+  const favs = all.filter((x) => x.r.fav);
+  if (favs.length === all.length) { box.append(exampleRow(all)); return; } // 名所が少ないタブは分けない
+  const label = document.createElement('p');
+  label.className = 'ex-label';
+  label.textContent = 'よく使う';
+  const more = document.createElement('details');
+  more.id = 'ex-all';
+  const sum = document.createElement('summary');
+  sum.textContent = 'すべての名所（' + all.length + '）';
+  more.append(sum, exampleRow(all));
+  box.append(label, exampleRow(favs), more);
+}
+
+// ===== 表示する名所の選び方（端末の中に覚える） =====
+function shownIds() {
+  const refs = KINDS[kind].refs;
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY_SHOWN + kind));
+    if (Array.isArray(saved)) {
+      const ids = refs.map((r) => r.id).filter((id) => saved.includes(id)); // 知らない名前は捨てる
+      if (ids.length) return ids;
+    }
+  } catch (e) {}
+  return refs.filter((r) => r.show).map((r) => r.id);
+}
+function saveShown(ids) {
+  try { localStorage.setItem(KEY_SHOWN + kind, JSON.stringify(ids)); } catch (e) {}
+}
+function setShown(id, on) {
+  const ids = shownIds().filter((x) => x !== id);
+  if (on) ids.push(id);
+  if (!ids.length) return; // 1つは残す
+  saveShown(KINDS[kind].refs.map((r) => r.id).filter((x) => ids.includes(x)));
+  calc();
+  buildPicker();
+}
+let pickerOpen = false;
+function buildPicker() {
+  const box = $('picker');
+  box.innerHTML = '';
+  const shown = shownIds();
+  const rest = KINDS[kind].refs.filter((r) => !shown.includes(r.id));
+  if (!rest.length) { pickerOpen = false; return; }
+  const btn = document.createElement('button');
+  btn.id = 'add-btn';
+  btn.textContent = pickerOpen ? '閉じる' : '＋名所を追加（あと' + rest.length + 'か所）';
+  btn.onclick = () => { pickerOpen = !pickerOpen; buildPicker(); };
+  box.append(btn);
+  if (!pickerOpen) return;
+  const list = document.createElement('div');
+  list.id = 'add-list';
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = '押すと、上の「例えると…」に加わります。';
+  list.append(hint);
+  rest.forEach((r) => {
+    const b = document.createElement('button');
+    b.textContent = '＋ ' + r.emoji + ' ' + r.name;
+    b.onclick = () => setShown(r.id, true);
+    list.append(b);
+  });
+  box.append(list);
 }
 function buildAll() {
   buildTabs();
   buildUnits();
   buildExamples();
   $('q').textContent = KINDS[kind].q;
+  pickerOpen = false;
   calc();
+  buildPicker();
 }
 
 // ===== 計算と表示 =====
@@ -261,7 +357,9 @@ function calc() {
   }
 
   const lines = [];
+  const shown = shownIds();
   k.refs.forEach((r, i) => {
+    if (!shown.includes(r.id)) return; // 選んでいない名所は出さない
     const x = base / r.value;
     const row = document.createElement('div');
     row.className = 'res' + (i === selfIndex ? ' self' : '');
@@ -279,7 +377,18 @@ function calc() {
       s.textContent = '（' + percent(x) + '）';
       val.append(s);
     }
-    row.append(name, val, pictures(r.emoji, x));
+    const head = document.createElement('div');
+    head.className = 'head';
+    head.append(name);
+    if (shown.length > 1) {
+      const rm = document.createElement('button');
+      rm.className = 'remove';
+      rm.textContent = '外す';
+      rm.setAttribute('aria-label', r.short + 'を表示から外す');
+      rm.onclick = () => setShown(r.id, false);
+      head.append(rm);
+    }
+    row.append(head, val, pictures(r.emoji, x));
     out.append(row);
     if (i !== selfIndex) lines.push(r.short + (r.word === '倍' ? 'の' : '') + main + (x < 1 && !asPercent ? '（' + percent(x) + '）' : ''));
   });

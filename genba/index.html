@@ -328,8 +328,20 @@ async function updateUsage() {
   } catch (e) { usageText = ''; }
 }
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+function normItem(it) {
+  if (!it || typeof it !== 'object' || !it.id) return null;
+  const s = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+  const blobs = (a) => (Array.isArray(a) ? a.filter((b) => b instanceof Blob) : []);
+  const now = Date.now(), c = normTime(it.createdAt) || normTime(it.updatedAt) || now;
+  return { ...it, id: String(it.id), kind: KINDS.includes(it.kind) ? it.kind : 'その他', place: s(it.place), memo: s(it.memo),
+    date: typeof it.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.date) ? it.date : '',
+    photos: blobs(it.photos), thumbs: blobs(it.thumbs), createdAt: c, updatedAt: normTime(it.updatedAt) || c };
+}
+const safeBlob = (x) => { try { return dataURLToBlob(typeof x === 'string' ? x : ''); } catch (e) { return null; } };
 async function reload() {
-  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  try { items = (await dbAll()).map(normItem).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
   await updateUsage();
   render();
 }
@@ -513,13 +525,14 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'genba' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  const n = data.items.filter((it) => it && typeof it === 'object' && it.id).length;
+  if (!n) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm(n + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
   try {
-    for (const it of data.items) {
-      if (!it || !it.id) continue;
-      it.photos = (it.photos || []).map(dataURLToBlob).filter(Boolean);
-      it.thumbs = (it.thumbs || []).map(dataURLToBlob).filter(Boolean);
-      if (!KINDS.includes(it.kind)) it.kind = 'その他';
+    for (const raw of data.items) {
+      if (!raw || typeof raw !== 'object' || !raw.id) continue;
+      const it = normItem({ ...raw, photos: (Array.isArray(raw.photos) ? raw.photos : []).map(safeBlob).filter(Boolean),
+        thumbs: (Array.isArray(raw.thumbs) ? raw.thumbs : []).map(safeBlob).filter(Boolean) });
       await dbPut(it);
     }
   } catch (err) { alert('読み込みの途中で失敗しました。iPhoneの空き容量を確認してください。'); }

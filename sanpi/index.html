@@ -264,8 +264,17 @@ function render() {
 }
 ['q', 'f-ses', 'f-vote'].forEach((id) => $(id).addEventListener(id === 'q' ? 'input' : 'change', render));
 
+// 欠けた項目を補う（バックアップを手で書き換えたときなどに、NaN・undefined を画面に出さない）
+function normTime(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
+function normItem(it) {
+  if (!it || typeof it !== 'object' || !it.id) return null;
+  const s = (v) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : ''));
+  const now = Date.now(), c = normTime(it.createdAt) || normTime(it.updatedAt) || now;
+  return { ...it, id: String(it.id), session: s(it.session), no: s(it.no), title: s(it.title), vote: VOTES.includes(it.vote) ? it.vote : '',
+    reason: s(it.reason), ask: s(it.ask), createdAt: c, updatedAt: normTime(it.updatedAt) || c };
+}
 async function reload() {
-  try { items = await dbAll(); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
+  try { items = (await dbAll()).map(normItem).filter(Boolean); } catch (e) { items = []; alert('データベースを開けませんでした。'); }
   buildFilters();
   render();
 }
@@ -359,7 +368,8 @@ $('export-csv').onclick = () => {
   const ss = sessions();
   const rows = shownItems().sort((a, b) => ss.indexOf(a.session || NO_SES) - ss.indexOf(b.session || NO_SES) || byNo(a, b));
   if (!rows.length) { alert('書き出す記録がありません。'); return; }
-  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  // 先頭が = + - @ などの欄は、Excelで式として動かないよう ' を付ける
+  const q = (v) => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r\n]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
   const head = ['定例会', '議案番号', '件名', '賛否', '理由', '会派内の確認事項', '最終更新'];
   const body = rows.map((i) => [i.session, i.no, i.title, i.vote, i.reason, i.ask, fmtDate(i.updatedAt)].map(q).join(','));
   // 先頭の ﻿ は、Excelで文字化けしないための印
@@ -376,8 +386,10 @@ $('import').onchange = async (e) => {
   let data;
   try { data = JSON.parse(await f.text()); } catch (err) { alert('ファイルを読み取れませんでした。'); return; }
   if (!data || data.app !== 'sanpi' || !Array.isArray(data.items)) { alert('このアプリのバックアップファイルではありません。'); return; }
-  if (!confirm(data.items.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
-  for (const it of data.items) { if (it && it.id) await dbPut(it); }
+  const list = data.items.map(normItem).filter(Boolean);
+  if (!list.length) { alert('読み込める記録がありませんでした。'); return; }
+  if (!confirm(list.length + '件の記録を読み込みます。同じ記録は、ファイルの内容で上書きします（ほかの記録は消えません）。よろしいですか？')) return;
+  for (const it of list) await dbPut(it);
   await reload();
   alert('読み込みました。');
 };
